@@ -95,6 +95,11 @@
 نحو 20 دقيقة. جميع الأوامر أدناه تُكتب في **PowerShell** (ابحث عنه في قائمة Start)، داخل مجلد
 المشروع بعد تنزيله.
 
+> **اختصار:** بعد الخطوة 1، نزّل الكود (بأمر `git clone` في الخطوة 2، أو من صفحة المشروع على GitHub عبر
+> **Code → Download ZIP** ثم فك الضغط) وأنشئ بوتك (الخطوة 4) — ثم انقر نقراً مزدوجاً على **`install.bat`**
+> في مجلد المشروع. سيُنجز عنك بقية الخطوتين 2 و3 ومعظم الخطوة 5 (البيئة `.venv` والمكتبات و Chromium،
+> ويفتح لك `.env` و `schedule.json` في Notepad) وينتهي بأداة الفحص. ثم تابع من الخطوة 6.
+
 ### 1. المتطلبات
 
 | تحتاج إلى | طريقة الحصول عليه | للتحقق |
@@ -122,11 +127,13 @@ py -3 -m venv .venv
 ```powershell
 .venv\Scripts\python -m pip install --upgrade pip
 .venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\pip install --no-deps -e .
 .venv\Scripts\python -m playwright install chromium
 ```
 
-السطر الأخير ينزّل متصفح Chromium الذي يعمل دون واجهة (headless، نحو 150 ميغابايت)، ويُستخدم لتسجيل
-الدخول والتقاط لقطات الشاشة.
+الملف `requirements.txt` يحدد الإصدارات الدقيقة للمكتبات التي اختُبر عليها البرنامج؛ والسطر الثالث يثبّت
+UniNotifier نفسه، والأخير ينزّل متصفح Chromium الذي يعمل دون واجهة (headless، نحو 150 ميغابايت)،
+ويُستخدم لتسجيل الدخول والتقاط لقطات الشاشة.
 
 ### 4. إنشاء بوت تيليجرام الخاص بك
 
@@ -242,7 +249,8 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1
 | `ARCHIVE_ROOT` (افتراضياً `Documents\University`) | ملفات موادك، مجلد لكل مادة | خارج المشروع |
 | `src\uninotifier\` | الكود البرمجي | نعم |
 | `monitor.py`، `bot.py` | ملفا التشغيل اللذان تشغّلهما المهام المجدولة | نعم |
-| `scripts\` | السكربتات `setup_tasks.ps1` و `remove_tasks.ps1` و `windows_recovery.ps1` | نعم |
+| `install.bat` | المثبّت الذي يعمل بنقرة مزدوجة (يشغّل `scripts\install.ps1`) | نعم |
+| `scripts\` | السكربتات `install.ps1` و `setup_tasks.ps1` و `remove_tasks.ps1` و `windows_recovery.ps1` | نعم |
 
 يُنشأ المجلدان `data\` و `data\logs\` تلقائياً عند أول تشغيل. ويمكنك نقل مجلد المشروع بالكامل إلى مكان
 آخر، ثم تشغيل `scripts\setup_tasks.ps1` مجدداً لتشير المهام إلى المكان الجديد.
@@ -312,7 +320,7 @@ powershell -ExecutionPolicy Bypass -File scripts\remove_tasks.ps1
 | أداة الفحص تقول *"The bot can't reach your chat yet"* | افتح بوتك في تيليجرام واضغط **Start** |
 | البوت لا يرد | هل المهمة `UniNotifier_BotListener` تعمل؟ (`Get-ScheduledTask UniNotifier*`) — وهل `ADMIN_USER_ID` هو رقمك التعريفي؟ |
 | رسالة *"running scripts is disabled on this system"* | شغّل السكربت كما هو موضح: `powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1` |
-| الخطأ `No module named uninotifier` | شغّل `.venv\Scripts\pip install -r requirements.txt` **من داخل مجلد المشروع** |
+| الخطأ `No module named uninotifier` | شغّل `.venv\Scripts\pip install --no-deps -e .` **من داخل مجلد المشروع** (أو انقر نقراً مزدوجاً على `install.bat` مجدداً) |
 | الخطأ `Executable doesn't exist … chromium` | شغّل `.venv\Scripts\python -m playwright install chromium` |
 | تطلب Microsoft التحقق | يمرّر البوت الطلب إليك عبر تيليجرام — وافق عليه من هاتفك (أو أرسل رمز SMS ردّاً). الحل الأخير: `.venv\Scripts\python -m uninotifier.tools.login_refresh` |
 | رسالة *"schedule.json needs fixing"* على تيليجرام | تسرد الرسالة كل خطأ، وتستمر التذكيرات باستخدام آخر نسخة سليمة حتى تصحّحه |
@@ -331,6 +339,7 @@ powershell -ExecutionPolicy Bypass -File scripts\remove_tasks.ps1
   `git status`.
 - **قراءة فقط على Moodle**، باستثناء علامة *Mark as done* التي تضغطها بنفسك، والعلامة التلقائية للملفات
   التي حفظها البرنامج؛ أما الواجبات والاختبارات القصيرة فلا يلمسها أبداً.
+- **وجدت ثغرة أمنية؟** أبلغ عنها بشكل خاص — انظر [SECURITY.md](SECURITY.md) (بالإنجليزية).
 
 ---
 
@@ -346,3 +355,5 @@ powershell -ExecutionPolicy Bypass -File scripts\remove_tasks.ps1
 (أي محاولة اتصال خارجي تُفشل التشغيل)، فلا تقرأ إعداداتك ولا تلمس بياناتك أبداً — وتنجح على نسخة
 مستنسخة حديثاً تماماً كما تنجح على جهاز مُعَدّ. البنية وكل وحدة وكل سلوك بالتفصيل:
 **[docs/REFERENCE.md](docs/REFERENCE.md)** (بالإنجليزية).
+
+تريد المساهمة؟ في **[CONTRIBUTING.md](CONTRIBUTING.md)** (بالإنجليزية) القواعد التي تفرضها الاختبارات، في صفحة واحدة.

@@ -1,0 +1,41 @@
+name: Feature request
+description: An idea that would make UniNotifier more useful for students.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea! UniNotifier is built for Al-Zaytoonah University's Moodle and student portal,
+        running on the student's own Windows PC — ideas that fit that are the easiest to take on.
+
+        **This page is public:** no passwords, student IDs, tokens or screenshots of your personal pages.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would it solve?
+      description: The situation where you missed something, or had to do something by hand.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+      description: What the bot would send or do — a sketch of the message or button is welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you've tried or considered instead? (optional)
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I have verified that no passwords, student IDs, or private tokens are included.
+          required: true

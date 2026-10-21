@@ -1,0 +1,29 @@
+# Weekly update proposals, each one a pull request that CI tests on Windows before you merge it.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Amman
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps
+    groups:
+      # Playwright comes alone: a new version also changes the browser that signs in to Moodle,
+      # so it deserves its own pull request (and a look at the next real check after merging).
+      python-packages:
+        patterns: ["*"]
+        exclude-patterns: ["playwright"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Amman
+    commit-message:
+      prefix: ci

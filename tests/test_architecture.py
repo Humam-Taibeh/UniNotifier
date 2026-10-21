@@ -7238,6 +7238,58 @@ def test_no_personal_files_are_tracked():
     assert schedule.validate(json.loads((project / "schedule.example.json").read_text(encoding="utf-8"))) == []
 
 
+def test_the_repository_is_ready_for_students():
+    """What a student and a contributor rely on stays in place: exact pins that match pyproject.toml,
+    Dependabot for packages and actions, the double-click installer (with Windows line endings), CI that
+    runs that installer, issue forms that refuse to be sent without the privacy promise, and the
+    security and contributing guides."""
+    import subprocess
+    project = Path(__file__).resolve().parents[1]
+
+    def lines(name):
+        return [l.strip() for l in (project / name).read_text(encoding="utf-8").splitlines()
+                if l.strip() and not l.strip().startswith("#")]
+    pins = lines("requirements.txt")
+    assert all(re.fullmatch(r"[A-Za-z0-9_.-]+==[0-9][\w.]*", p) for p in pins), pins
+    assert lines("requirements-dev.txt")[0] == "-r requirements.txt"
+    assert all(re.fullmatch(r"[A-Za-z0-9_.-]+==[0-9][\w.]*", p) for p in lines("requirements-dev.txt")[1:])
+    declared = re.search(r"^dependencies = \[(.*?)\]", (project / "pyproject.toml").read_text(encoding="utf-8"), re.S | re.M)
+    names = {re.split(r"[<>=!~ ]", d.strip().strip('",'))[0].lower() for d in declared.group(1).split(",") if d.strip()}
+    assert names == {p.split("==")[0].lower() for p in pins}, ("pyproject.toml and requirements.txt list different packages", names)
+
+    dependabot = (project / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+    assert "package-ecosystem: pip" in dependabot and "package-ecosystem: github-actions" in dependabot
+    assert dependabot.count("interval: weekly") == 2
+
+    bat = (project / "install.bat").read_bytes()
+    assert b"-ExecutionPolicy Bypass" in bat and b'scripts\\install.ps1"' in bat and b"pause" in bat
+    attributes = (project / ".gitattributes").read_text(encoding="utf-8")
+    assert "*.bat text eol=crlf" in attributes and "*.ps1 text eol=crlf" in attributes
+    if (project / ".git").exists():
+        checked = subprocess.run(["git", "check-attr", "eol", "install.bat", "scripts/install.ps1"], cwd=project,
+                                 capture_output=True, text=True).stdout
+        assert checked.count("eol: crlf") == 2, checked
+    installer = (project / "scripts" / "install.ps1").read_text(encoding="utf-8")
+    assert all(ord(ch) < 128 for ch in installer), "Windows PowerShell 5.1 misreads a BOM-less non-ASCII script"
+    for step in ("'3.11'", "'-r', 'requirements.txt'", "'--no-deps', '-e', '.'", "'playwright', 'install', 'chromium'",
+                 "'.env.example', '.env'", "'schedule.example.json', 'schedule.json'", "-m uninotifier.doctor"):
+        assert step in installer, f"the installer lost: {step}"
+    ci = (project / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
+    assert "installer:" in ci and "scripts\\install.ps1 -NoEditor" in ci and "pip install --no-deps -e ." in ci
+
+    promise = "I have verified that no passwords, student IDs, or private tokens are included."
+    for form in ("bug_report.yml", "feature_request.yml"):
+        text = (project / ".github" / "ISSUE_TEMPLATE" / form).read_text(encoding="utf-8")
+        assert re.search(rf"- label: {re.escape(promise)}\n\s+required: true", text), form
+    config = (project / ".github" / "ISSUE_TEMPLATE" / "config.yml").read_text(encoding="utf-8")
+    assert "blank_issues_enabled: false" in config and "/security/advisories/new" in config
+    security = (project / "SECURITY.md").read_text(encoding="utf-8")
+    assert "/security/advisories/new" in security and "Don't open a public issue" in security
+    contributing = (project / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    for rule in ("Tests are offline", "No personal data", "Both READMEs change together", "The bot speaks English"):
+        assert rule in contributing, rule
+
+
 REPO_PATH = "github.com/Humam-Taibeh/UniNotifier"      # the project's own public address
 PUBLIC_REPO = f"https://{REPO_PATH}.git"
 
@@ -7330,7 +7382,7 @@ if __name__ == "__main__":
                test_replaced_files_move_to_old_versions, test_settings_are_checked_before_anything_runs,
                test_archive_root_defaults_to_documents_university, test_state_backup_lives_in_its_own_repository,
                test_doctor_says_what_to_fix, test_no_personal_files_are_tracked,
-               test_the_readme_translations_say_the_same):
+               test_the_readme_translations_say_the_same, test_the_repository_is_ready_for_students):
         _chat = _package("uninotifier.bot")
         for _name, _original in _CHAT_ORIGINALS.items():      # a test that forgets to restore a stub cannot leak it into the next
             setattr(_chat, _name, _original)

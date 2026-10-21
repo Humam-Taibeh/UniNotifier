@@ -1,9 +1,10 @@
-playwright>=1.47
-python-dotenv>=1.0
-requests>=2.31
-openpyxl>=3.1
-xlrd>=2.0
-python-docx>=1.1
-lxml>=5.0
-# this project itself, editable, so "python -m uninotifier.<tool>" works (run pip from the project folder)
--e .
+# Exact versions: every student installs what the tests and the maintainer's own copy run.
+# Dependabot proposes updates weekly (.github/dependabot.yml); CI tests each one before it is merged.
+# The project itself is installed separately:  pip install --no-deps -e .
+playwright==1.63.0
+python-dotenv==1.2.4
+requests==2.34.2
+openpyxl==3.1.5
+xlrd==2.0.2
+python-docx==1.2.0
+lxml==6.1.3

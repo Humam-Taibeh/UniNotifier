@@ -93,6 +93,11 @@ subscription, and nothing about you ever leaves your PC except the messages it s
 About 20 minutes. Every command below is typed in **PowerShell** (Start menu → "PowerShell"),
 inside the project folder once you have it.
 
+> **Shortcut:** after step 1, get the code (step 2's `git clone`, or **Code → Download ZIP** on GitHub,
+> then unzip it) and create your bot (step 4) — then double-click **`install.bat`** in the project folder.
+> It does the rest of steps 2 and 3 and most of step 5 for you (`.venv`, the packages, Chromium, your
+> `.env` and `schedule.json` opened in Notepad) and ends with the doctor. Then continue with step 6.
+
 ### 1. Prerequisites
 
 | You need | How to get it | Check |
@@ -119,10 +124,13 @@ py -3 -m venv .venv
 ```powershell
 .venv\Scripts\python -m pip install --upgrade pip
 .venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\pip install --no-deps -e .
 .venv\Scripts\python -m playwright install chromium
 ```
 
-The last line downloads the headless Chromium (~150 MB) used to sign in and take screenshots.
+`requirements.txt` pins the exact package versions UniNotifier is tested with; the third line installs
+UniNotifier itself, and the last one downloads the headless Chromium (~150 MB) used to sign in and take
+screenshots.
 
 ### 4. Create your private Telegram bot
 
@@ -239,7 +247,8 @@ The bot answers only you (`ADMIN_USER_ID`); anyone else who finds it gets no rep
 | `ARCHIVE_ROOT` (default `Documents\University`) | your course files, per course | outside the project |
 | `src\uninotifier\` | the code | yes |
 | `monitor.py`, `bot.py` | the two launchers the scheduled tasks start | yes |
-| `scripts\` | `setup_tasks.ps1`, `remove_tasks.ps1`, `windows_recovery.ps1` | yes |
+| `install.bat` | the double-click installer (runs `scripts\install.ps1`) | yes |
+| `scripts\` | `install.ps1`, `setup_tasks.ps1`, `remove_tasks.ps1`, `windows_recovery.ps1` | yes |
 
 `data\` and `data\logs\` are created automatically on the first run. You can move the whole
 project folder: run `scripts\setup_tasks.ps1` again afterwards so the tasks point at the new place.
@@ -306,7 +315,7 @@ Then look at `data\logs\monitor.log` and `data\logs\bot.log`.
 | The doctor says *"The bot can't reach your chat yet"* | open your bot in Telegram and press **Start** |
 | The bot doesn't answer | is `UniNotifier_BotListener` running? (`Get-ScheduledTask UniNotifier*`) — is `ADMIN_USER_ID` your own Id? |
 | *"running scripts is disabled on this system"* | start the script as shown: `powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1` |
-| `No module named uninotifier` | run `.venv\Scripts\pip install -r requirements.txt` **from the project folder** |
+| `No module named uninotifier` | run `.venv\Scripts\pip install --no-deps -e .` **from the project folder** (or double-click `install.bat` again) |
 | `Executable doesn't exist … chromium` | `.venv\Scripts\python -m playwright install chromium` |
 | Microsoft asks for verification | the bot relays it to Telegram — approve it on your phone (or reply with the SMS code). Last resort: `.venv\Scripts\python -m uninotifier.tools.login_refresh` |
 | *"schedule.json needs fixing"* on Telegram | the message lists each mistake; reminders keep using the last good copy until it is fixed |
@@ -324,6 +333,7 @@ Then look at `data\logs\monitor.log` and `data\logs\bot.log`.
   git-ignored, and a test fails if one ever is. Before you `git push`, `git status` should list none of them.
 - **Read-only on Moodle**, except the manual *Mark as done* tick you press yourself and the automatic
   tick for files it saved; assignments and quizzes are never touched.
+- **Found a security problem?** Please report it privately — see [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -339,3 +349,5 @@ The suite runs in a throw-away folder with a made-up `.env`, a fixture timetable
 (any outside connection fails the run), so it never reads your settings or touches your data — and a
 fresh clone passes exactly like a configured PC. Architecture, every module and every behaviour:
 **[docs/REFERENCE.md](docs/REFERENCE.md)**.
+
+Want to help? **[CONTRIBUTING.md](CONTRIBUTING.md)** has the rules the tests enforce, on one page.

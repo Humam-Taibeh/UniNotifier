@@ -598,10 +598,15 @@ UniNotifier/
 │   ├── zuj_auth.py, mfa.py, notifier.py, guide.py, paths.py            sign-in, Telegram, /help, where files live
 │   └── tools/                login_refresh · send_test_message · showcase · record_pages ·
 │                             migrate_archive · tidy_archive · upload_benchmark   (python -m uninotifier.tools.<name>)
-├── scripts/                  setup_tasks.ps1 · remove_tasks.ps1 · windows_recovery.ps1
+├── install.bat               the double-click installer (runs scripts/install.ps1)
+├── scripts/                  install.ps1 · setup_tasks.ps1 · remove_tasks.ps1 · windows_recovery.ps1
 ├── tests/                    test_architecture.py; fixtures/ (a fixed tracker and timetable);
 │                             recorded/ (your real pages, kept out of Git)
 ├── docs/REFERENCE.md         this file
+├── .github/                  CI (the suite + pyflakes on Python 3.11 and 3.13, and the installer, on Windows),
+│                             Dependabot (weekly), issue forms with a privacy promise
+├── requirements.txt          exact package versions (requirements-dev.txt adds pyflakes and pylint)
+├── SECURITY.md, CONTRIBUTING.md   reporting a vulnerability privately; the rules the tests enforce
 ├── .env.example, schedule.example.json   the templates — copied to .env and schedule.json (git-ignored)
 ├── assets/                   your timetable PDF / PNG (git-ignored, optional)
 └── data/                     everything the program writes (git-ignored): saved_items.json, sessions,
@@ -609,8 +614,9 @@ UniNotifier/
                               optionally its own private backup repository (see Cloud state backup)
 ```
 
-Every path comes from `paths.py`. `requirements.txt` installs the package itself in editable mode, so the
-tools run with `python -m`; the launchers and the tests work without it too. `UNINOTIFIER_ENV`,
+Every path comes from `paths.py`. `pip install --no-deps -e .` (README step 3, and the installer) makes the
+package importable in editable mode, so the tools run with `python -m`; the launchers and the tests work
+without it too. `requirements.txt` holds only exact pins, which Dependabot can update. `UNINOTIFIER_ENV`,
 `UNINOTIFIER_DATA`, `UNINOTIFIER_SCHEDULE` and `UNINOTIFIER_ASSETS` move the settings, the state folder,
 the timetable and its pictures elsewhere — the tests use them; never set them system-wide.
 

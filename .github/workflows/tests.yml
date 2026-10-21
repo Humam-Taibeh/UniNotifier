@@ -43,8 +43,11 @@ jobs:
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
 
-      - name: Install the dependencies and the project
+      - name: Install the pinned dependencies
         run: python -m pip install -r requirements-dev.txt
+
+      - name: Install the project (as the README and the installer do)
+        run: python -m pip install --no-deps -e .
 
       - name: Install Chromium for Playwright
         run: python -m playwright install chromium
@@ -54,3 +57,28 @@ jobs:
 
       - name: pyflakes
         run: python -m pyflakes src tests monitor.py bot.py
+
+  installer:
+    # What a student gets from double-clicking install.bat, on a machine that has nothing yet.
+    name: Student installer on a clean Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        id: python
+        with:
+          python-version: "3.11"
+
+      - name: Run scripts/install.ps1 (what install.bat runs)
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -NoEditor -Python "${{ steps.python.outputs.python-path }}"
+
+      - name: The environment works and the settings files exist
+        run: |
+          .venv\Scripts\python -c "import uninotifier.doctor, playwright, requests, lxml; print('imports ok')"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path .env) -or -not (Test-Path schedule.json)) { Write-Error 'settings files missing'; exit 1 }
+
+      - name: Running it again keeps everything
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -NoEditor
