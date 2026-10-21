@@ -1,0 +1,9 @@
+playwright>=1.47
+python-dotenv>=1.0
+requests>=2.31
+openpyxl>=3.1
+xlrd>=2.0
+python-docx>=1.1
+lxml>=5.0
+# this project itself, editable, so "python -m uninotifier.<tool>" works (run pip from the project folder)
+-e .

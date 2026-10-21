@@ -1,0 +1,1040 @@
+{
+ "classDetails": {
+  "title": "Mays. B2. sec. 15 . 3:30-5:00"
+ },
+ "assignmentsData": {
+  "count": 1,
+  "entities": [
+   {
+    "assigned_path_id": "244aea91-dfc4-434b-b0fd-69a4a6a6879c",
+    "classid": "a5113848-d23a-45b3-9785-0eeaa1db1f21",
+    "created": 1792532255922,
+    "duedate": 1793912373000,
+    "items": [
+     {
+      "__analytics": {
+       "accessedOnce": false,
+       "activityStatus": "",
+       "bestResult": {},
+       "completedCount": 0,
+       "completedCountOverall": 0,
+       "completedLastDate": 0,
+       "completedOnce": false,
+       "completedOnceDate": 0,
+       "completedOnceWithSuccess": false,
+       "completedOnceWithSuccessDate": 0,
+       "completedOnceWithSuccessResult": {},
+       "firstAccessed": 0,
+       "firstResult": {},
+       "lastAccessed": 0,
+       "lastLaunched": 0,
+       "lastResult": {},
+       "lastSubmitted": 0,
+       "launchCount": 0,
+       "status": "not_started",
+       "submitCount": 0,
+       "submitCountOverall": 0,
+       "submittedOnce": false,
+       "submittedOnceDate": 0,
+       "timespent": 0
+      },
+      "contributes-to-completion": true,
+      "contributes-to-score": true,
+      "description": "",
+      "dls_product_code": "empbe2ednl5dwa",
+      "ext-cup-xapiscoreable": {
+       "container": "Channel",
+       "cup-options": {
+        "contentid": "1633398837112",
+        "dp": "deps/dp/cup-rdp-base-0.47",
+        "engine": "deps/engine/buckminster-33.0.2",
+        "lmsApis": "Channel",
+        "title": "1633398837112"
+       },
+       "filename": "Emp2_PE_BE_L5_U01_leA_x01_vo1_SCO.zip",
+       "filesize": 327651,
+       "url": "ext-cup-xapiscoreable/1633398837112"
+      },
+      "game": false,
+      "item-code": "1633339239376/1633340011111/1633398837112",
+      "item-type": "resource",
+      "item_type": "dls-internal",
+      "learning-objectives": [
+       "Learning Objective 1"
+      ],
+      "model": {
+       "role": "all"
+      },
+      "name": "Vocabulary: Character adjectives 1",
+      "pass-score": 0.7,
+      "resource": "RE_0001",
+      "sub-type": "ext-cup-xapiscoreable",
+      "tags": [
+       "c6ba00e8-0101-1ef5-9ec1-73ed27fb8652/a2ba00e8-147f-77a9-3b8a-4e37915af87b/b4bbc8d9-b55a-a30b-7e62-8d2a797bdf57",
+       "d4bbc653-4de0-fe0c-b820-5c6cc244cfc6/60bbc653-6bd0-0595-02a8-3a3e50987306",
+       "f8ba6f09-11b3-2df6-02f0-1ff7bdc3683e/4aba6f09-2320-64d9-47ef-ccdbbe45f60b",
+       "debbc653-b220-e3ad-85c0-1da695662156/e4bbc654-0bb5-4eb6-7b79-627e808f2b75",
+       "b6bbc657-2d3f-9935-b5eb-1c3c99e0eb3b/1ebcc26c-67e0-a2df-fb27-790d8d2365d6"
+      ],
+      "tracking": true
+     },
+     {
+      "__analytics": {
+       "accessedOnce": false,
+       "activityStatus": "",
+       "bestResult": {},
+       "completedCount": 0,
+       "completedCountOverall": 0,
+       "completedLastDate": 0,
+       "completedOnce": false,
+       "completedOnceDate": 0,
+       "completedOnceWithSuccess": false,
+       "completedOnceWithSuccessDate": 0,
+       "completedOnceWithSuccessResult": {},
+       "firstAccessed": 0,
+       "firstResult": {},
+       "lastAccessed": 0,
+       "lastLaunched": 0,
+       "lastResult": {},
+       "lastSubmitted": 0,
+       "launchCount": 0,
+       "status": "not_started",
+       "submitCount": 0,
+       "submitCountOverall": 0,
+       "submittedOnce": false,
+       "submittedOnceDate": 0,
+       "timespent": 0
+      },
+      "contributes-to-completion": true,
+      "contributes-to-score": true,
+      "description": "",
+      "dls_product_code": "empbe2ednl5dwa",
+      "ext-cup-xapiscoreable": {
+       "container": "Channel",
+       "cup-options": {
+        "contentid": "1633398840223",
+        "dp": "deps/dp/cup-rdp-base-0.47",
+        "engine": "deps/engine/buckminster-33.0.2",
+        "lmsApis": "Channel",
+        "title": "1633398840223"
+       },
+       "filename": "Emp2_PE_BE_L5_U01_leA_x02_vo2_SCO.zip",
+       "filesize": 474497,
+       "url": "ext-cup-xapiscoreable/1633398840223"
+      },
+      "game": false,
+      "item-code": "1633339239376/1633340011111/1633398840223",
+      "item-type": "resource",
+      "item_type": "dls-internal",
+      "learning-objectives": [
+       "Learning Objective 1"
+      ],
+      "model": {
+       "role": "all"
+      },
+      "name": "Vocabulary: Character adjectives 2",
+      "pass-score": 0.7,
+      "resource": "RE_0002",
+      "sub-type": "ext-cup-xapiscoreable",
+      "tags": [
+       "c6ba00e8-0101-1ef5-9ec1-73ed27fb8652/a2ba00e8-147f-77a9-3b8a-4e37915af87b/b4bbc8d9-b55a-a30b-7e62-8d2a797bdf57",
+       "d4bbc653-4de0-fe0c-b820-5c6cc244cfc6/60bbc653-6bd0-0595-02a8-3a3e50987306",
+       "f8ba6f09-11b3-2df6-02f0-1ff7bdc3683e/4aba6f09-2320-64d9-47ef-ccdbbe45f60b",
+       "debbc653-b220-e3ad-85c0-1da695662156/e4bbc654-0bb5-4eb6-7b79-627e808f2b75",
+       "b6bbc657-2d3f-9935-b5eb-1c3c99e0eb3b/1ebcc26c-67e0-a2df-fb27-790d8d2365d6"
+      ],
+      "tracking": true
+     },
+     {
+      "__analytics": {
+       "accessedOnce": false,
+       "activityStatus": "",
+       "bestResult": {},
+       "completedCount": 0,
+       "completedCountOverall": 0,
+       "completedLastDate": 0,
+       "completedOnce": false,
+       "completedOnceDate": 0,
+       "completedOnceWithSuccess": false,
+       "completedOnceWithSuccessDate": 0,
+       "completedOnceWithSuccessResult": {},
+       "firstAccessed": 0,
+       "firstResult": {},
+       "lastAccessed": 0,
+       "lastLaunched": 0,
+       "lastResult": {},
+       "lastSubmitted": 0,
+       "launchCount": 0,
+       "status": "not_started",
+       "submitCount": 0,
+       "submitCountOverall": 0,
+       "submittedOnce": false,
+       "submittedOnceDate": 0,
+       "timespent": 0
+      },
+      "contributes-to-completion": true,
+      "contributes-to-score": true,
+      "description": "",
+      "dls_product_code": "empbe2ednl5dwa",
+      "ext-cup-xapiscoreable": {
+       "container": "Channel",
+       "cup-options": {
+        "contentid": "1633398853551",
+        "dp": "deps/dp/cup-rdp-base-0.47",
+        "engine": "deps/engine/buckminster-33.0.2",
+        "lmsApis": "Channel",
+        "title": "1633398853551"
+       },
+       "filename": "Emp2_PE_BE_L5_U01_leA_x03_gr1_SCO.zip",
+       "filesize": 391011,
+       "url": "ext-cup-xapiscoreable/1633398853551"
+      },
+      "game": false,
+      "item-code": "1633339239376/1633340011111/1633398853551",
+      "item-type": "resource",
+      "item_type": "dls-internal",
+      "learning-objectives": [
+       "Learning Objective 1"
+      ],
+      "model": {
+       "role": "all"
+      },
+      "name": "Grammar: Review of tenses 1",
+      "pass-score": 0.7,
+      "resource": "RE_0003",
+      "sub-type": "ext-cup-xapiscoreable",
+      "tags": [
+       "c6ba00e8-0101-1ef5-9ec1-73ed27fb8652/a2ba00e8-147f-77a9-3b8a-4e37915af87b/b4bbc8d9-b55a-a30b-7e62-8d2a797bdf57",
+       "d4bbc653-4de0-fe0c-b820-5c6cc244cfc6/60bbc653-6bd0-0595-02a8-3a3e50987306",
+       "f8ba6f09-11b3-2df6-02f0-1ff7bdc3683e/0aba6f09-306a-2f73-af32-fc5dc239e0d3",
+       "debbc653-b220-e3ad-85c0-1da695662156/e4bbc654-0bb5-4eb6-7b79-627e808f2b75",
+       "b6bbc657-2d3f-9935-b5eb-1c3c99e0eb3b/1ebcc26c-67e0-a2df-fb27-790d8d2365d6"
+      ],
+      "tracking": true
+     },
+     {
+      "__analytics": {
+       "accessedOnce": false,
+       "activityStatus": "",
+       "bestResult": {},
+       "completedCount": 0,
+       "completedCountOverall": 0,
+       "completedLastDate": 0,
+       "completedOnce": false,
+       "completedOnceDate": 0,
+       "completedOnceWithSuccess": false,
+       "completedOnceWithSuccessDate": 0,
+       "completedOnceWithSuccessResult": {},
+       "firstAccessed": 0,
+       "firstResult": {},
+       "lastAccessed": 0,
+       "lastLaunched": 0,
+       "lastResult": {},
+       "lastSubmitted": 0,
+       "launchCount": 0,
+       "status": "not_started",
+       "submitCount": 0,
+       "submitCountOverall": 0,
+       "submittedOnce": false,
+       "submittedOnceDate": 0,
+       "timespent": 0
+      },
+      "contributes-to-completion": true,
+      "contributes-to-score": true,
+      "description": "",
+      "dls_product_code": "empbe2ednl5dwa",
+      "ext-cup-xapiscoreable": {
+       "container": "Channel",
+       "cup-options": {
+        "contentid": "1633398866152",
+        "dp": "deps/dp/cup-rdp-base-0.47",
+        "engine": "deps/engine/buckminster-33.0.2",
+        "lmsApis": "Channel",
+        "title": "1633398866152"
+       },
+       "filename": "Emp2_PE_BE_L5_U01_leA_x04_gr2_SCO.zip",
+       "filesize": 442127,
+       "url": "ext-cup-xapiscoreable/1633398866152"
+      },
+      "game": false,
+      "item-code": "1633339239376/1633340011111/1633398866152",
+      "item-type": "resource",
+      "item_type": "dls-internal",
+      "learning-objectives": [
+       "Learning Objective 1"
+      ],
+      "model": {
+       "role": "all"
+      },
+      "name": "Grammar: Review of tenses 2",
+      "pass-score": 0.7,
+      "resource": "RE_0004",
+      "sub-type": "ext-cup-xapiscoreable",
+      "tags": [
+       "c6ba00e8-0101-1ef5-9ec1-73ed27fb8652/a2ba00e8-147f-77a9-3b8a-4e37915af87b/b4bbc8d9-b55a-a30b-7e62-8d2a797bdf57",
+       "d4bbc653-4de0-fe0c-b820-5c6cc244cfc6/60bbc653-6bd0-0595-02a8-3a3e50987306",
+       "f8ba6f09-11b3-2df6-02f0-1ff7bdc3683e/0aba6f09-306a-2f73-af32-fc5dc239e0d3",
+       "debbc653-b220-e3ad-85c0-1da695662156/e4bbc654-0bb5-4eb6-7b79-627e808f2b75",
+       "b6bbc657-2d3f-9935-b5eb-1c3c99e0eb3b/1ebcc26c-67e0-a2df-fb27-790d8d2365d6"
+      ],
+      "tracking": true
+     },
+     {
+      "__analytics": {
+       "accessedOnce": false,
+       "activityStatus": "",
+       "bestResult": {},
+       "completedCount": 0,
+       "completedCountOverall": 0,
+       "completedLastDate": 0,
+       "completedOnce": false,
+       "completedOnceDate": 0,
+       "completedOnceWithSuccess": false,
+       "completedOnceWithSuccessDate": 0,
+       "completedOnceWithSuccessResult": {},
+       "firstAccessed": 0,
+       "firstResult": {},
+       "lastAccessed": 0,
+       "lastLaunched": 0,
+       "lastResult": {},
+       "lastSubmitted": 0,
+       "launchCount": 0,
+       "status": "not_started",
+       "submitCount": 0,
+       "submitCountOverall": 0,
+       "submittedOnce": false,
+       "submittedOnceDate": 0,
+       "timespent": 0
+      },
+      "contributes-to-completion": true,
+      "contributes-to-score": true,
+      "description": "",
+      "dls_product_code": "empbe2ednl5dwa",
+      "ext-cup-xapiscoreable": {
+       "container": "Channel",
+       "cup-options": {
+        "contentid": "1633398919187",
+        "dp": "deps/dp/cup-rdp-base-0.47",
+        "engine": "deps/engine/buckminster-33.0.2",
+        "lmsApis": "Channel",
+        "title": "1633398919187"
+       },
+       "filename": "Emp2_PE_BE_L5_U01_leB_x01_vo1_SCO.zip",
+       "filesize": 315130,
+       "url": "ext-cup-xapiscoreable/1633398919187"
+      },
+      "game": false,
+      "item-code": "1633339239376/1633340010025/1633398919187",
+      "item-type": "resource",
+      "item_type": "dls-internal",
+      "learning-objectives": [
+       "Learning Objective 1"
+      ],
+      "model": {
+       "role": "all"
+      },
+      "name": "Vocabulary: Trying and succeeding 1",
+      "pass-score": 0.7,
+      "resource": "RE_0005",
+      "sub-type": "ext-cup-xapiscoreable",
+      "tags": [
+       "c6ba00e8-0101-1ef5-9ec1-73ed27fb8652/a2ba00e8-147f-77a9-3b8a-4e37915af87b/b4bbc8d9-b55a-a30b-7e62-8d2a797bdf57",
+       "d4bbc653-4de0-fe0c-b820-5c6cc244cfc6/60bbc653-6bd0-0595-02a8-3a3e50987306",
+       "f8ba6f09-11b3-2df6-02f0-1ff7bdc3683e/4aba6f09-2320-64d9-47ef-ccdbbe45f60b",
+       "debbc653-b220-e3ad-85c0-1da695662156/e4bbc654-0bb5-4eb6-7b79-627e808f2b75",
+       "b6bbc657-2d3f-9935-b5eb-1c3c99e0eb3b/1ebcc26c-67e0-a2df-fb27-790d8d2365d6"
+      ],
+      "tracking": true
+     },
+     {
+      "__analytics": {
+       "accessedOnce": false,
+       "activityStatus": "",
+       "bestResult": {},
+       "completedCount": 0,
+       "completedCountOverall": 0,
+       "completedLastDate": 0,
+       "completedOnce": false,
+       "completedOnceDate": 0,
+       "completedOnceWithSuccess": false,
+       "completedOnceWithSuccessDate": 0,
+       "completedOnceWithSuccessResult": {},
+       "firstAccessed": 0,
+       "firstResult": {},
+       "lastAccessed": 0,
+       "lastLaunched": 0,
+       "lastResult": {},
+       "lastSubmitted": 0,
+       "launchCount": 0,
+       "status": "not_started",
+       "submitCount": 0,
+       "submitCountOverall": 0,
+       "submittedOnce": false,
+       "submittedOnceDate": 0,
+       "timespent": 0
+      },
+      "contributes-to-completion": true,
+      "contributes-to-score": true,
+      "description": "",
+      "dls_product_code": "empbe2ednl5dwa",
+      "ext-cup-xapiscoreable": {
+       "container": "Channel",
+       "cup-options": {
+        "contentid": "1633398928126",
+        "dp": "deps/dp/cup-rdp-base-0.47",
+        "engine": "deps/engine/buckminster-33.0.2",
+        "lmsApis": "Channel",
+        "title": "1633398928126"
+       },
+       "filename": "Emp2_PE_BE_L5_U01_leB_x02_vo2_SCO.zip",
+       "filesize": 479211,
+       "url": "ext-cup-xapiscoreable/1633398928126"
+      },
+      "game": false,
+      "item-code": "1633339239376/1633340010025/1633398928126",
+      "item-type": "resource",
+      "item_type": "dls-internal",
+      "learning-objectives": [
+       "Learning Objective 1"
+      ],
+      "model": {
+       "role": "all"
+      },
+      "name": "Vocabulary: Trying and succeeding 2",
+      "pass-score": 0.7,
+      "resource": "RE_0006",
+      "sub-type": "ext-cup-xapiscoreable",
+      "tags": [
+       "c6ba00e8-0101-1ef5-9ec1-73ed27fb8652/a2ba00e8-147f-77a9-3b8a-4e37915af87b/b4bbc8d9-b55a-a30b-7e62-8d2a797bdf57",
+       "d4bbc653-4de0-fe0c-b820-5c6cc244cfc6/60bbc653-6bd0-0595-02a8-3a3e50987306",
+       "f8ba6f09-11b3-2df6-02f0-1ff7bdc3683e/4aba6f09-2320-64d9-47ef-ccdbbe45f60b",
+       "debbc653-b220-e3ad-85c0-1da695662156/e4bbc654-0bb5-4eb6-7b79-627e808f2b75",
+       "b6bbc657-2d3f-9935-b5eb-1c3c99e0eb3b/1ebcc26c-67e0-a2df-fb27-790d8d2365d6"
+      ],
+      "tracking": true
+     },
+     {
+      "__analytics": {
+       "accessedOnce": false,
+       "activityStatus": "",
+       "bestResult": {},
+       "completedCount": 0,
+       "completedCountOverall": 0,
+       "completedLastDate": 0,
+       "completedOnce": false,
+       "completedOnceDate": 0,
+       "completedOnceWithSuccess": false,
+       "completedOnceWithSuccessDate": 0,
+       "completedOnceWithSuccessResult": {},
+       "firstAccessed": 0,
+       "firstResult": {},
+       "lastAccessed": 0,
+       "lastLaunched": 0,
+       "lastResult": {},
+       "lastSubmitted": 0,
+       "launchCount": 0,
+       "status": "not_started",
+       "submitCount": 0,
+       "submitCountOverall": 0,
+       "submittedOnce": false,
+       "submittedOnceDate": 0,
+       "timespent": 0
+      },
+      "contributes-to-completion": true,
+      "contributes-to-score": true,
+      "description": "",
+      "dls_product_code": "empbe2ednl5dwa",
+      "ext-cup-xapiscoreable": {
+       "container": "Channel",
+       "cup-options": {
+        "contentid": "1633398935111",
+        "dp": "deps/dp/cup-rdp-base-0.47",
+        "engine": "deps/engine/buckminster-33.0.2",
+        "lmsApis": "Channel",
+        "title": "1633398935111"
+       },
+       "filename": "Emp2_PE_BE_L5_U01_leB_x03_gr1_SCO.zip",
+       "filesize": 386978,
+       "url": "ext-cup-xapiscoreable/1633398935111"
+      },
+      "game": false,
+      "item-code": "1633339239376/1633340010025/1633398935111",
+      "item-type": "resource",
+      "item_type": "dls-internal",
+      "learning-objectives": [
+       "Learning Objective 1"
+      ],
+      "model": {
+       "role": "all"
+      },
+      "name": "Grammar: Questions 1",
+      "pass-score": 0.7,
+      "resource": "RE_0007",
+      "sub-type": "ext-cup-xapiscoreable",
+      "tags": [
+       "c6ba00e8-0101-1ef5-9ec1-73ed27fb8652/a2ba00e8-147f-77a9-3b8a-4e37915af87b/b4bbc8d9-b55a-a30b-7e62-8d2a797bdf57",
+       "d4bbc653-4de0-fe0c-b820-5c6cc244cfc6/60bbc653-6bd0-0595-02a8-3a3e50987306",
+       "f8ba6f09-11b3-2df6-02f0-1ff7bdc3683e/0aba6f09-306a-2f73-af32-fc5dc239e0d3",
+       "debbc653-b220-e3ad-85c0-1da695662156/e4bbc654-0bb5-4eb6-7b79-627e808f2b75",
+       "b6bbc657-2d3f-9935-b5eb-1c3c99e0eb3b/1ebcc26c-67e0-a2df-fb27-790d8d2365d6"
+      ],
+      "tracking": true
+     },
+     {
+      "__analytics": {
+       "accessedOnce": false,
+       "activityStatus": "",
+       "bestResult": {},
+       "completedCount": 0,
+       "completedCountOverall": 0,
+       "completedLastDate": 0,
+       "completedOnce": false,
+       "completedOnceDate": 0,
+       "completedOnceWithSuccess": false,
+       "completedOnceWithSuccessDate": 0,
+       "completedOnceWithSuccessResult": {},
+       "firstAccessed": 0,
+       "firstResult": {},
+       "lastAccessed": 0,
+       "lastLaunched": 0,
+       "lastResult": {},
+       "lastSubmitted": 0,
+       "launchCount": 0,
+       "status": "not_started",
+       "submitCount": 0,
+       "submitCountOverall": 0,
+       "submittedOnce": false,
+       "submittedOnceDate": 0,
+       "timespent": 0
+      },
+      "contributes-to-completion": true,
+      "contributes-to-score": true,
+      "description": "",
+      "dls_product_code": "empbe2ednl5dwa",
+      "ext-cup-xapiscoreable": {
+       "container": "Channel",
+       "cup-options": {
+        "contentid": "1633398944522",
+        "dp": "deps/dp/cup-rdp-base-0.47",
+        "engine": "deps/engine/buckminster-33.0.2",
+        "lmsApis": "Channel",
+        "title": "1633398944522"
+       },
+       "filename": "Emp2_PE_BE_L5_U01_leB_x04_gr2_SCO.zip",
+       "filesize": 416827,
+       "url": "ext-cup-xapiscoreable/1633398944522"
+      },
+      "game": false,
+      "item-code": "1633339239376/1633340010025/1633398944522",
+      "item-type": "resource",
+      "item_type": "dls-internal",
+      "learning-objectives": [
+       "Learning Objective 1"
+      ],
+      "model": {
+       "role": "all"
+      },
+      "name": "Grammar: Questions 2",
+      "pass-score": 0.7,
+      "resource": "RE_0008",
+      "sub-type": "ext-cup-xapiscoreable",
+      "tags": [
+       "c6ba00e8-0101-1ef5-9ec1-73ed27fb8652/a2ba00e8-147f-77a9-3b8a-4e37915af87b/b4bbc8d9-b55a-a30b-7e62-8d2a797bdf57",
+       "d4bbc653-4de0-fe0c-b820-5c6cc244cfc6/60bbc653-6bd0-0595-02a8-3a3e50987306",
+       "f8ba6f09-11b3-2df6-02f0-1ff7bdc3683e/0aba6f09-306a-2f73-af32-fc5dc239e0d3",
+       "debbc653-b220-e3ad-85c0-1da695662156/e4bbc654-0bb5-4eb6-7b79-627e808f2b75",
+       "b6bbc657-2d3f-9935-b5eb-1c3c99e0eb3b/1ebcc26c-67e0-a2df-fb27-790d8d2365d6"
+      ],
+      "tracking": true
+     },
+     {
+      "__analytics": {
+       "accessedOnce": false,
+       "activityStatus": "",
+       "bestResult": {},
+       "completedCount": 0,
+       "completedCountOverall": 0,
+       "completedLastDate": 0,
+       "completedOnce": false,
+       "completedOnceDate": 0,
+       "completedOnceWithSuccess": false,
+       "completedOnceWithSuccessDate": 0,
+       "completedOnceWithSuccessResult": {},
+       "firstAccessed": 0,
+       "firstResult": {},
+       "lastAccessed": 0,
+       "lastLaunched": 0,
+       "lastResult": {},
+       "lastSubmitted": 0,
+       "launchCount": 0,
+       "status": "not_started",
+       "submitCount": 0,
+       "submitCountOverall": 0,
+       "submittedOnce": false,
+       "submittedOnceDate": 0,
+       "timespent": 0
+      },
+      "contributes-to-completion": true,
+      "contributes-to-score": true,
+      "description": "",
+      "dls_product_code": "empbe2ednl5dwa",
+      "ext-cup-xapiscoreable": {
+       "container": "Channel",
+       "cup-options": {
+        "contentid": "1633399016920",
+        "dp": "deps/dp/cup-rdp-base-0.47",
+        "engine": "deps/engine/buckminster-33.0.2",
+        "lmsApis": "Channel",
+        "title": "1633399016920"
+       },
+       "filename": "Emp2_PE_BE_L5_U01_leC_x01_li1_SCO.zip",
+       "filesize": 9146312,
+       "url": "ext-cup-xapiscoreable/1633399016920"
+      },
+      "game": false,
+      "item-code": "1633339239376/1633340013837/1633399016920",
+      "item-type": "resource",
+      "item_type": "dls-internal",
+      "learning-objectives": [
+       "Learning Objective 1"
+      ],
+      "model": {
+       "role": "all"
+      },
+      "name": "Listening: Starting a new job 1",
+      "pass-score": 0.7,
+      "resource": "RE_0009",
+      "sub-type": "ext-cup-xapiscoreable",
+      "tags": [
+       "c6ba00e8-0101-1ef5-9ec1-73ed27fb8652/a2ba00e8-147f-77a9-3b8a-4e37915af87b/b4bbc8d9-b55a-a30b-7e62-8d2a797bdf57",
+       "d4bbc653-4de0-fe0c-b820-5c6cc244cfc6/60bbc653-6bd0-0595-02a8-3a3e50987306",
+       "f8ba6f09-11b3-2df6-02f0-1ff7bdc3683e/a6ba6f09-47d8-41d7-3bbb-457c73fa7675",
+       "debbc653-b220-e3ad-85c0-1da695662156/e4bbc654-0bb5-4eb6-7b79-627e808f2b75",
+       "b6bbc657-2d3f-9935-b5eb-1c3c99e0eb3b/1ebcc26c-67e0-a2df-fb27-790d8d2365d6"
+      ],
+      "tracking": true
+     },
+     {
+      "__analytics": {
+       "accessedOnce": false,
+       "completedCount": 0,
+       "completedCountOverall": 0,
+       "completedLastDate": 0,
+       "completedOnce": false,
+       "completedOnceDate": 0,
+       "completedOnceWithSuccess": false,
+       "completedOnceWithSuccessDate": 0,
+       "firstAccessed": 0,
+       "lastAccessed": 0,
+       "lastLaunched": 0,
+       "launchCount": 0,
+       "status": "not_started",
+       "timespent": 0
+      },
+      "contributes-to-completion": true,
+      "description": "",
+      "dls_product_code": "empbe2ednl5dwa",
+      "ext-cup-xapi": {
+       "container": "Channel",
+       "cup-options": {
+        "contentid": "1633399083267",
+        "dp": "deps/dp/cup-rdp-base-0.47",
+        "engine": "deps/engine/buckminster-33.0.2",
+        "lmsApis": "Channel",
+        "title": "1633399083267"
+       },
+       "filename": "Emp2_PE_BE_L5_U01_leC_x02_li2_NSC.zip",
+       "filesize": 4373800,
+       "url": "ext-cup-xapi/1633399083267"
+      },
+      "game": false,
+      "item-code": "1633339239376/1633340013837/1633399083267",
+      "item-type": "resource",
+      "item_type": "dls-internal",
+      "learning-objectives": [
+       "Learning Objective 1"
+      ],
+      "model": {
+       "role": "all"
+      },
+      "name": "Listening: Starting a new job 2",
+      "pass-score": 0.7,
+      "resource": "RE_00010",
+      "sub-type": "ext-cup-xapi",
+      "tags": [
+       "c6ba00e8-0101-1ef5-9ec1-73ed27fb8652/a2ba00e8-147f-77a9-3b8a-4e37915af87b/b4bbc8d9-b55a-a30b-7e62-8d2a797bdf57",
+       "d4bbc653-4de0-fe0c-b820-5c6cc244cfc6/60bbc653-6bd0-0595-02a8-3a3e50987306",
+       "f8ba6f09-11b3-2df6-02f0-1ff7bdc3683e/a6ba6f09-47d8-41d7-3bbb-457c73fa7675",
+       "debbc653-b220-e3ad-85c0-1da695662156/e4bbc654-0bb5-4eb6-7b79-627e808f2b75",
+       "b6bbc657-2d3f-9935-b5eb-1c3c99e0eb3b/1ebcc26c-67e0-a2df-fb27-790d8d2365d6"
+      ],
+      "tracking": true
+     },
+     {
+      "__analytics": {
+       "accessedOnce": false,
+       "activityStatus": "",
+       "bestResult": {},
+       "completedCount": 0,
+       "completedCountOverall": 0,
+       "completedLastDate": 0,
+       "completedOnce": false,
+       "completedOnceDate": 0,
+       "completedOnceWithSuccess": false,
+       "completedOnceWithSuccessDate": 0,
+       "completedOnceWithSuccessResult": {},
+       "firstAccessed": 0,
+       "firstResult": {},
+       "lastAccessed": 0,
+       "lastLaunched": 0,
+       "lastResult": {},
+       "lastSubmitted": 0,
+       "launchCount": 0,
+       "status": "not_started",
+       "submitCount": 0,
+       "submitCountOverall": 0,
+       "submittedOnce": false,
+       "submittedOnceDate": 0,
+       "timespent": 0
+      },
+      "contributes-to-completion": true,
+      "contributes-to-score": true,
+      "description": "",
+      "dls_product_code": "empbe2ednl5dwa",
+      "ext-cup-xapiscoreable": {
+       "container": "Channel",
+       "cup-options": {
+        "contentid": "1633399033421",
+        "dp": "deps/dp/cup-rdp-base-0.47",
+        "engine": "deps/engine/buckminster-33.0.2",
+        "lmsApis": "Channel",
+        "title": "1633399033421"
+       },
+       "filename": "Emp2_PE_BE_L5_U01_leC_x03_sp1_SCO.zip",
+       "filesize": 339238,
+       "url": "ext-cup-xapiscoreable/1633399033421"
+      },
+      "game": false,
+      "item-code": "1633339239376/1633340013837/1633399033421",
+      "item-type": "resource",
+      "item_type": "dls-internal",
+      "learning-objectives": [
+       "Learning Objective 1"
+      ],
+      "model": {
+       "role": "all"
+      },
+      "name": "Speaking: Cutting a conversation short; Explaining and checking understanding 1",
+      "pass-score": 0.7,
+      "resource": "RE_00011",
+      "sub-type": "ext-cup-xapiscoreable",
+      "tags": [
+       "c6ba00e8-0101-1ef5-9ec1-73ed27fb8652/a2ba00e8-147f-77a9-3b8a-4e37915af87b/b4bbc8d9-b55a-a30b-7e62-8d2a797bdf57",
+       "d4bbc653-4de0-fe0c-b820-5c6cc244cfc6/60bbc653-6bd0-0595-02a8-3a3e50987306",
+       "f8ba6f09-11b3-2df6-02f0-1ff7bdc3683e/28ba6f09-3cca-8132-a6e3-d6abd90d911b",
+       "debbc653-b220-e3ad-85c0-1da695662156/e4bbc654-0bb5-4eb6-7b79-627e808f2b75",
+       "b6bbc657-2d3f-9935-b5eb-1c3c99e0eb3b/1ebcc26c-67e0-a2df-fb27-790d8d2365d6"
+      ],
+      "tracking": true
+     },
+     {
+      "__analytics": {
+       "accessedOnce": false,
+       "activityStatus": "",
+       "bestResult": {},
+       "completedCount": 0,
+       "completedCountOverall": 0,
+       "completedLastDate": 0,
+       "completedOnce": false,
+       "completedOnceDate": 0,
+       "completedOnceWithSuccess": false,
+       "completedOnceWithSuccessDate": 0,
+       "completedOnceWithSuccessResult": {},
+       "firstAccessed": 0,
+       "firstResult": {},
+       "lastAccessed": 0,
+       "lastLaunched": 0,
+       "lastResult": {},
+       "lastSubmitted": 0,
+       "launchCount": 0,
+       "status": "not_started",
+       "submitCount": 0,
+       "submitCountOverall": 0,
+       "submittedOnce": false,
+       "submittedOnceDate": 0,
+       "timespent": 0
+      },
+      "contributes-to-completion": true,
+      "contributes-to-score": true,
+      "cup-pskill": {
+       "cup-options": {
+        "durationFormat": "seconds",
+        "helpText": "<b>A: </b>I'm the new waiter. What should I do?<br><b style=\"color: inherit;\">B: </b><span style=\"color: inherit;\">The most important thing is, give the guests menus as soon as they sit down. Remember to always be polite. Another thing to remember is, bring their food and drinks quickly. Is that clear?</span><br>",
+        "helpTitle": "Example",
+        "instructions": "Read the information and the question. Record your response.<br><span style=\"color: inherit;\">&nbsp;</span><br><span style=\"color: inherit;\">You are training a new employee at a restaurant. What are the main things to remember? Use the notes below or your own ideas.</span><br><ul><li>Explain the process.</li><li>Check that the new waiter understands.</li></ul>Notes:<br><ul><li>Most important: Give the guests menus.</li><li>Be polite.</li><li>Bring food and drinks quickly.</li></ul>Useful language:<br>The most important thing is,…<br>Remember to always / never…<br>Another thing to remember is,…<br>Is that clear?<br>Do you know what I mean?<br>Did you get that?<br>Do you get the idea?<br>&nbsp;<br><b>I'm the new waiter. What should I do?</b><br>",
+        "maxChars": "",
+        "maxDuration": "240",
+        "submissionType": {
+         "id": "speak",
+         "value": "Speaking"
+        },
+        "title": "Speaking: Explaining and checking understanding 2"
+       },
+       "url": ""
+      },
+      "dls_product_code": "empbe2ednl5dwa",
+      "grading": "manual",
+      "item-code": "1633339239376/1633340013837/1633399330700",
+      "item-type": "resource",
+      "item_type": "dls-internal",
+      "learning-objectives": [
+       "Learning Objective 1"
+      ],
+      "model": {
+       "role": "all"
+      },
+      "name": "Speaking: Explaining and checking understanding 2",
+      "pass-score": 0.7,
+      "resource": "RE_00012",
+      "sub-type": "cup-pskill",
+      "tags": [
+       "c6ba00e8-0101-1ef5-9ec1-73ed27fb8652/a2ba00e8-147f-77a9-3b8a-4e37915af87b/b4bbc8d9-b55a-a30b-7e62-8d2a797bdf57",
+       "d4bbc653-4de0-fe0c-b820-5c6cc244cfc6/60bbc653-6bd0-0595-02a8-3a3e50987306",
+       "f8ba6f09-11b3-2df6-02f0-1ff7bdc3683e/28ba6f09-3cca-8132-a6e3-d6abd90d911b",
+       "debbc653-b220-e3ad-85c0-1da695662156/e4bbc654-0bb5-4eb6-7b79-627e808f2b75",
+       "b6bbc657-2d3f-9935-b5eb-1c3c99e0eb3b/1ebcc26c-67e0-a2df-fb27-790d8d2365d6"
+      ],
+      "tracking": true
+     },
+     {
+      "__analytics": {
+       "accessedOnce": false,
+       "activityStatus": "",
+       "bestResult": {},
+       "completedCount": 0,
+       "completedCountOverall": 0,
+       "completedLastDate": 0,
+       "completedOnce": false,
+       "completedOnceDate": 0,
+       "completedOnceWithSuccess": false,
+       "completedOnceWithSuccessDate": 0,
+       "completedOnceWithSuccessResult": {},
+       "firstAccessed": 0,
+       "firstResult": {},
+       "lastAccessed": 0,
+       "lastLaunched": 0,
+       "lastResult": {},
+       "lastSubmitted": 0,
+       "launchCount": 0,
+       "status": "not_started",
+       "submitCount": 0,
+       "submitCountOverall": 0,
+       "submittedOnce": false,
+       "submittedOnceDate": 0,
+       "timespent": 0
+      },
+      "contributes-to-completion": true,
+      "contributes-to-score": true,
+      "description": "",
+      "dls_product_code": "empbe2ednl5dwa",
+      "ext-cup-xapiscoreable": {
+       "container": "Channel",
+       "cup-options": {
+        "contentid": "1633399644830",
+        "dp": "deps/dp/cup-rdp-base-0.47",
+        "engine": "deps/engine/buckminster-33.0.2",
+        "lmsApis": "Channel",
+        "title": "1633399644830"
+       },
+       "filename": "Emp2_PE_BE_L5_U01_leD_x01_re1_SCO.zip",
+       "filesize": 9751,
+       "url": "ext-cup-xapiscoreable/1633399644830"
+      },
+      "game": false,
+      "item-code": "1633339239376/1633340016651/1633399644830",
+      "item-type": "resource",
+      "item_type": "dls-internal",
+      "learning-objectives": [
+       "Learning Objective 1"
+      ],
+      "model": {
+       "role": "all"
+      },
+      "name": "Reading: Article: My Tech-free Summer",
+      "pass-score": 0.7,
+      "resource": "RE_00013",
+      "sub-type": "ext-cup-xapiscoreable",
+      "tags": [
+       "c6ba00e8-0101-1ef5-9ec1-73ed27fb8652/a2ba00e8-147f-77a9-3b8a-4e37915af87b/b4bbc8d9-b55a-a30b-7e62-8d2a797bdf57",
+       "d4bbc653-4de0-fe0c-b820-5c6cc244cfc6/60bbc653-6bd0-0595-02a8-3a3e50987306",
+       "f8ba6f09-11b3-2df6-02f0-1ff7bdc3683e/7cba6f09-53c0-1045-809a-b304d34cd4b3",
+       "debbc653-b220-e3ad-85c0-1da695662156/e4bbc654-0bb5-4eb6-7b79-627e808f2b75",
+       "b6bbc657-2d3f-9935-b5eb-1c3c99e0eb3b/1ebcc26c-67e0-a2df-fb27-790d8d2365d6"
+      ],
+      "tracking": true
+     },
+     {
+      "__analytics": {
+       "accessedOnce": false,
+       "activityStatus": "",
+       "bestResult": {},
+       "completedCount": 0,
+       "completedCountOverall": 0,
+       "completedLastDate": 0,
+       "completedOnce": false,
+       "completedOnceDate": 0,
+       "completedOnceWithSuccess": false,
+       "completedOnceWithSuccessDate": 0,
+       "completedOnceWithSuccessResult": {},
+       "firstAccessed": 0,
+       "firstResult": {},
+       "lastAccessed": 0,
+       "lastLaunched": 0,
+       "lastResult": {},
+       "lastSubmitted": 0,
+       "launchCount": 0,
+       "status": "not_started",
+       "submitCount": 0,
+       "submitCountOverall": 0,
+       "submittedOnce": false,
+       "submittedOnceDate": 0,
+       "timespent": 0
+      },
+      "contributes-to-completion": true,
+      "contributes-to-score": true,
+      "description": "",
+      "dls_product_code": "empbe2ednl5dwa",
+      "ext-cup-xapiscoreable": {
+       "container": "Channel",
+       "cup-options": {
+        "contentid": "1633399659775",
+        "dp": "deps/dp/cup-rdp-base-0.47",
+        "engine": "deps/engine/buckminster-33.0.2",
+        "lmsApis": "Channel",
+        "title": "1633399659775"
+       },
+       "filename": "Emp2_PE_BE_L5_U01_leD_x02_wr1_SCO.zip",
+       "filesize": 423949,
+       "url": "ext-cup-xapiscoreable/1633399659775"
+      },
+      "game": false,
+      "item-code": "1633339239376/1633340016651/1633399659775",
+      "item-type": "resource",
+      "item_type": "dls-internal",
+      "learning-objectives": [
+       "Learning Objective 1"
+      ],
+      "model": {
+       "role": "all"
+      },
+      "name": "Writing: Organising an article",
+      "pass-score": 0.7,
+      "resource": "RE_00014",
+      "sub-type": "ext-cup-xapiscoreable",
+      "tags": [
+       "c6ba00e8-0101-1ef5-9ec1-73ed27fb8652/a2ba00e8-147f-77a9-3b8a-4e37915af87b/b4bbc8d9-b55a-a30b-7e62-8d2a797bdf57",
+       "d4bbc653-4de0-fe0c-b820-5c6cc244cfc6/60bbc653-6bd0-0595-02a8-3a3e50987306",
+       "f8ba6f09-11b3-2df6-02f0-1ff7bdc3683e/a2ba6f09-5c60-b61a-08af-a1c000044c48",
+       "debbc653-b220-e3ad-85c0-1da695662156/e4bbc654-0bb5-4eb6-7b79-627e808f2b75",
+       "b6bbc657-2d3f-9935-b5eb-1c3c99e0eb3b/1ebcc26c-67e0-a2df-fb27-790d8d2365d6"
+      ],
+      "tracking": true
+     },
+     {
+      "__analytics": {
+       "accessedOnce": false,
+       "activityStatus": "",
+       "bestResult": {},
+       "completedCount": 0,
+       "completedCountOverall": 0,
+       "completedLastDate": 0,
+       "completedOnce": false,
+       "completedOnceDate": 0,
+       "completedOnceWithSuccess": false,
+       "completedOnceWithSuccessDate": 0,
+       "completedOnceWithSuccessResult": {},
+       "firstAccessed": 0,
+       "firstResult": {},
+       "lastAccessed": 0,
+       "lastLaunched": 0,
+       "lastResult": {},
+       "lastSubmitted": 0,
+       "launchCount": 0,
+       "status": "not_started",
+       "submitCount": 0,
+       "submitCountOverall": 0,
+       "submittedOnce": false,
+       "submittedOnceDate": 0,
+       "timespent": 0
+      },
+      "contributes-to-completion": true,
+      "contributes-to-score": true,
+      "cup-pskill": {
+       "cup-options": {
+        "durationFormat": "seconds",
+        "helpText": "<p>Have you ever wondered what it's like to go camping without a tent? I took a survival camping course last summer, and I learned a lot. The first thing we learned was how to find water. Surprisingly, we could do this by looking for very green, healthy plants. This shows that there is water nearby. After we found a river, we went fishing to catch our dinner. Predictably, it was quite hard as we were trying to fish in an area that had no fish! Afterwards, we learned how to make a fire. Amazingly, even though we hadn't found any dry leaves or small branches, it was really easy! Then, we found places to sleep. It's safer to sleep near other people to keep animals away. By this stage, I was pretty tired, so I fell asleep very easily. All in all, I enjoyed the experience, and I undoubtedly learned a lot. But I was also very happy to go home the next morning!<br></p>",
+        "helpTitle": "Example",
+        "instructions": "Write a short article about an unexpected experience you had. What happened? What was your opinion of it?<br>&nbsp;<br>Here are some ideas:<br><ul><li>Begin the article with a direct question to get the reader's attention.</li><li>Use a sequence of events, or compare and contrast ideas.</li><li>Use comment adverbs.</li><li>Use linking words.</li><li>Summarise your experience or ideas and evaluate them.</li></ul>Useful language:<br>amazingly<br>naturally<br>inevitably<br>(not) surprisingly<br>predictably<br>undoubtedly<br>The first thing…<br>After…<br>Afterwards…<br>By this stage…<br>Then…<br>All in all,…<br>",
+        "maxChars": "",
+        "maxDuration": "240",
+        "submissionType": {
+         "fields": [
+          {
+           "key": "maxChars",
+           "resetOnToggle": false
+          },
+          {
+           "key": "groups",
+           "resetOnToggle": true
+          }
+         ],
+         "id": "text",
+         "value": "Simple Text"
+        },
+        "title": "Writing: An article"
+       },
+       "url": ""
+      },
+      "dls_product_code": "empbe2ednl5dwa",
+      "grading": "manual",
+      "item-code": "1633339239376/1633340016651/1633399856834",
+      "item-type": "resource",
+      "item_type": "dls-internal",
+      "learning-objectives": [
+       "Learning Objective 1"
+      ],
+      "model": {
+       "role": "all"
+      },
+      "name": "Writing: An article",
+      "pass-score": 0.7,
+      "resource": "RE_00015",
+      "sub-type": "cup-pskill",
+      "tags": [
+       "c6ba00e8-0101-1ef5-9ec1-73ed27fb8652/a2ba00e8-147f-77a9-3b8a-4e37915af87b/b4bbc8d9-b55a-a30b-7e62-8d2a797bdf57",
+       "d4bbc653-4de0-fe0c-b820-5c6cc244cfc6/60bbc653-6bd0-0595-02a8-3a3e50987306",
+       "f8ba6f09-11b3-2df6-02f0-1ff7bdc3683e/a2ba6f09-5c60-b61a-08af-a1c000044c48",
+       "debbc653-b220-e3ad-85c0-1da695662156/e4bbc654-0bb5-4eb6-7b79-627e808f2b75",
+       "b6bbc657-2d3f-9935-b5eb-1c3c99e0eb3b/1ebcc26c-67e0-a2df-fb27-790d8d2365d6"
+      ],
+      "tracking": true
+     }
+    ],
+    "modified": 1792532255924,
+    "path_type": "flat",
+    "rules": {
+     "rule_id": "QmFgLQgGvRdSq5f7"
+    },
+    "scope": "global",
+    "shared_progress": true,
+    "startdate": 1792532156773,
+    "status": "active",
+    "title": "Assignment 1, Mays. B2. sec. 15 . 3:30-5:00",
+    "version": 1
+   }
+  ],
+  "server": {
+   "request_id": "Self=1-6ad8779b-2d40cac434c67d8432f1fbd6;Root=1-6ad8779b-219550727dff02285b39ba38"
+  }
+ }
+}

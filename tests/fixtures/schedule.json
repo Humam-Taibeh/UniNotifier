@@ -1,0 +1,33 @@
+{
+  "_comment": "Weekly class schedule (issued Oct 10, 2026). Times are local 24h. Days: sun, mon, tue, wed.",
+  "semester": "First Semester 2026/2027",
+  "degree_hours": 132,
+  "lecture_reminder_minutes": 60,
+  "morning_summary_hour": null,
+  "remind_modes": ["Online"],
+  "portal_aliases": {"Databases": "Database Systems"},
+  "course_codes": {"0101221": "Linear Algebra (1)", "0101272": "Numerical Analysis (1)", "0135220": "Database Systems", "0135321": "Big Data", "0420115": "Arabic Communication Skills", "0420123": "English Communication Skills"},
+  "teachers": {"Linear Algebra (1)": "Dr. Waseem Almashaelh", "Numerical Analysis (1)": "Dr. Tareq Hamadneh", "Database Systems": "Dr. Bilal Hawashin", "Big Data": "Dr. Hani Omar", "Arabic Communication Skills": "Dr. Sayel Alkhelaifat", "English Communication Skills": "Dr. Mais Al-Shibli"},
+  "days": {
+    "sun": [
+      {"start": "09:30", "end": "11:00", "course": "Linear Algebra (1)", "course_ar": "جبر خطي 1", "section": "02", "mode": "In-Person", "label": "In-Person Lecture", "place": "Room 9147"},
+      {"start": "11:00", "end": "12:30", "course": "Big Data", "course_ar": "البيانات الضخمة", "section": "01", "mode": "In-Person", "label": "In-Person Lecture", "place": "Room 9104"},
+      {"start": "12:30", "end": "14:00", "course": "Numerical Analysis (1)", "course_ar": "تحليل عددي 1", "section": "03", "mode": "In-Person", "label": "In-Person Lecture", "place": "Room 349"},
+      {"start": "14:00", "end": "15:30", "course": "Database Systems", "course_ar": "قواعد البيانات", "section": "01", "mode": "In-Person", "label": "In-Person Lecture", "place": "Room 9135"},
+      {"start": "15:30", "end": "17:00", "course": "English Communication Skills", "course_ar": "الاتصال والتواصل باللغة الإنجليزية", "section": "15", "mode": "In-Person", "label": "In-Person Lecture", "place": "Room 19123"}
+    ],
+    "mon": [
+      {"start": "19:00", "end": "20:30", "course": "Arabic Communication Skills", "course_ar": "الاتصال والتواصل باللغة العربية", "section": "12", "mode": "Activity", "label": "Activity / Assignment"}
+    ],
+    "tue": [
+      {"start": "09:30", "end": "11:00", "course": "Linear Algebra (1)", "course_ar": "جبر خطي 1", "section": "02", "mode": "In-Person", "label": "In-Person Lecture", "place": "Room 9147"},
+      {"start": "11:00", "end": "12:30", "course": "Big Data", "course_ar": "البيانات الضخمة", "section": "01", "mode": "Activity", "label": "Activity / Self-Study"},
+      {"start": "12:30", "end": "14:00", "course": "Numerical Analysis (1)", "course_ar": "تحليل عددي 1", "section": "03", "mode": "Activity", "label": "Activity / Self-Study"},
+      {"start": "14:00", "end": "15:30", "course": "Database Systems", "course_ar": "قواعد البيانات", "section": "01", "mode": "In-Person", "label": "In-Person Lecture", "place": "Room 9135"},
+      {"start": "15:30", "end": "17:00", "course": "English Communication Skills", "course_ar": "الاتصال والتواصل باللغة الإنجليزية", "section": "15", "mode": "In-Person", "label": "In-Person Lecture", "place": "Room 19123"}
+    ],
+    "wed": [
+      {"start": "19:00", "end": "20:30", "course": "Arabic Communication Skills", "course_ar": "الاتصال والتواصل باللغة العربية", "section": "12", "mode": "Online", "label": "Online Lecture"}
+    ]
+  }
+}

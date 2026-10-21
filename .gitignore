@@ -1,0 +1,26 @@
+# ── your personal files: made from the *.example files, never committed ──
+/.env
+/schedule.json
+/assets/*
+!/assets/README.md
+
+# ── everything the program writes: state, sessions, caches, logs ──
+# (data/ can be its own private backup repository: python -m uninotifier.gitsync --init <url>)
+/data/
+/logs/
+*.log
+*.tmp
+
+# real pages recorded for the tests (tools.record_pages) — they hold your courses
+tests/recorded/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+build/
+
+# test coverage
+.coverage
+htmlcov/
