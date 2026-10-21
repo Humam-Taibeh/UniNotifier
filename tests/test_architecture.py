@@ -5245,7 +5245,7 @@ def test_no_personal_values_in_the_code():
             assert personal not in text, (path.name, personal)
     for path in [*(project / "scripts").glob("*.ps1"), project / ".env.example", project / "schedule.example.json",
                  *project.glob("*.md"), *(project / "docs").glob("*.md")]:      # what a new student reads and runs
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8").replace(PUBLIC_REPO, "")    # the project's own public address is fine
         for personal in ("Humam", "Taibeh", "Year_04", *own_ids):
             assert personal not in text, (path.name, personal)
     for path in (project / "tests").glob("*.py"):           # the tests use a made-up ID, never the real one
@@ -7238,14 +7238,39 @@ def test_no_personal_files_are_tracked():
     assert schedule.validate(json.loads((project / "schedule.example.json").read_text(encoding="utf-8"))) == []
 
 
+PUBLIC_REPO = "https://github.com/Humam-Taibeh/UniNotifier.git"
+
+
+def _suite_size() -> int:
+    """How many tests the runner below runs: the longest tuple of test functions it loops over."""
+    import ast
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    loops = [node.iter.elts for node in ast.walk(tree) if isinstance(node, ast.For) and isinstance(node.iter, ast.Tuple)
+             and node.iter.elts and all(isinstance(e, ast.Name) and e.id.startswith("test_") for e in node.iter.elts)]
+    return max(len(elts) for elts in loops)
+
+
 def test_the_readme_translations_say_the_same():
-    """README.md and README.ar.md link to each other and stay in step: the same commands, the same
-    diagram and sample output (comments may be translated), every relative link pointing at a file."""
+    """README.md and README.ar.md link to each other and stay in step: the same badges, commands,
+    diagram and sample output (comments may be translated), every relative link pointing at a file —
+    and the tests badge counts the tests this file really runs."""
     project = Path(__file__).resolve().parents[1]
     en = (project / "README.md").read_text(encoding="utf-8")
     ar = (project / "README.ar.md").read_text(encoding="utf-8")
     assert en.splitlines()[0] == "[العربية](README.ar.md) | **English**", en.splitlines()[0]
     assert ar.splitlines()[0] == "**العربية** | [English](README.md)", ar.splitlines()[0]
+
+    def badges(text):
+        head = text.split("\n# UniNotifier\n", 1)[0].splitlines()
+        assert head[1:4] == ["", "---", ""] and head[4] == '<div align="center">' and head[-1] == "</div>", head
+        return [line for line in head if line.startswith("[![")]
+    assert badges(en) == badges(ar) and len(badges(en)) == 5, "the same five badges on both pages"
+    labels = " ".join(badges(en))
+    for label in ("Python 3.11+", "Platform: Windows", "Code style: pyflakes clean", "License: MIT"):
+        assert f"[![{label}](" in labels, label
+    count = re.search(r"\[!\[Tests: (\d+) passed\]\(https://img\.shields\.io/badge/tests-(\d+)%20passed-", labels)
+    assert count and count.group(1) == count.group(2) == str(_suite_size()), \
+        f"the tests badge says {count and count.group(1)}, the suite has {_suite_size()} tests"
 
     def blocks(text):
         found = []
@@ -7259,7 +7284,7 @@ def test_the_readme_translations_say_the_same():
         for target in re.findall(r"\]\(([^)#]+?)\)", text):
             if not target.startswith(("http://", "https://")):
                 assert (project / target).exists(), (name, target)
-        assert "<owner>" in text and "%USERPROFILE%" in text, (name, "the placeholders stay placeholders")
+        assert f"git clone {PUBLIC_REPO}\n" in text and "%USERPROFILE%" in text, (name, "clone address and placeholder")
     assert [line.count("|") for line in en.splitlines() if line.startswith("|")] == \
            [line.count("|") for line in ar.splitlines() if line.startswith("|")], "the tables have the same shape"
 

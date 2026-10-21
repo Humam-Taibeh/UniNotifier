@@ -1,5 +1,17 @@
 [العربية](README.ar.md) | **English**
 
+---
+
+<div align="center">
+
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)](https://www.microsoft.com/windows)
+[![Tests: 105 passed](https://img.shields.io/badge/tests-105%20passed-brightgreen)](tests/test_architecture.py)
+[![Code style: pyflakes clean](https://img.shields.io/badge/code%20style-pyflakes%20clean-brightgreen)](https://github.com/PyCQA/pyflakes)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+</div>
+
 # UniNotifier
 
 **Your university, on your phone — the moment anything changes.**
@@ -95,7 +107,7 @@ inside the project folder once you have it.
 
 ```powershell
 cd $HOME\Documents
-git clone https://github.com/<owner>/UniNotifier.git     # the address of the repository you got this from
+git clone https://github.com/Humam-Taibeh/UniNotifier.git
 cd UniNotifier
 py -3 -m venv .venv
 ```
