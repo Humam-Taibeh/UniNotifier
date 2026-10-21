@@ -1,0 +1,56 @@
+# The whole test suite and pyflakes on a clean Windows machine, for every push and pull request.
+# The suite is offline by design (no Moodle, no portal, no Telegram; any outside connection fails it)
+# and runs on a made-up .env, so it needs no secrets.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python ${{ matrix.python }} on Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]          # the oldest version the README promises, and the newest
+    env:
+      PYTHONUTF8: "1"                     # course names are Arabic; the runner's console is not UTF-8
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Use Jordan's time zone (where UniNotifier runs)
+        run: tzutil /s "Jordan Standard Time"
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install the dependencies and the project
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Install Chromium for Playwright
+        run: python -m playwright install chromium
+
+      - name: Tests (offline)
+        run: python tests/test_architecture.py
+
+      - name: pyflakes
+        run: python -m pyflakes src tests monitor.py bot.py

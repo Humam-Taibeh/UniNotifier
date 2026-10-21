@@ -6,7 +6,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)](https://www.microsoft.com/windows)
-[![Tests: 105 passed](https://img.shields.io/badge/tests-105%20passed-brightgreen)](tests/test_architecture.py)
+[![Tests](https://github.com/Humam-Taibeh/UniNotifier/actions/workflows/tests.yml/badge.svg)](https://github.com/Humam-Taibeh/UniNotifier/actions/workflows/tests.yml)
 [![Code style: pyflakes clean](https://img.shields.io/badge/code%20style-pyflakes%20clean-brightgreen)](https://github.com/PyCQA/pyflakes)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 

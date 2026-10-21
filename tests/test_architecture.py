@@ -5245,7 +5245,7 @@ def test_no_personal_values_in_the_code():
             assert personal not in text, (path.name, personal)
     for path in [*(project / "scripts").glob("*.ps1"), project / ".env.example", project / "schedule.example.json",
                  *project.glob("*.md"), *(project / "docs").glob("*.md")]:      # what a new student reads and runs
-        text = path.read_text(encoding="utf-8").replace(PUBLIC_REPO, "")    # the project's own public address is fine
+        text = path.read_text(encoding="utf-8").replace(REPO_PATH, "")      # the project's own public address is fine
         for personal in ("Humam", "Taibeh", "Year_04", *own_ids):
             assert personal not in text, (path.name, personal)
     for path in (project / "tests").glob("*.py"):           # the tests use a made-up ID, never the real one
@@ -7238,22 +7238,14 @@ def test_no_personal_files_are_tracked():
     assert schedule.validate(json.loads((project / "schedule.example.json").read_text(encoding="utf-8"))) == []
 
 
-PUBLIC_REPO = "https://github.com/Humam-Taibeh/UniNotifier.git"
-
-
-def _suite_size() -> int:
-    """How many tests the runner below runs: the longest tuple of test functions it loops over."""
-    import ast
-    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
-    loops = [node.iter.elts for node in ast.walk(tree) if isinstance(node, ast.For) and isinstance(node.iter, ast.Tuple)
-             and node.iter.elts and all(isinstance(e, ast.Name) and e.id.startswith("test_") for e in node.iter.elts)]
-    return max(len(elts) for elts in loops)
+REPO_PATH = "github.com/Humam-Taibeh/UniNotifier"      # the project's own public address
+PUBLIC_REPO = f"https://{REPO_PATH}.git"
 
 
 def test_the_readme_translations_say_the_same():
     """README.md and README.ar.md link to each other and stay in step: the same badges, commands,
     diagram and sample output (comments may be translated), every relative link pointing at a file —
-    and the tests badge counts the tests this file really runs."""
+    and the tests badge is the live status of the CI workflow that runs this suite."""
     project = Path(__file__).resolve().parents[1]
     en = (project / "README.md").read_text(encoding="utf-8")
     ar = (project / "README.ar.md").read_text(encoding="utf-8")
@@ -7268,9 +7260,12 @@ def test_the_readme_translations_say_the_same():
     labels = " ".join(badges(en))
     for label in ("Python 3.11+", "Platform: Windows", "Code style: pyflakes clean", "License: MIT"):
         assert f"[![{label}](" in labels, label
-    count = re.search(r"\[!\[Tests: (\d+) passed\]\(https://img\.shields\.io/badge/tests-(\d+)%20passed-", labels)
-    assert count and count.group(1) == count.group(2) == str(_suite_size()), \
-        f"the tests badge says {count and count.group(1)}, the suite has {_suite_size()} tests"
+    workflow = f"https://{REPO_PATH}/actions/workflows/tests.yml"
+    assert f"[![Tests]({workflow}/badge.svg)]({workflow})" in labels, "the tests badge is the CI workflow's own"
+    ci = (project / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
+    for step in ("runs-on: windows-latest", '"3.11"', "python tests/test_architecture.py",
+                 "python -m pyflakes src tests monitor.py bot.py", "python -m playwright install chromium"):
+        assert step in ci, f"the CI workflow lost: {step}"
 
     def blocks(text):
         found = []
