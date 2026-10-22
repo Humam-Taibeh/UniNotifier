@@ -111,13 +111,15 @@ inside the project folder once you have it.
 ### 2. Get the code and create its private Python environment
 
 ```powershell
-cd $HOME\Documents
+cd $HOME
 git clone https://github.com/Humam-Taibeh/UniNotifier.git
 cd UniNotifier
 py -3 -m venv .venv
 ```
 
 `.venv` is a private copy of Python for this project only; nothing is installed system-wide.
+Keep the project in your user folder as shown, not inside OneDrive: syncing breaks `.venv` and locks
+the files UniNotifier writes.
 
 ### 3. Install the dependencies and the browser
 
@@ -289,6 +291,7 @@ restarting the PC by itself while you are signed in. See [docs/REFERENCE.md](doc
 # update to the latest version
 git pull
 .venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\python -m playwright install chromium               # a new Playwright needs its own Chromium
 powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1     # restarts the bot on the new code
 
 # pause / resume everything

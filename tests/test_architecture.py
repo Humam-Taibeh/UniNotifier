@@ -3396,7 +3396,8 @@ def test_telegram_transport():
         telegram.request("T", "sendMessage", json={"chat_id": 7, "text": "b"})
         telegram.request("T", "sendMessage", json={"chat_id": 8, "text": "c"})
         telegram.request("T", "answerCallbackQuery", json={"callback_query_id": "1"})
-        assert len(sleeps) == 1 and 0.2 < sleeps[0] <= 0.4, sleeps
+        # Windows' monotonic clock ticks every ~16 ms: two sends in one tick wait the full 0.4 s, give or take a float's last bit
+        assert len(sleeps) == 1 and 0.2 < sleeps[0] <= 0.4 + 1e-6, sleeps
     finally:
         telegram.post, telegram.time.sleep, telegram.MIN_SEND_INTERVAL = keep
 
@@ -5233,11 +5234,14 @@ def test_no_personal_values_in_the_code():
     bot = _package("uninotifier.bot")
     project = Path(__file__).resolve().parents[1]
     code = list((project / "src").rglob("*.py")) + list(project.glob("*.py"))
-    # your own IDs, read from .env (so they are never written in this file either)
+    # your own IDs, read from .env (so they are never written in this file either); a value still
+    # copied from .env.example (what install.bat leaves before you fill it in) is nobody's
     from dotenv import dotenv_values
+    from uninotifier import envcheck
     env = dotenv_values(project / ".env") if (project / ".env").is_file() else {}
     own_ids = {v.strip() for v in (env.get("STUDENT_ID"), env.get("PORTAL_USERNAME"),
-                                   (env.get("ZUJ_USERNAME") or "").split("@")[0]) if v and len(v.strip()) >= 6}
+                                   (env.get("ZUJ_USERNAME") or "").split("@")[0])
+               if v and len(v.strip()) >= 6 and not envcheck._PLACEHOLDER.search(v.strip())}
     assert len(code) > 30, code
     for path in code:
         text = path.read_text(encoding="utf-8")
@@ -7130,20 +7134,32 @@ def test_settings_are_checked_before_anything_runs():
 
 
 def test_archive_root_defaults_to_documents_university():
-    """ARCHIVE_ROOT is optional: unset, files go to Documents/University in the home folder; set, %VARS%
-    and ~ are expanded, so one .env line works on any PC."""
+    """ARCHIVE_ROOT is optional: unset, files go to University in the Documents folder Explorer shows
+    (OneDrive's when OneDrive backs up Documents); set, %VARS% and ~ are expanded, so one .env line
+    works on any PC."""
     empty = _HOME / "empty.env"
     empty.write_text("", encoding="utf-8")
-    keep = paths.ENV_FILE
+    keep = paths.ENV_FILE, archive._shell_documents
     paths.ENV_FILE = empty
     try:
-        assert _with_env({"ARCHIVE_ROOT": None}, archive._archive_root) == Path.home() / "Documents" / "University"
+        assert archive.DEFAULT_ARCHIVE_ROOT == archive.documents_folder() / "University"
+        assert _with_env({"ARCHIVE_ROOT": None}, archive._archive_root) == archive.DEFAULT_ARCHIVE_ROOT
         assert _with_env({"ARCHIVE_ROOT": "  "}, archive._archive_root) == archive.DEFAULT_ARCHIVE_ROOT
+        # which Documents: Windows' shell folder first, then OneDrive's, then the home folder's
+        shell, onedrive = _HOME / "ShellDocs", _HOME / "OneDrive - ZUJ"
+        shell.mkdir(exist_ok=True)
+        (onedrive / "Documents").mkdir(parents=True, exist_ok=True)
+        archive._shell_documents = lambda: str(shell)
+        assert _with_env({"OneDrive": str(onedrive)}, archive.documents_folder) == shell
+        archive._shell_documents = lambda: ""
+        assert _with_env({"OneDrive": str(onedrive)}, archive.documents_folder) == onedrive / "Documents"
+        archive._shell_documents = lambda: str(_HOME / "gone")       # a shell folder that doesn't exist is skipped
+        assert _with_env({"OneDrive": None}, archive.documents_folder) == Path.home() / "Documents"
         got = _with_env({"ARCHIVE_ROOT": "%UNINOTIFIER_T%\\Semester_1", "UNINOTIFIER_T": str(_HOME)}, archive._archive_root)
         assert got == _HOME / "Semester_1", got
         assert _with_env({"ARCHIVE_ROOT": "~/Uni"}, archive._archive_root) == Path.home() / "Uni"
     finally:
-        paths.ENV_FILE = keep
+        paths.ENV_FILE, archive._shell_documents = keep
     assert archive.ARCHIVE_ROOT == _HOME / "archive", "the tests never touch the real archive"
 
 

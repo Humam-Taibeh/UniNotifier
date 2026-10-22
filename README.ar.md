@@ -113,7 +113,7 @@
 ### 2. تنزيل الكود وإنشاء البيئة الافتراضية
 
 ```powershell
-cd $HOME\Documents
+cd $HOME
 git clone https://github.com/Humam-Taibeh/UniNotifier.git
 cd UniNotifier
 py -3 -m venv .venv
@@ -121,6 +121,8 @@ py -3 -m venv .venv
 
 المجلد `.venv` هو بيئة افتراضية (virtual environment): نسخة خاصة من Python لهذا المشروع وحده، فلا
 يُثبَّت أي شيء على مستوى النظام.
+احفظ المشروع في مجلد المستخدم كما في الأوامر أعلاه، لا داخل OneDrive: المزامنة تُفسد `.venv` وتقفل
+الملفات التي يكتبها UniNotifier.
 
 ### 3. تثبيت المكتبات والمتصفح
 
@@ -294,6 +296,7 @@ Windows من إعادة تشغيل الجهاز تلقائياً أثناء تس
 # التحديث إلى أحدث إصدار
 git pull
 .venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\python -m playwright install chromium               # إصدار Playwright الجديد يحتاج متصفح Chromium الخاص به
 powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1     # يعيد تشغيل البوت على الكود الجديد
 
 # إيقاف كل شيء مؤقتاً / استئنافه

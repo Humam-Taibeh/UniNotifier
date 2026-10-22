@@ -98,7 +98,8 @@ including network tracebacks.
 ## Local archive
 
 Every course gets a folder under `ARCHIVE_ROOT` (set in `.env`; without it,
-`Documents\University` in your home folder) with this structure:
+`University` in the Documents folder Explorer shows — OneDrive's when OneDrive backs up
+Documents) with this structure:
 
 ```
 <Course in English>/

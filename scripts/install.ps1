@@ -62,6 +62,12 @@ function VersionOf([string]$exe, [string[]]$prefix) {
 Write-Host 'UniNotifier installer'
 Write-Host "Project: $Root"
 Set-Location $Root
+if ($Root -match '\\OneDrive( - [^\\]+)?\\') {
+    # a synced folder can make .venv's files cloud-only and locks data\ files while they upload
+    Write-Host ''
+    Write-Host '[WARN] This folder is inside OneDrive. UniNotifier works best outside it:' -ForegroundColor Yellow
+    Write-Host "       -> move the whole folder to $HOME and run install.bat there" -ForegroundColor Yellow
+}
 
 # -- 1. Python ---------------------------------------------------------------------------------
 Step 'Looking for Python 3.11 or newer'

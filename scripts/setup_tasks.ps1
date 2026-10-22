@@ -58,7 +58,7 @@ Write-Host "Project: $Root"
 
 if (-not (Test-Path $Pythonw)) {
     Fail "No virtual environment in $Root\.venv" `
-         "create it first:  py -3 -m venv .venv ; .venv\Scripts\pip install -r requirements.txt"
+         "double-click install.bat first (it creates .venv and installs everything)"
 }
 foreach ($file in $Monitor, $Bot) {
     if (-not (Test-Path $file)) { Fail "Missing $file" "run this script from a complete copy of the repository" }

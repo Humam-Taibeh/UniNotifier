@@ -34,9 +34,31 @@ from uninotifier.zuj_auth import BASE_URL
 
 log = logging.getLogger("uninotifier")
 
+def _shell_documents() -> str:
+    """Explorer's Documents folder as Windows records it (the "Personal" shell folder) - OneDrive's
+    when OneDrive backs up Documents; "" when it can't be read."""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders") as key:
+            return os.path.expandvars(str(winreg.QueryValueEx(key, "Personal")[0])).strip()
+    except (ImportError, OSError):
+        return ""
+
+
+def documents_folder() -> Path:
+    """The Documents folder the student sees in Explorer: the shell folder, else OneDrive's Documents,
+    else Documents in the home folder."""
+    onedrive = (os.getenv("OneDrive") or "").strip()
+    for candidate in (_shell_documents(), os.path.join(onedrive, "Documents") if onedrive else ""):
+        if candidate and Path(candidate).is_dir():
+            return Path(candidate)
+    return Path.home() / "Documents"
+
+
 # Where downloaded course files go: ARCHIVE_ROOT in .env (a semester folder of your own;
-# %USERPROFILE% and ~ are expanded), or Documents/University in your home folder when it isn't set.
-DEFAULT_ARCHIVE_ROOT = Path.home() / "Documents" / "University"
+# %USERPROFILE% and ~ are expanded), or University in your Documents folder when it isn't set.
+DEFAULT_ARCHIVE_ROOT = documents_folder() / "University"
 
 
 def _archive_root() -> Path:

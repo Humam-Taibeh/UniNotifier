@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.11", "3.13"]          # the oldest version the README promises, and the newest
+        python: ["3.11", "3.13", "3.14", "3.15"]    # the oldest version the README promises, up to what python.org offers now
     env:
       PYTHONUTF8: "1"                     # course names are Arabic; the runner's console is not UTF-8
       PYTHONIOENCODING: utf-8
