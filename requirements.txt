@@ -1,7 +1,7 @@
 # Exact versions: every student installs what the tests and the maintainer's own copy run.
 # Dependabot proposes updates weekly (.github/dependabot.yml); CI tests each one before it is merged.
 # The project itself is installed separately:  pip install --no-deps -e .
-playwright==1.63.0
+playwright==1.64.0
 python-dotenv==1.2.4
 requests==2.34.2
 openpyxl==3.1.5
