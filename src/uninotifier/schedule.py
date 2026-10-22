@@ -92,8 +92,8 @@ def validate(data) -> list[str]:
         if key in data and not (isinstance(data[key], list) and all(m in MODE_EMOJI for m in data[key])):
             errors.append(f'"{key}" must be a list of: {", ".join(MODE_EMOJI)}')
     degree = data.get("degree_hours")
-    if "degree_hours" in data and (isinstance(degree, bool) or not isinstance(degree, (int, float)) or not 30 <= degree <= 400):
-        errors.append('"degree_hours" must be the number of credit hours of the whole degree plan (30 to 400)')
+    if degree is not None and (isinstance(degree, bool) or not isinstance(degree, (int, float)) or not 30 <= degree <= 400):
+        errors.append('"degree_hours" must be null or the number of credit hours of the whole degree plan (30 to 400)')
     if "semester" in data and not isinstance(data["semester"], str):
         errors.append('"semester" must be text')
     for key in ("portal_aliases", "course_codes"):
@@ -141,7 +141,7 @@ def load_schedule() -> dict:
     global _good, _broken
     path = str(SCHEDULE_FILE)
     try:
-        text = SCHEDULE_FILE.read_text(encoding="utf-8")
+        text = SCHEDULE_FILE.read_text(encoding="utf-8-sig")     # Notepad may save it with a BOM
     except OSError as e:
         if _read["path"] == path and _read["text"] is None and _read["data"] is not None:
             return copy.deepcopy(_read["data"])           # still missing: already reported

@@ -85,8 +85,9 @@ if ($Python) {
     }
 }
 if (-not $base) {
-    Fail 'Python 3.11 or newer was not found' ('install it from https://www.python.org/downloads/ (tick "Add python.exe to PATH") ' +
-         'or run:  winget install -e --id Python.Python.3.13  - then run this installer again')
+    Fail 'Python 3.11 or newer was not found' ('install it from https://www.python.org/downloads/ (the Python install manager, ' +
+         'or the classic installer with "Add python.exe to PATH" ticked) or run:  winget install -e --id Python.Python.3.13  - ' +
+         'then run this installer again')
 }
 Ok "Python $($base.Version)"
 
@@ -157,6 +158,7 @@ if ($healthy) {
     Write-Host ''
     Write-Host 'After that, three commands are left (README, step 6):'
 }
+Write-Host '  (type them in PowerShell in this folder: in File Explorer, type powershell in the address bar)'
 Write-Host '  .venv\Scripts\python -m uninotifier.tools.login_refresh      sign in to Moodle once'
 Write-Host '  .venv\Scripts\python monitor.py                              the first, quiet check'
 Write-Host '  powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1   run it automatically'

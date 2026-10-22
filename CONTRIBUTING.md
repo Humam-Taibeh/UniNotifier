@@ -18,7 +18,7 @@ for anything bigger, open a feature request first so we can agree on the shape.
 .venv\Scripts\python -m pyflakes src tests monitor.py bot.py
 ```
 
-Both must pass — CI runs them on Windows with Python 3.11 and 3.13, and runs the student installer.
+Both must pass — CI runs them on Windows with Python 3.11, 3.13, 3.14 and 3.15, and runs the student installer.
 
 ## The rules the tests enforce
 

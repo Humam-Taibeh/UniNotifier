@@ -93,9 +93,11 @@
 ## الإعداد في 6 خطوات
 
 نحو 20 دقيقة. جميع الأوامر أدناه تُكتب في **PowerShell** (ابحث عنه في قائمة Start)، داخل مجلد
-المشروع بعد تنزيله.
+المشروع بعد تنزيله. وأسرع طريقة لذلك: افتح مجلد المشروع في مستكشف الملفات (File Explorer)، واكتب
+`powershell` في شريط العنوان ثم اضغط Enter.
 
-> **اختصار:** بعد الخطوة 1، نزّل الكود (بأمر `git clone` في الخطوة 2، أو من صفحة المشروع على GitHub عبر
+> **اختصار:** بعد الخطوة 1، نزّل الكود (بأمر `git clone` في الخطوة 2 — وهو المُستحسن، إذ يصبح كل تحديث بعدها
+> أمر `git pull` واحداً — أو من صفحة المشروع على GitHub عبر
 > **Code → Download ZIP** ثم فك الضغط) وأنشئ بوتك (الخطوة 4) — ثم انقر نقراً مزدوجاً على **`install.bat`**
 > في مجلد المشروع. سيُنجز عنك بقية الخطوتين 2 و3 ومعظم الخطوة 5 (البيئة `.venv` والمكتبات و Chromium،
 > ويفتح لك `.env` و `schedule.json` في Notepad) وينتهي بأداة الفحص. ثم تابع من الخطوة 6.
@@ -105,7 +107,7 @@
 | تحتاج إلى | طريقة الحصول عليه | للتحقق |
 |---|---|---|
 | نظام Windows 10 أو 11 | — | — |
-| إصدار **Python 3.11** أو أحدث | من [python.org/downloads](https://www.python.org/downloads/) — وأثناء التثبيت فعّل خيار **"Add python.exe to PATH"** | `py --version` |
+| إصدار **Python 3.11** أو أحدث | من [python.org/downloads](https://www.python.org/downloads/) — أداة التثبيت الافتراضية **Python install manager** تنزّل Python بنفسها عند أول تشغيل للأمر `py --version`؛ أما إن استخدمت المثبّت التقليدي ففعّل خيار **"Add python.exe to PATH"** | `py --version` |
 | برنامج **Git** | من [git-scm.com/download/win](https://git-scm.com/download/win) (الإعدادات الافتراضية كافية) | `git --version` |
 | تطبيق تيليجرام | على هاتفك | — |
 | حساب Microsoft الجامعي | الحساب الذي تسجّل به الدخول إلى Moodle، وتطبيق Authenticator إن كنت تستخدمه | — |
@@ -307,6 +309,12 @@ Enable-ScheduledTask UniNotifier; Start-ScheduledTask UniNotifier_BotListener
 powershell -ExecutionPolicy Bypass -File scripts\remove_tasks.ps1
 ```
 
+**نزّلت الملف المضغوط (ZIP) بدلاً من الاستنساخ؟** الأمر `git pull` لا يعمل إلا في نسخة أُنشئت بـ `git clone`.
+نزّل ملف ZIP الجديد وفك ضغطه، وانسخ إليه من مجلدك القديم `.env` و `schedule.json` و `assets\` و `data\`،
+ثم انقر نقراً مزدوجاً على `install.bat` في المجلد الجديد، وبعدها شغّل `scripts\setup_tasks.ps1` منه كي تشير
+المهام المجدولة إليه، ثم احذف المجلد القديم. أو انتقل إلى `git clone` مرة واحدة (الخطوة 2)، فيصبح كل تحديث
+لاحق هو الأسطر الأربعة أعلاه.
+
 للإزالة الكاملة: أزل المهام أولاً، ثم احذف مجلد المشروع (ومجلد الأرشيف أيضاً إن لم تعد بحاجة إلى
 ملفات المواد).
 
@@ -326,6 +334,7 @@ powershell -ExecutionPolicy Bypass -File scripts\remove_tasks.ps1
 | الخطأ `No module named uninotifier` | شغّل `.venv\Scripts\pip install --no-deps -e .` **من داخل مجلد المشروع** (أو انقر نقراً مزدوجاً على `install.bat` مجدداً) |
 | الخطأ `Executable doesn't exist … chromium` | شغّل `.venv\Scripts\python -m playwright install chromium` |
 | تطلب Microsoft التحقق | يمرّر البوت الطلب إليك عبر تيليجرام — وافق عليه من هاتفك (أو أرسل رمز SMS ردّاً). الحل الأخير: `.venv\Scripts\python -m uninotifier.tools.login_refresh` |
+| أداة الفحص تقول *"schedule.json still holds the example classes"* | استبدل الحصص الواردة كمثال بجدولك الأسبوعي (الخطوة 5) — فلو تركتها لأرسل لك البوت تنبيهات محاضرات ليست لك |
 | رسالة *"schedule.json needs fixing"* على تيليجرام | تسرد الرسالة كل خطأ، وتستمر التذكيرات باستخدام آخر نسخة سليمة حتى تصحّحه |
 | لا يحدث شيء بعد إعادة تشغيل الجهاز | سجّل الدخول إلى Windows — فالمهام تعمل ما دمت مسجّل الدخول، وتعوّض الفحوص الفائتة تلقائياً |
 

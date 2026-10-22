@@ -91,10 +91,12 @@ subscription, and nothing about you ever leaves your PC except the messages it s
 ## Setup in 6 steps
 
 About 20 minutes. Every command below is typed in **PowerShell** (Start menu → "PowerShell"),
-inside the project folder once you have it.
+inside the project folder once you have it. The quickest way there: in File Explorer, open the project
+folder, type `powershell` in the address bar and press Enter.
 
-> **Shortcut:** after step 1, get the code (step 2's `git clone`, or **Code → Download ZIP** on GitHub,
-> then unzip it) and create your bot (step 4) — then double-click **`install.bat`** in the project folder.
+> **Shortcut:** after step 1, get the code (step 2's `git clone` — recommended, as every update is then
+> one `git pull` — or **Code → Download ZIP** on GitHub, then unzip it) and create your bot (step 4) —
+> then double-click **`install.bat`** in the project folder.
 > It does the rest of steps 2 and 3 and most of step 5 for you (`.venv`, the packages, Chromium, your
 > `.env` and `schedule.json` opened in Notepad) and ends with the doctor. Then continue with step 6.
 
@@ -103,7 +105,7 @@ inside the project folder once you have it.
 | You need | How to get it | Check |
 |---|---|---|
 | Windows 10 or 11 | — | — |
-| **Python 3.11 or newer** | [python.org/downloads](https://www.python.org/downloads/) — during setup tick **"Add python.exe to PATH"** | `py --version` |
+| **Python 3.11 or newer** | [python.org/downloads](https://www.python.org/downloads/) — its default **Python install manager** downloads Python by itself the first time you run `py --version`; with the classic installer instead, tick **"Add python.exe to PATH"** | `py --version` |
 | **Git** | [git-scm.com/download/win](https://git-scm.com/download/win) (all defaults are fine) | `git --version` |
 | Telegram | on your phone | — |
 | Your ZUJ Microsoft account | the one you sign in to Moodle with, and the Authenticator app if you use it | — |
@@ -302,6 +304,12 @@ Enable-ScheduledTask UniNotifier; Start-ScheduledTask UniNotifier_BotListener
 powershell -ExecutionPolicy Bypass -File scripts\remove_tasks.ps1
 ```
 
+**Downloaded the ZIP instead of cloning?** `git pull` only works in a clone. Download and extract the
+new ZIP, copy `.env`, `schedule.json`, `assets\` and `data\` from your old folder into the new one,
+double-click `install.bat` there, then run `scripts\setup_tasks.ps1` from the new folder so the tasks
+point at it, and delete the old folder. Or switch to a clone once (step 2): every later update is then
+the four lines above.
+
 To uninstall completely, remove the tasks, then delete the project folder (and your archive
 folder, if you no longer want the course files).
 
@@ -321,6 +329,7 @@ Then look at `data\logs\monitor.log` and `data\logs\bot.log`.
 | `No module named uninotifier` | run `.venv\Scripts\pip install --no-deps -e .` **from the project folder** (or double-click `install.bat` again) |
 | `Executable doesn't exist … chromium` | `.venv\Scripts\python -m playwright install chromium` |
 | Microsoft asks for verification | the bot relays it to Telegram — approve it on your phone (or reply with the SMS code). Last resort: `.venv\Scripts\python -m uninotifier.tools.login_refresh` |
+| The doctor says *"schedule.json still holds the example classes"* | replace them with your own week (step 5) — left as they are, the bot would announce lectures you don't have |
 | *"schedule.json needs fixing"* on Telegram | the message lists each mistake; reminders keep using the last good copy until it is fixed |
 | Nothing happens after a restart | sign in to Windows — the tasks run while you are signed in; checks catch up by themselves |
 

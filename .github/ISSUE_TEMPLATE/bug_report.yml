@@ -13,7 +13,7 @@ body:
         with `you` if you prefer.
 
         Found a way to read someone's credentials or make the bot act for a stranger? Please don't open an
-        issue — report it privately as described in [SECURITY.md](../blob/main/SECURITY.md).
+        issue — report it privately as described in [SECURITY.md](https://github.com/Humam-Taibeh/UniNotifier/blob/main/SECURITY.md).
 
   - type: textarea
     id: what-happened
@@ -58,7 +58,7 @@ body:
     attributes:
       label: UniNotifier version
       description: The release you installed, or the output of `git log -1 --format=%h`.
-      placeholder: v1.0.0
+      placeholder: v1.0.1
 
   - type: checkboxes
     id: privacy

@@ -3193,6 +3193,12 @@ def test_schedule_validation_and_last_good():
         edited["lecture_reminder_minutes"] = 15
         schedule.SCHEDULE_FILE.write_text(json.dumps(edited), encoding="utf-8")
         assert schedule.load_schedule()["lecture_reminder_minutes"] == 15, "an edit takes effect on the next call"
+        sent = len(OUTBOX)
+        edited["lecture_reminder_minutes"] = 20                   # saved by Notepad as "UTF-8 with BOM"
+        schedule.SCHEDULE_FILE.write_text("﻿" + json.dumps(edited), encoding="utf-8")
+        assert schedule.load_schedule()["lecture_reminder_minutes"] == 20, "a byte-order mark is not a mistake"
+        failsafe.wait_idle()
+        assert len(OUTBOX) == sent, OUTBOX[sent:]
     finally:
         schedule.SCHEDULE_FILE, schedule.LAST_GOOD_FILE, schedule._good, schedule._broken = keep[:4]
         schedule._read.update(keep[4])
@@ -4992,7 +4998,8 @@ def test_guest_summary_and_target_math():
     from uninotifier import schedule
     base = {"days": {}, "degree_hours": 132}
     assert schedule.validate(base) == [] and schedule.validate({"days": {}, "degree_hours": 132.5}) == []
-    for bad in ("132", 10, 500, True, None):
+    assert schedule.validate({"days": {}, "degree_hours": None}) == [], "null = not set (the example's value)"
+    for bad in ("132", 10, 500, True):
         assert schedule.validate({"days": {}, "degree_hours": bad}), bad
     assert "degree_hours" in schedule.KNOWN_KEYS
 
@@ -7230,6 +7237,24 @@ def test_doctor_says_what_to_fix():
         finally:
             paths.SCHEDULE_FILE = keep_schedule
         assert code == 1 and "copy schedule.example.json to no-such-schedule.json" in text, text
+
+        # the example left as it was installed (and saved by Notepad with a BOM): fails, so no fake lecture alerts
+        tmp = Path(tempfile.mkdtemp(prefix="uninotifier-doctor-"))
+        example = json.loads(paths.SCHEDULE_EXAMPLE.read_text(encoding="utf-8"))
+        own = json.loads(keep_schedule.read_text(encoding="utf-8"))
+        paths.SCHEDULE_FILE = tmp / "schedule.json"
+        try:
+            paths.SCHEDULE_FILE.write_text("﻿" + json.dumps(example, ensure_ascii=False), encoding="utf-8")
+            code, text = run("--offline")
+            assert code == 1 and "[FAIL] schedule.json still holds the example classes" in text, text
+            assert "not valid JSON" not in text and "[ OK ] Timetable" not in text, text
+            own["days"].setdefault("mon", []).append(example["days"]["mon"][0])     # one example class left behind
+            paths.SCHEDULE_FILE.write_text(json.dumps(own), encoding="utf-8")
+            code, text = run("--offline")
+            assert code == 0 and "[ OK ] Timetable" in text and "[WARN] 1 class(es) in schedule.json are still the example's" in text, text
+        finally:
+            paths.SCHEDULE_FILE = keep_schedule
+            shutil.rmtree(tmp, ignore_errors=True)
         assert all(ord(ch) < 128 for line in text.splitlines() if line.startswith("[") for ch in line[:6])
     finally:
         doctor.check_browser, doctor.check_tasks = keep

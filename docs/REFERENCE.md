@@ -604,7 +604,7 @@ UniNotifier/
 ├── tests/                    test_architecture.py; fixtures/ (a fixed tracker and timetable);
 │                             recorded/ (your real pages, kept out of Git)
 ├── docs/REFERENCE.md         this file
-├── .github/                  CI (the suite + pyflakes on Python 3.11 and 3.13, and the installer, on Windows),
+├── .github/                  CI (the suite + pyflakes on Python 3.11, 3.13, 3.14 and 3.15, and the installer, on Windows),
 │                             Dependabot (weekly), issue forms with a privacy promise
 ├── requirements.txt          exact package versions (requirements-dev.txt adds pyflakes and pylint)
 ├── SECURITY.md, CONTRIBUTING.md   reporting a vulnerability privately; the rules the tests enforce
@@ -634,7 +634,10 @@ Telegram settings themselves are fine, sent to you (once per 6 hours, through `f
 archive folder (written to), Chromium, the bot token and your chat (`--offline` skips Telegram, `--send`
 sends a test message), the Moodle session, the state backup and the scheduled tasks — and prints one
 `[ OK ]` / `[FAIL]` / `[WARN]` line each, with the fix under every failure. Exit code 0 means nothing
-blocks a run; `scripts/setup_tasks.ps1` runs it before registering anything.
+blocks a run; `scripts/setup_tasks.ps1` runs it before registering anything. A `schedule.json` whose
+classes are all still `schedule.example.json`'s fails (it would announce lectures the student doesn't
+have); a few example classes left among real ones are a warning. `schedule.json` may carry a UTF-8
+byte-order mark (Notepad's "UTF-8 with BOM"): the doctor and the bot both read it.
 
 ## Scheduled tasks
 

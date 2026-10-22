@@ -54,23 +54,43 @@ def check_env(r: Report) -> None:
         r.line(OK, "Settings (.env): everything required is filled in")
 
 
+def example_classes(days: dict) -> int:
+    """How many of these classes are still copied unchanged from schedule.example.json."""
+    try:
+        example = json.loads(paths.SCHEDULE_EXAMPLE.read_text(encoding="utf-8-sig")).get("days") or {}
+    except (OSError, ValueError):
+        return 0
+    return sum(lecture in example.get(day, []) for day, lectures in days.items() for lecture in lectures)
+
+
 def check_schedule(r: Report) -> None:
     from uninotifier import schedule
+    name = paths.SCHEDULE_FILE.name
     if not paths.SCHEDULE_FILE.is_file():
-        r.line(FAIL, f"No timetable ({paths.SCHEDULE_FILE.name})",
-               f"copy {paths.SCHEDULE_EXAMPLE.name} to {paths.SCHEDULE_FILE.name} and enter your own classes")
+        r.line(FAIL, f"No timetable ({name})",
+               f"copy {paths.SCHEDULE_EXAMPLE.name} to {name} and enter your own classes")
         return
     try:
-        data = json.loads(paths.SCHEDULE_FILE.read_text(encoding="utf-8"))
+        data = json.loads(paths.SCHEDULE_FILE.read_text(encoding="utf-8-sig"))    # Notepad may add a BOM
     except (OSError, ValueError) as e:
-        r.line(FAIL, f"{paths.SCHEDULE_FILE.name} is not valid JSON: {e}")
+        r.line(FAIL, f"{name} is not valid JSON: {e}")
         return
     found = schedule.validate(data)
     for problem in found[:10]:
-        r.line(FAIL, f"{paths.SCHEDULE_FILE.name}: {problem}")
+        r.line(FAIL, f"{name}: {problem}")
     if not found:
-        lectures = sum(len(v) for v in (data.get("days") or {}).values())
-        r.line(OK, f"Timetable: {data.get('semester') or '(no semester name)'}, {lectures} weekly classes")
+        days = data.get("days") or {}
+        lectures = sum(len(v) for v in days.values())
+        copied = example_classes(days)
+        if copied and copied == lectures:
+            # left as installed, it would announce lectures the student doesn't have
+            r.line(FAIL, f"{name} still holds the example classes",
+                   f"open it (notepad {name}) and replace them with your own week - README, step 5")
+        else:
+            r.line(OK, f"Timetable: {data.get('semester') or '(no semester name)'}, {lectures} weekly classes")
+            if copied:
+                r.line(WARN, f"{copied} class(es) in {name} are still the example's",
+                       f"replace or delete them (notepad {name})")
     if not (paths.SCHEDULE_PDF.is_file() or paths.SCHEDULE_IMAGE.is_file()):
         r.line(INFO, f"No timetable picture in assets/ (optional: {paths.SCHEDULE_PDF.name} / {paths.SCHEDULE_IMAGE.name} "
                      "are what the bot's Weekly Timetable button sends)")
