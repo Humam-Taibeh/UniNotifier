@@ -597,6 +597,7 @@ UniNotifier/
 │   ├── moodle.py, httpctx.py, richtext.py, media.py, activities.py, probe.py   reading Moodle, wording messages
 │   ├── archive.py, grades.py                                           the archive and marks in files
 │   ├── lectures.py, lecturelinks.py, schedule.py, reminders.py, daily.py   time-based messages
+│   ├── tasks.py              every open task: the Upcoming Tasks list and the noon digest
 │   ├── gpa.py, gpa_ui.py, gradebook.py, transcript.py, portal.py, finals.py, guest.py   grades, GPA, the portal
 │   ├── cambridge.py                                                    Cambridge One assignments (optional)
 │   ├── watchdog.py, maintenance.py, healthcheck.py, gitsync.py          keeping itself honest; state backup
@@ -720,8 +721,17 @@ There is no manual-check button: the 15-minute schedule and the status line cove
 
 ### Upcoming Tasks & Reminders
 
-The planner (`/tasks`) lists the portal's upcoming assignments and quizzes — course,
-due time, countdown — each with a **🔗 Open Task** button, then your own reminders.
+The planner (`/tasks`) lists every open task (`tasks.py`) — assignments not submitted,
+quizzes not attempted (with their opening and closing times), Cambridge One assignments
+with activities left, and those without a due date — each with course, countdown and a
+**🔗 Open Task** button, then your own reminders. A task whose date has passed leaves the list.
+
+**📋 Your Open Tasks** — every day at noon one message lists what can be worked on now,
+closest first, every day until it is done; anything due within 24 hours comes first under a
+loud **🚨 LAST DAY** heading. A quiz that has not opened yet is left out (its 24 h / 1 h
+reminders come before it opens), and a day with nothing open gets no message. The bot sends
+it on its clock; a check that runs later that day sends it if the bot could not (a claim file
+in `data/daily_sent/` makes sure it goes out once). A day the PC was off is not caught up.
 
 * **📌 Add to Reminders** sits under every notification except assignments and quizzes
   (those are tracked here by themselves): announcements, forum posts, course pages, files,

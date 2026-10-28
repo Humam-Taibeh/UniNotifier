@@ -29,6 +29,7 @@ from uninotifier import probe
 from uninotifier import cambridge          # temporary (this semester): remove with its thread below
 from uninotifier import reminders
 from uninotifier import schedule
+from uninotifier import tasks
 from uninotifier import telegram
 from uninotifier.bot import chat, checks, finals_flow, gpa_flow, guest_flow, portal_flow, reminder_flow, views
 
@@ -341,11 +342,13 @@ def lecture_loop() -> None:
     (Join Meeting, Course Page, link screenshot). The scheduled monitor sends
     the same messages as a fallback when this bot is down; lectures.py makes
     sure each goes out once. Personal reminders the same way (reminders.py).
-    At 11:59 PM, the quiet-day recap — left to the monitor while a check is
-    running (it may still find something)."""
+    At noon, the open-tasks digest (tasks.py). At 11:59 PM, the quiet-day
+    recap — left to the monitor while a check is running (it may still find
+    something)."""
     while True:
         for name, job in (("lectures", lambda: lectures.send_due(chat.BOT_TOKEN, chat.CHAT_ID)),
                           ("reminders", lambda: reminders.send_due(chat.BOT_TOKEN, chat.CHAT_ID)),
+                          ("tasks", lambda: tasks.send_digest(chat.BOT_TOKEN, chat.CHAT_ID, chat.load_state())),
                           ("recap", send_recap_if_due)):
             try:
                 job()

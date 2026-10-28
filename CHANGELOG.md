@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Every day at noon, one message with every open assignment, quiz and Cambridge One task, closest
+  first, until it is done; anything due within a day comes first under a loud 🚨 LAST DAY heading.
+- Upcoming Tasks lists every open task: Cambridge One assignments and tasks without a due date too.
 - `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1, adapted) with a private way to report.
 - A pull request template with the checks the repository relies on.
 - An "unofficial, use at your own risk" notice in both READMEs.

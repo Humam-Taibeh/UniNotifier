@@ -17,6 +17,7 @@ from uninotifier import notifier
 from uninotifier import paths
 from uninotifier import reminders
 from uninotifier import schedule
+from uninotifier import tasks
 from uninotifier import timetable
 from uninotifier.bot import chat
 from uninotifier.notifier import escape_md
@@ -82,9 +83,6 @@ def view_record() -> tuple[str, list]:
     ]
 
 
-OPEN_TASK_BUTTONS = 8
-
-
 REMINDERS_SHOWN = 10
 
 
@@ -92,28 +90,17 @@ VIEW_POST_BUTTONS = 6
 
 
 def view_tasks() -> tuple[str, list]:
-    """Course deadlines from the portal, then the user's own reminders."""
+    """Every open task — assignments, quizzes, Cambridge One (tasks.py) — then
+    the user's own reminders."""
     now = time.time()
-    upcoming = sorted(
-        (d for d in chat.load_state().get("deadlines", {}).values()
-         if d.get("timestamp", 0) > now and not d.get("submitted")),
-        key=lambda d: d["timestamp"])
+    upcoming = tasks.open_tasks(chat.load_state(), now)
 
-    lines = ["⏳ *Upcoming Tasks & Reminders*", guide.DIVIDER, "📚 *Course deadlines*"]
-    rows = []
+    lines = ["⏳ *Upcoming Tasks & Reminders*", guide.DIVIDER, "📚 *Course tasks*"]
     if not upcoming:
         lines.append("🎉 No assignments or quizzes ahead.")
-    for n, d in enumerate(upcoming, 1):
-        is_quiz = d.get("type") == "quiz"
-        emoji = "📊" if is_quiz else "📝"
-        field = "Opens" if is_quiz else "Due"
-        lines += [
-            f'{n}. {emoji} *{escape_md(d.get("name", "?"))}*',
-            f'    {media.course_line(d.get("course", ""))}',
-            f'    🕐 *{field}:* {notifier.format_timestamp(d["timestamp"])} · ⏱️ {chat.remaining_text(d["timestamp"])}',
-        ]
-        if d.get("url") and len(rows) < OPEN_TASK_BUTTONS:
-            rows.append([{"text": f"🔗 Open Task {n} · {chat._short(d.get('name', ''))}", "url": d["url"]}])
+    for n, task in enumerate(upcoming, 1):
+        lines += tasks.task_lines(n, task, now)
+    rows = tasks.open_buttons(upcoming)
 
     mine = reminders.pending()
     lines += ["", "🔔 *Your reminders*"]

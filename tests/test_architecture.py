@@ -444,6 +444,98 @@ def test_quizzes_keep_their_opening_and_closing_times():
     assert saved_state["undated"] == {"assign-5": False}, "an undated task's status is kept beside the deadlines"
 
 
+def test_open_tasks_and_the_noon_digest():
+    """Every open task — assignments, quizzes, Cambridge One — in the ⏳ screen and in a
+    message every day at noon until it is done: anything due within a day comes first,
+    loudly; a quiz that has not opened yet waits; nothing open, no message; once a day."""
+    from datetime import datetime
+    from uninotifier import cambridge, tasks
+    bot = _package("uninotifier.bot")
+    noon = datetime(2030, 3, 4, 12, 0)
+    h, day = 3600, 86400
+
+    def dl(kind, cmid, name, **fields):
+        return {"type": kind, "name": name, "course": "20261-Big Data-AllSec-3-",
+                "url": f"https://x/mod/{kind}/view.php?id={cmid}", **fields}
+
+    def at(t):                  # the same tasks around the moment t
+        return {
+            "deadlines": {
+                "assign-1": dl("assign", 1, "Report 1", timestamp=t + 20 * h),
+                "assign-2": dl("assign", 2, "Project", timestamp=t + 6 * day),
+                "assign-3": dl("assign", 3, "Handed in", timestamp=t + 2 * day, submitted=True),
+                "assign-8": dl("assign", 8, "Too late", timestamp=t - h),
+                "quiz-9": dl("quiz", 9, "Quiz 9", opens=t + 3 * day, closes=t + 3 * day + h, timestamp=t + 3 * day, event="open"),
+                "quiz-10": dl("quiz", 10, "Quiz 10", opens=t - h, closes=t + 5 * h, timestamp=t - h, event="open"),
+                "quiz-11": dl("quiz", 11, "Old quiz", timestamp=t - 2 * day),
+            },
+            "content": {
+                "c-1": {**dl("assign", 1, "Report 1"), "cmid": "1"},
+                "c-5": {**dl("assign", 5, "Reading notes"), "cmid": "5"},
+                "c-6": {**dl("assign", 6, "Marked done"), "cmid": "6", "done": True},
+                "c-7": {**dl("quiz", 7, "Practice quiz"), "cmid": "7"},
+                "c-12": {**dl("resource", 12, "Slides"), "cmid": "12"},
+            },
+            "undated": {"quiz-7": True},
+        }
+    t = noon.timestamp()
+    state = at(t)
+    feed = json.loads((_FIXTURES / "cambridge_assignment.json").read_text(encoding="utf-8"))
+    ident = cambridge.parse(feed)[0]["id"]
+    with tempfile.TemporaryDirectory() as tmp:
+        keep = (cambridge.active, cambridge.SEEN_FILE, cambridge.FEED_FILE, cambridge.assignments_url,
+                daily.CLAIM_DIR, notifier.send_message, bot.load_state)
+        cambridge.active, cambridge.assignments_url = (lambda today=None: True), (lambda: "https://cambridge.example/a")
+        cambridge.SEEN_FILE, cambridge.FEED_FILE = Path(tmp) / "c.json", Path(tmp) / "f.json"
+        cambridge.SEEN_FILE.write_text(json.dumps({"seen": {
+            ident: {"title": "Assignment 1", "due": t + 3 * day - h, "submitted": False},
+            "done": {"title": "Assignment 0", "due": t + day, "submitted": True}}}), encoding="utf-8")
+        cambridge.FEED_FILE.write_text(json.dumps(feed["assignmentsData"]), encoding="utf-8")
+        daily.CLAIM_DIR = Path(tmp) / "claims"
+        try:
+            found = tasks.open_tasks(state, t)
+            assert [x["name"] for x in found] == ["Quiz 10", "Report 1", "Assignment 1", "Quiz 9", "Project",
+                                                  "Reading notes"], found
+            assert found[2]["progress"] == "15 of 15 activities not done yet" and found[2]["kind"] == "cambridge"
+
+            text, rows = tasks.digest(found, t)
+            assert _legacy_markdown_ok(text), text
+            last_day, still = text.split("⏳ *Still open*")
+            assert "LAST DAY" in last_day and "Quiz 10" in last_day and "Report 1" in last_day and "Project" in still
+            assert "Quiz 9" not in text, "a quiz that has not opened yet waits for its own reminders"
+            assert "*Closes:*" in last_day and "5h 0m left" in last_day and "20h 0m left" in last_day, last_day
+            assert "No due date set" in still and "15 of 15 activities not done yet" in still
+            assert rows[0][0]["text"] == "🔗 Open Task 1 · Quiz 10" and rows[2][0]["url"] == "https://cambridge.example/a"
+            assert len(rows) == 5, "every task with a link has a button (the 5 that can be done today)"
+            assert tasks.digest([], t) is None and tasks.digest([found[3]], t) is None, "nothing to do today: silence"
+
+            sent, ok = [], {"v": True}
+            notifier.send_message = lambda token, chat, text, url=None, rows=None, silent=False: \
+                sent.append((text, rows)) or ok["v"]
+            assert not tasks.send_digest("t", "c", state, datetime(2030, 3, 4, 11, 59)) and not sent, "before noon"
+            ok["v"] = False
+            assert not tasks.send_digest("t", "c", state, noon) and len(sent) == 1
+            ok["v"] = True
+            assert tasks.send_digest("t", "c", state, datetime(2030, 3, 4, 12, 0, 20)), "a failed send is tried again"
+            assert not tasks.send_digest("t", "c", state, datetime(2030, 3, 4, 18, 0)), "bot + monitor: once a day"
+            assert tasks.send_digest("t", "c", state, datetime(2030, 3, 5, 12, 0)), "and again the next day"
+            assert sent[-1][0].startswith("📋 *Your Open Tasks*")
+
+            bot.load_state = lambda: at(time.time())     # the screen counts from the real clock
+            screen, buttons = bot.view_tasks()
+            assert "Course tasks" in screen and "Quiz 9" in screen and "*Opens:*" in screen, screen
+            assert "Assignment 1" in screen and "Old quiz" not in screen and "Practice quiz" not in screen, screen
+            assert _legacy_markdown_ok(screen)
+        finally:
+            (cambridge.active, cambridge.SEEN_FILE, cambridge.FEED_FILE, cambridge.assignments_url,
+             daily.CLAIM_DIR, notifier.send_message, bot.load_state) = keep
+
+    import inspect
+    from uninotifier.monitor import run
+    assert "tasks.send_digest" in inspect.getsource(bot.lecture_loop), "the bot's clock sends it at noon"
+    assert "tasks.send_digest" in inspect.getsource(run.run), "a check sends it when the bot could not"
+
+
 def test_bot_views():
     bot = _package("uninotifier.bot")
     text, rows = bot.view_menu()
@@ -4898,7 +4990,7 @@ def test_tasks_and_reminders_planner():
                 "name": "Assignment 2 — ER Diagram", "type": "assign", "course": "20261-Databases-AllSec-3-F",
                 "url": "https://x/mod/assign/view.php?id=1", "timestamp": time.time() + 86400 * 2}}}
             text, rows = bot.view_tasks()
-            assert "Course deadlines" in text and "Assignment 2" in text and "Your reminders" in text
+            assert "Course tasks" in text and "Assignment 2" in text and "Your reminders" in text
             assert "كلية الآداب" in text and _legacy_markdown_ok(text)
             assert rows[0][0]["text"].startswith("🔗 Open Task 1 · Assignment 2") and rows[0][0]["url"].endswith("id=1")
             views_btns = [r[0] for r in rows if r[0].get("callback_data", "").startswith("rem:view:")]
@@ -7832,7 +7924,7 @@ if __name__ == "__main__":
                test_sign_in_needs_no_form_when_microsoft_still_remembers_you,
                test_doctor_says_what_to_fix, test_no_personal_files_are_tracked,
                test_the_readme_translations_say_the_same, test_the_repository_is_ready_for_students,
-               test_quizzes_keep_their_opening_and_closing_times):
+               test_quizzes_keep_their_opening_and_closing_times, test_open_tasks_and_the_noon_digest):
         _chat = _package("uninotifier.bot")
         for _name, _original in _CHAT_ORIGINALS.items():      # a test that forgets to restore a stub cannot leak it into the next
             setattr(_chat, _name, _original)

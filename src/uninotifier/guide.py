@@ -77,9 +77,15 @@ PAGES: dict[str, Page] = {
     # ---------------------------------------------- 2: tasks & reminders
     "tasks": Page("⏳", "Tasks & Custom Reminders Engine", [
         "*Deadlines — automatic*",
-        "Every assignment and quiz shows up in Upcoming Tasks with a countdown and a 🔗 Open Task "
-        "button. You get a reminder 24 hours and 1 hour before it is due, each sent once. If the bot "
-        "sees that you already submitted, the reminders stop.",
+        "Every open assignment and quiz — and your Cambridge One assignments — shows up in Upcoming "
+        "Tasks with a countdown and a 🔗 Open Task button, even weeks ahead or with no due date. You "
+        "get a reminder 24 hours and 1 hour before it is due (a quiz: before it opens), each sent "
+        "once. Once the bot sees you submitted it (or attempted the quiz), it stops.",
+        "",
+        "*📋 Your Open Tasks — every day at noon*",
+        "One message lists everything you can work on now, closest first, every day until it is "
+        "done. Anything due within a day comes first under 🚨 LAST DAY. A quiz that has not opened "
+        "yet waits for its own reminders; with nothing open, there is no message.",
         "",
         "*📌 Add to Reminders* (under announcements, posts, pages, files and links)",
         "• 🏫 Next Campus Day — an hour before your first in-person class on the next campus day "

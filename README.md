@@ -39,7 +39,7 @@ subscription, and nothing about you ever leaves your PC except the messages it s
 |---|---|
 | 📚 **Everything on Moodle, as it happens** | Files, folders, links, pages, labels, quizzes, assignments, forum posts and announcements, Teams lectures and attendance — each with its full text, a sharp screenshot, and the file itself (up to 45 MB). Edited text and re-uploaded files are reported too. |
 | 🗂️ **A tidy archive** | Every file lands in `<Course>\01_Lectures`, `02_Assignments` or `03_Exams`, never twice; an instructor's new version takes its place and the old one moves to `_Old_Versions`. |
-| ⏰ **Deadlines & lectures** | Assignment and quiz reminders 24 h and 1 h ahead (stopped by your submission); online-lecture alerts an hour before and at the start, with 🎥 Join Meeting and ✍️ Check In. |
+| ⏰ **Deadlines & lectures** | Assignment and quiz reminders 24 h and 1 h ahead (stopped by your submission), and every day at noon a list of every open task — Cambridge One too — with a loud 🚨 on the last day; online-lecture alerts an hour before and at the start, with 🎥 Join Meeting and ✍️ Check In. |
 | 📌 **Your own reminders** | "Add to Reminders" under any notification, or a typed note — delivered at the exact minute. |
 | 📊 **Grades & GPA** | Grade Needed for a semester or cumulative target, transcript and balance on demand, Finals Watch announcing each released grade. |
 | 🛡️ **Quiet and self-healing** | ~10-second plain-HTTP checks every 15 minutes plus a tiny look every 2 minutes, retries, maintenance detection, Microsoft 2FA relayed to Telegram, a bot that restarts itself, and alerts when something needs you. |
@@ -252,7 +252,7 @@ Everything is buttons: send `/start` for the menu. A few commands are worth know
 | Command | What it does |
 |---|---|
 | `/start` | the dashboard and menu |
-| `/tasks` | upcoming assignments, quizzes and your reminders |
+| `/tasks` | every open assignment, quiz and Cambridge One task, and your reminders |
 | `/remind` | a new reminder |
 | `/courses` · `/schedule` | your courses and lecturers · your timetable files |
 | `/need` · `/gpa` | Grade Needed · GPA & Grade Hub |

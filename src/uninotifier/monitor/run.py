@@ -19,6 +19,7 @@ from uninotifier import media
 from uninotifier import mfa
 from uninotifier import moodle
 from uninotifier import notifier
+from uninotifier import tasks
 from uninotifier import watchdog
 from uninotifier.monitor import alerts, config, notify, scan, state, timed
 from uninotifier.notifier import escape_md
@@ -237,6 +238,12 @@ def run(announce: bool = False) -> None:
     })
     state.save_data(saved)
     state.backup_state()
+    try:
+        tasks.send_digest(config.BOT_TOKEN, config.CHAT_ID, saved)    # the noon digest, if the bot missed it
+    except Exception as e:
+        log.exception("Open-tasks digest failed")
+        failsafe.bug("monitor:tasks", "The daily open-tasks message failed", e,
+                     "The noon list of open assignments and quizzes may not arrive.")
 
 
 def main() -> None:
