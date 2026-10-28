@@ -843,7 +843,7 @@ def test_portal_parsers():
     lines = "\n".join(portal.transcript_lines(semesters))
     assert "In Progress" in lines and "✅ *88*" in lines and "🔁 *35*" in lines and "average 76 · cumulative 71.3" in lines
     assert lines.index("In Progress") < lines.index("Second semester 2025/2026"), "the semester in progress comes first"
-    assert "⏳ ⁨Algebra⁩ · 3h" in lines, "an in-progress course shows ⏳, its name isolated from its neighbours"
+    assert "⏳ \u2068Algebra\u2069 · 3h" in lines, "an in-progress course shows ⏳, its name isolated from its neighbours"
     assert lines.rstrip().endswith("⏳ in progress_"), "a one-line legend closes the blocks"
     assert "Second semester 2024/2025" not in lines, "an empty semester is skipped"
     assert portal.english_term("الفصل الصيفي 2023/2024 20233") == "Summer semester 2023/2024"
@@ -1487,20 +1487,20 @@ def test_transcript_layout():
     assert order == sorted(order), "the semester in progress first"
     assert text.startswith("⏳ *First semester 2026/2027* · In Progress")
     assert "📅 *Second semester 2025/2026* · average 76 · cumulative 71.3" in text
-    for fragment in ("✅ *88* ·", "✅ *74* ·", "🔁 *35* · ⁨جبر خطي (1)⁩ · 3h", "🔁 *35* · ⁨قواعد البيانات⁩ · 3h",
-                     "❌ *30* · ⁨تراكيب البيانات⁩ · 3h", "✅ *95* ·"):
+    for fragment in ("✅ *88* ·", "✅ *74* ·", "🔁 *35* · \u2068جبر خطي (1)\u2069 · 3h", "🔁 *35* · \u2068قواعد البيانات\u2069 · 3h",
+                     "❌ *30* · \u2068تراكيب البيانات\u2069 · 3h", "✅ *95* ·"):
         assert fragment in text, fragment       # Databases: failed, replaced by this term's retake (the portal did not flag it)
-    assert text.count("⏳ ⁨") == 3, "the three courses of the term in progress"
+    assert text.count("⏳ \u2068") == 3, "the three courses of the term in progress"
     assert text.count("🔁 *") == 2 and text.count("❌ *") == 1
     # an Arabic name cannot reorder its neighbours: every course line starts with a left-to-right mark, the name is isolated
     for line in text.splitlines():
         if "· 3h" in line or "· 2h" in line:
-            assert line.startswith("‎") and "⁨" in line and "⁩" in line, repr(line)
+            assert line.startswith("\u200e") and "\u2068" in line and "\u2069" in line, repr(line)
     assert "Big\\_Data \\*2\\*" in text and _legacy_markdown_ok(text), "Markdown characters in a name are escaped"
     assert text.rstrip().endswith("⏳ in progress_") and transcript.blocks([]) == []
     # marks the results page already shows for the term in progress
     published = "\n".join(transcript.blocks(sems, {"0135220": 74.0, "0101221": 40.0}))
-    assert "✅ *74* · ⁨قواعد البيانات⁩" in published and "❌ *40* · ⁨جبر خطي (1)⁩" in published
+    assert "✅ *74* · \u2068قواعد البيانات\u2069" in published and "❌ *40* · \u2068جبر خطي (1)\u2069" in published
     assert "🔁 *35*" in published, "a replaced attempt is still marked as such"
     # a full record fits one message
     many = sems * 3

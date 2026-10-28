@@ -16,7 +16,7 @@ with a left-to-right mark, so an Arabic name cannot reorder the mark and hours a
 from uninotifier import gpa, gradebook
 from uninotifier.notifier import escape_md
 
-LRM, FSI, PDI = "‎", "⁨", "⁩"
+LRM, FSI, PDI = "\u200e", "\u2068", "\u2069"
 LEGEND = "_✅ passed · ❌ failed · 🔁 replaced by a later retake · ⏳ in progress_"
 
 
