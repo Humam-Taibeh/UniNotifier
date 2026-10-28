@@ -608,7 +608,8 @@ UniNotifier/
 │                             recorded/ (your real pages, kept out of Git)
 ├── docs/REFERENCE.md         this file
 ├── .github/                  CI (the suite + pyflakes on Python 3.11, 3.13, 3.14 and 3.15, and the installer, on Windows),
-│                             Dependabot (weekly), issue forms with a privacy promise
+│                             CodeQL, dependency review on pull requests (actions pinned to commits),
+│                             Dependabot (weekly), issue forms with a privacy promise, a pull request template
 ├── requirements.txt          exact package versions (requirements-dev.txt adds pyflakes and pylint)
 ├── SECURITY.md, CONTRIBUTING.md   reporting a vulnerability privately; the rules the tests enforce
 ├── .env.example, schedule.example.json   the templates — copied to .env and schedule.json (git-ignored)

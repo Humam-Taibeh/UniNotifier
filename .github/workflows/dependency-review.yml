@@ -1,0 +1,30 @@
+# Dependency review: on every pull request, GitHub compares the dependencies before and after the
+# change and fails the check if the change brings in a package with a known vulnerability or a
+# licence that does not fit an MIT project. It reads the diff only, runs nothing and needs no secrets.
+name: Dependency review
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: New dependencies are safe
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1    # v7.0.1
+
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294    # v5.0.0
+        with:
+          fail-on-severity: moderate
+          deny-licenses: GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, AGPL-3.0-only, AGPL-3.0-or-later
+          # pylint (GPL) is a maintainer's lint tool from requirements-dev.txt: never shipped to students
+          allow-dependencies-licenses: pkg:pypi/pylint

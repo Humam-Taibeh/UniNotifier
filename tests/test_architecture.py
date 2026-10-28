@@ -7632,6 +7632,11 @@ def test_the_repository_is_ready_for_students():
         assert step in installer, f"the installer lost: {step}"
     ci = (project / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
     assert "installer:" in ci and "scripts\\install.ps1 -NoEditor" in ci and "pip install --no-deps -e ." in ci
+    for workflow in sorted((project / ".github" / "workflows").glob("*.yml")):
+        text = workflow.read_text(encoding="utf-8")
+        assert re.search(r"^permissions:\n  contents: read$", text, re.M), (workflow.name, "read-only token by default")
+        for action in re.findall(r"uses: (\S+)", text):
+            assert re.fullmatch(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}", action), (workflow.name, "pin to a commit", action)
 
     promise = "I have verified that no passwords, student IDs, or private tokens are included."
     for form in ("bug_report.yml", "feature_request.yml"):
