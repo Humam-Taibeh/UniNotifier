@@ -41,9 +41,10 @@ Both must pass — CI runs them on Windows with Python 3.11, 3.13, 3.14 and 3.15
 
 ## Dependencies
 
-Versions are pinned exactly in `requirements.txt`. Dependabot proposes updates every Monday; merge one
-only when CI is green. Playwright updates arrive on their own because they change the browser that
-signs in — after merging one, watch the next real check.
+Versions are pinned exactly in `requirements.txt`. Dependabot proposes updates every Monday. Once its
+CI is green, the maintainer applies the same version change in an ordinary commit and closes the pull
+request, so the project's history and contributors stay human. Playwright updates arrive on their own
+because they change the browser that signs in — after applying one, watch the next real check.
 
 ## Commit messages
 

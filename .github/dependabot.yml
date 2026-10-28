@@ -1,4 +1,5 @@
-# Weekly update proposals, each one a pull request that CI tests on Windows before you merge it.
+# Weekly update proposals, each one a pull request that CI tests on Windows. The maintainer applies a
+# green one by hand in an ordinary commit and closes the pull request (see CONTRIBUTING.md).
 version: 2
 updates:
   - package-ecosystem: pip

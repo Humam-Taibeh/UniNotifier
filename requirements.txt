@@ -1,5 +1,5 @@
 # Exact versions: every student installs what the tests and the maintainer's own copy run.
-# Dependabot proposes updates weekly (.github/dependabot.yml); CI tests each one before it is merged.
+# Dependabot proposes updates weekly (.github/dependabot.yml); CI tests each one before it is applied.
 # The project itself is installed separately:  pip install --no-deps -e .
 playwright==1.64.1
 python-dotenv==1.2.4

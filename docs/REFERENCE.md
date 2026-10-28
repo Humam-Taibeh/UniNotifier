@@ -603,7 +603,8 @@ UniNotifier/
 │   └── tools/                login_refresh · send_test_message · showcase · record_pages ·
 │                             migrate_archive · tidy_archive · upload_benchmark   (python -m uninotifier.tools.<name>)
 ├── install.bat               the double-click installer (runs scripts/install.ps1)
-├── scripts/                  install.ps1 · setup_tasks.ps1 · remove_tasks.ps1 · windows_recovery.ps1
+├── backup_usb.bat            double-click: copies the whole project to a USB drive (runs scripts/backup_usb.ps1)
+├── scripts/                  install.ps1 · backup_usb.ps1 · setup_tasks.ps1 · remove_tasks.ps1 · windows_recovery.ps1
 ├── tests/                    test_architecture.py; fixtures/ (a fixed tracker and timetable);
 │                             recorded/ (your real pages, kept out of Git)
 ├── docs/REFERENCE.md         this file
@@ -612,6 +613,7 @@ UniNotifier/
 │                             Dependabot (weekly), issue forms with a privacy promise, a pull request template
 ├── requirements.txt          exact package versions (requirements-dev.txt adds pyflakes and pylint)
 ├── SECURITY.md, CONTRIBUTING.md   reporting a vulnerability privately; the rules the tests enforce
+├── CODE_OF_CONDUCT.md, CHANGELOG.md   how people treat each other here; what changed in each version
 ├── .env.example, schedule.example.json   the templates — copied to .env and schedule.json (git-ignored)
 ├── assets/                   your timetable PDF / PNG (git-ignored, optional)
 └── data/                     everything the program writes (git-ignored): saved_items.json, sessions,
