@@ -1,0 +1,43 @@
+{
+  "_comment": [
+    "Your weekly timetable. Copy this file to schedule.json and replace the example classes with your own.",
+    "Times are local, 24-hour (09:30, 14:00). Days: sun, mon, tue, wed, thu, fri, sat.",
+    "Each class: start, end, course (English name), course_ar (the Arabic name Moodle shows), section, mode,",
+    "  and optionally label (shown text) and place (e.g. Room 2147 - leave it out for Online/Activity).",
+    "mode is one of: In-Person, Online, Activity. Lecture reminders go out for the modes in remind_modes.",
+    "course_codes: the course number on the portal -> the English course name (used for files and grades).",
+    "portal_aliases: a different name Moodle uses -> the English name above.",
+    "degree_hours (optional): the credit hours of your whole degree plan, e.g. 132 (shows remaining hours); null = not shown.",
+    "finals (optional, during finals season): {\"from\": \"2027-01-04\", \"to\": \"2027-01-31\", \"interval_minutes\": 30}.",
+    "The bot checks this file whenever it changes and tells you on Telegram if something is wrong."
+  ],
+  "semester": "First Semester 2026/2027",
+  "degree_hours": null,
+  "lecture_reminder_minutes": 60,
+  "morning_summary_hour": null,
+  "remind_modes": ["Online"],
+  "portal_aliases": {"Databases": "Database Systems"},
+  "course_codes": {
+    "0101101": "Calculus (1)",
+    "0135220": "Database Systems",
+    "0420115": "Arabic Communication Skills"
+  },
+  "teachers": {
+    "Calculus (1)": "Dr. First Lastname",
+    "Database Systems": "Dr. Second Lastname",
+    "Arabic Communication Skills": "Dr. Third Lastname"
+  },
+  "days": {
+    "sun": [
+      {"start": "09:30", "end": "11:00", "course": "Calculus (1)", "course_ar": "تفاضل وتكامل 1", "section": "01", "mode": "In-Person", "label": "In-Person Lecture", "place": "Room 9101"},
+      {"start": "14:00", "end": "15:30", "course": "Database Systems", "course_ar": "قواعد البيانات", "section": "02", "mode": "In-Person", "label": "In-Person Lecture", "place": "Room 2135"}
+    ],
+    "mon": [
+      {"start": "19:00", "end": "20:30", "course": "Arabic Communication Skills", "course_ar": "الاتصال والتواصل باللغة العربية", "section": "31", "mode": "Online", "label": "Online Lecture"}
+    ],
+    "tue": [
+      {"start": "09:30", "end": "11:00", "course": "Calculus (1)", "course_ar": "تفاضل وتكامل 1", "section": "01", "mode": "In-Person", "label": "In-Person Lecture", "place": "Room 9101"},
+      {"start": "14:00", "end": "15:30", "course": "Database Systems", "course_ar": "قواعد البيانات", "section": "02", "mode": "Activity", "label": "Activity / Self-Study"}
+    ]
+  }
+}

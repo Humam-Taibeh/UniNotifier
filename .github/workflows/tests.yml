@@ -1,0 +1,84 @@
+# The whole test suite and pyflakes on a clean Windows machine, for every push and pull request.
+# The suite is offline by design (no Moodle, no portal, no Telegram; any outside connection fails it)
+# and runs on a made-up .env, so it needs no secrets.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python ${{ matrix.python }} on Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13", "3.14", "3.15"]    # the oldest version the README promises, up to what python.org offers now
+    env:
+      PYTHONUTF8: "1"                     # course names are Arabic; the runner's console is not UTF-8
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Use Jordan's time zone (where UniNotifier runs)
+        run: tzutil /s "Jordan Standard Time"
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install the pinned dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Install the project (as the README and the installer do)
+        run: python -m pip install --no-deps -e .
+
+      - name: Install Chromium for Playwright
+        run: python -m playwright install chromium
+
+      - name: Tests (offline)
+        run: python tests/test_architecture.py
+
+      - name: pyflakes
+        run: python -m pyflakes src tests monitor.py bot.py
+
+  installer:
+    # What a student gets from double-clicking install.bat, on a machine that has nothing yet.
+    name: Student installer on a clean Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        id: python
+        with:
+          python-version: "3.11"
+
+      - name: Run scripts/install.ps1 (what install.bat runs)
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -NoEditor -Python "${{ steps.python.outputs.python-path }}"
+
+      - name: The environment works and the settings files exist
+        run: |
+          .venv\Scripts\python -c "import uninotifier.doctor, playwright, requests, lxml; print('imports ok')"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path .env) -or -not (Test-Path schedule.json)) { Write-Error 'settings files missing'; exit 1 }
+
+      - name: Running it again keeps everything
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -NoEditor

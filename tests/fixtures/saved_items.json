@@ -1,0 +1,943 @@
+{
+  "courses": {
+    "8804": {
+      "name": "20261-Big Data-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/course/view.php?id=8804"
+    },
+    "8803": {
+      "name": "20261-Databases-AllSec-3-F",
+      "url": "https://elearning.zuj.edu.jo/course/view.php?id=8803"
+    },
+    "8801": {
+      "name": "20261-Linear Algebra (1)-AllSec-3-F",
+      "url": "https://elearning.zuj.edu.jo/course/view.php?id=8801"
+    },
+    "8802": {
+      "name": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/course/view.php?id=8802"
+    },
+    "8806": {
+      "name": "20261-الاتصال والتواصل باللغة الإنجليزية-ش27-3-و",
+      "url": "https://elearning.zuj.edu.jo/course/view.php?id=8806"
+    },
+    "8805": {
+      "name": "20261-الاتصال والتواصل باللغة العربية-ش31-3-ك",
+      "url": "https://elearning.zuj.edu.jo/course/view.php?id=8805"
+    }
+  },
+  "content": {
+    "8804-13931": {
+      "name": "Announcements",
+      "type": "forum",
+      "course": "20261-Big Data-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/forum/view.php?id=13931",
+      "section": "General",
+      "course_id": "8804",
+      "cmid": "13931",
+      "done": false
+    },
+    "8804-87206": {
+      "name": "Dr Sam Taylor Sec 1 Sun_Tue (11:00-12:30)",
+      "type": "attendance",
+      "course": "20261-Big Data-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/attendance/view.php?id=87206",
+      "section": "كشف الغياب",
+      "course_id": "8804",
+      "cmid": "87206",
+      "done": false
+    },
+    "8804-67666": {
+      "name": "Big Data Course Plan for Bachelor program 0135321 (1)",
+      "type": "resource",
+      "course": "20261-Big Data-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=67666",
+      "section": "course plan",
+      "course_id": "8804",
+      "cmid": "67666",
+      "done": false
+    },
+    "8804-68643": {
+      "name": "Chapter 1 Introduction to Data Warehouse",
+      "type": "resource",
+      "course": "20261-Big Data-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=68643",
+      "section": "chapter 1",
+      "course_id": "8804",
+      "cmid": "68643",
+      "done": false
+    },
+    "8804-69620": {
+      "name": "Chapter 2 – part 2",
+      "type": "resource",
+      "course": "20261-Big Data-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=69620",
+      "section": "chapter 2",
+      "course_id": "8804",
+      "cmid": "69620",
+      "done": false
+    },
+    "8804-70597": {
+      "name": "Chapter 2 part1 Data Warehouse Schemas Star Schema",
+      "type": "resource",
+      "course": "20261-Big Data-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=70597",
+      "section": "chapter 2",
+      "course_id": "8804",
+      "cmid": "70597",
+      "done": false
+    },
+    "8804-71574": {
+      "name": "Chapter 2 part 3 Snowflake schema",
+      "type": "resource",
+      "course": "20261-Big Data-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=71574",
+      "section": "chapter 2",
+      "course_id": "8804",
+      "cmid": "71574",
+      "done": false
+    },
+    "8803-90137": {
+      "name": "Attendance- SEC- 2 - [ 09:30_11:00 ] ن (و) ر (و)",
+      "type": "attendance",
+      "course": "20261-Databases-AllSec-3-F",
+      "url": "https://elearning.zuj.edu.jo/mod/attendance/view.php?id=90137",
+      "section": "General",
+      "course_id": "8803",
+      "cmid": "90137",
+      "done": false
+    },
+    "8803-12954": {
+      "name": "Announcements",
+      "type": "forum",
+      "course": "20261-Databases-AllSec-3-F",
+      "url": "https://elearning.zuj.edu.jo/mod/forum/view.php?id=12954",
+      "section": "General",
+      "course_id": "8803",
+      "cmid": "12954",
+      "done": false
+    },
+    "8803-77436": {
+      "name": "الوصف التفصيلي لمادة قواعد البيانات في قسم نظم المعلومات",
+      "type": "resource",
+      "course": "20261-Databases-AllSec-3-F",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=77436",
+      "section": "General",
+      "course_id": "8803",
+      "cmid": "77436",
+      "done": false
+    },
+    "8803-82321": {
+      "name": "Announcements",
+      "type": "forum",
+      "course": "20261-Databases-AllSec-3-F",
+      "url": "https://elearning.zuj.edu.jo/mod/forum/view.php?id=82321",
+      "section": "General",
+      "course_id": "8803",
+      "cmid": "82321",
+      "done": false
+    },
+    "8803-83298": {
+      "name": "الوصف التفصيلي للمادة",
+      "type": "subsection",
+      "course": "20261-Databases-AllSec-3-F",
+      "url": "https://elearning.zuj.edu.jo/course/view.php?id=8803#module-83298",
+      "section": "General",
+      "course_id": "8803",
+      "cmid": "83298",
+      "done": false,
+      "hash": "1055013422eba13790db9f729d96258748cc102b"
+    },
+    "8803-84275": {
+      "name": "الوصف التفصيلي لمادة قواعد البيانات في قسم نظم المعلومات (1)",
+      "type": "resource",
+      "course": "20261-Databases-AllSec-3-F",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=84275",
+      "section": "General",
+      "course_id": "8803",
+      "cmid": "84275",
+      "done": false
+    },
+    "8803-78413": {
+      "name": "1 Introduction",
+      "type": "resource",
+      "course": "20261-Databases-AllSec-3-F",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=78413",
+      "section": "Introduction to Databases",
+      "course_id": "8803",
+      "cmid": "78413",
+      "done": false
+    },
+    "8803-85252": {
+      "name": "Oracle SQL Revision",
+      "type": "resource",
+      "course": "20261-Databases-AllSec-3-F",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=85252",
+      "section": "Introduction to Databases",
+      "course_id": "8803",
+      "cmid": "85252",
+      "done": false
+    },
+    "8803-section-17839": {
+      "name": "General",
+      "type": "section",
+      "course": "20261-Databases-AllSec-3-F",
+      "url": "https://elearning.zuj.edu.jo/course/view.php?id=8803",
+      "section": "General",
+      "course_id": "8803",
+      "sectionid": "17839",
+      "hash": "79bdc11aca532d6a256c3f95ab4d27719079e006"
+    },
+    "8803-section-18816": {
+      "name": "Introduction to Databases",
+      "type": "section",
+      "course": "20261-Databases-AllSec-3-F",
+      "url": "https://elearning.zuj.edu.jo/course/view.php?id=8803#sectionid-18816-title",
+      "section": "Introduction to Databases",
+      "course_id": "8803",
+      "sectionid": "18816",
+      "hash": "dcc9c94fc6503121a62974f8333ddd70f1b05e3e"
+    },
+    "8801-11000": {
+      "name": "Announcements",
+      "type": "forum",
+      "course": "20261-Linear Algebra (1)-AllSec-3-F",
+      "url": "https://elearning.zuj.edu.jo/mod/forum/view.php?id=11000",
+      "section": "General",
+      "course_id": "8801",
+      "cmid": "11000",
+      "done": false
+    },
+    "8801-81344": {
+      "name": "مادة جبر خطي",
+      "type": "resource",
+      "course": "20261-Linear Algebra (1)-AllSec-3-F",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=81344",
+      "section": "General",
+      "course_id": "8801",
+      "cmid": "81344",
+      "done": false
+    },
+    "8801-89160": {
+      "name": "رابط قائمة تشغيل جبر خطي (1)",
+      "type": "url",
+      "course": "20261-Linear Algebra (1)-AllSec-3-F",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=89160",
+      "section": "General",
+      "course_id": "8801",
+      "cmid": "89160",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=4s1EBIlFx7g&list=PL7MH3B_3PlSQo-PKXPACtc9Q2Cfcd_K0n&pp=sAgC"
+    },
+    "8802-11977": {
+      "name": "Announcements",
+      "type": "forum",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/forum/view.php?id=11977",
+      "section": "Information on Lecturers",
+      "course_id": "8802",
+      "cmid": "11977",
+      "done": false
+    },
+    "8802-23701": {
+      "name": "Announcements",
+      "type": "forum",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/forum/view.php?id=23701",
+      "section": "Information on Lecturers",
+      "course_id": "8802",
+      "cmid": "23701",
+      "done": false
+    },
+    "8802-79390": {
+      "name": "مراجعة الاشتقاق",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=79390",
+      "section": "Information on Lecturers",
+      "course_id": "8802",
+      "cmid": "79390",
+      "done": false
+    },
+    "8802-24678": {
+      "name": "Announcements",
+      "type": "forum",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/forum/view.php?id=24678",
+      "section": "Information on Lecturers",
+      "course_id": "8802",
+      "cmid": "24678",
+      "done": false
+    },
+    "8802-25655": {
+      "name": "Numerical analysis",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=25655",
+      "section": "Information on Lecturers",
+      "course_id": "8802",
+      "cmid": "25655",
+      "done": false
+    },
+    "8802-26632": {
+      "name": "Announcements",
+      "type": "forum",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/forum/view.php?id=26632",
+      "section": "Information on Lecturers",
+      "course_id": "8802",
+      "cmid": "26632",
+      "done": false
+    },
+    "8802-27609": {
+      "name": "Course Syllabus",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=27609",
+      "section": "Information on Lecturers",
+      "course_id": "8802",
+      "cmid": "27609",
+      "done": true,
+      "manual": true
+    },
+    "8802-28586": {
+      "name": "Course Content",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=28586",
+      "section": "Information on Lecturers",
+      "course_id": "8802",
+      "cmid": "28586",
+      "done": false
+    },
+    "8802-29563": {
+      "name": "اسئلة مقترحة",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=29563",
+      "section": "Information on Lecturers",
+      "course_id": "8802",
+      "cmid": "29563",
+      "done": false
+    },
+    "8802-88183": {
+      "name": "Attendance Section 3",
+      "type": "attendance",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/attendance/view.php?id=88183",
+      "section": "Attendance",
+      "course_id": "8802",
+      "cmid": "88183",
+      "done": false
+    },
+    "8802-30540": {
+      "name": "The derivative",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=30540",
+      "section": "Course Home",
+      "course_id": "8802",
+      "cmid": "30540",
+      "done": false
+    },
+    "8802-31517": {
+      "name": "خطة المادة",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=31517",
+      "section": "Course Home",
+      "course_id": "8802",
+      "cmid": "31517",
+      "done": false
+    },
+    "8802-32494": {
+      "name": "ملخص المادة",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=32494",
+      "section": "Course Home",
+      "course_id": "8802",
+      "cmid": "32494",
+      "done": false
+    },
+    "8802-33471": {
+      "name": "Revision",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=33471",
+      "section": "Revision on Calculus",
+      "course_id": "8802",
+      "cmid": "33471",
+      "done": false
+    },
+    "8802-34448": {
+      "name": "The derivative",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=34448",
+      "section": "Revision on Calculus",
+      "course_id": "8802",
+      "cmid": "34448",
+      "done": true,
+      "manual": true
+    },
+    "8802-35425": {
+      "name": "Belzano's Theorem &amp; Rolle's Theorems",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=35425",
+      "section": "Belzano's Theorem &amp; Rolle's Theorems",
+      "course_id": "8802",
+      "cmid": "35425",
+      "done": true,
+      "manual": true
+    },
+    "8802-36402": {
+      "name": "Belzano's Theorem",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=36402",
+      "section": "Belzano's Theorem &amp; Rolle's Theorems",
+      "course_id": "8802",
+      "cmid": "36402",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=dUd-HxjOu1A&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=2"
+    },
+    "8802-37379": {
+      "name": "Rolle's Theorem",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=37379",
+      "section": "Belzano's Theorem &amp; Rolle's Theorems",
+      "course_id": "8802",
+      "cmid": "37379",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=Ppi_AzOsg0g&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=3"
+    },
+    "8802-38356": {
+      "name": "Uniqueness of Root to a Function",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=38356",
+      "section": "Uniqueness of Root to a Function",
+      "course_id": "8802",
+      "cmid": "38356",
+      "done": true,
+      "manual": true
+    },
+    "8802-39333": {
+      "name": "Unique Root to a Function Part (1/2)",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=39333",
+      "section": "Uniqueness of Root to a Function",
+      "course_id": "8802",
+      "cmid": "39333",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=RqzFT4VWi4Q&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=4"
+    },
+    "8802-40310": {
+      "name": "Unique Root to a Function Part (2/2)",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=40310",
+      "section": "Uniqueness of Root to a Function",
+      "course_id": "8802",
+      "cmid": "40310",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=E-NBMEavKIg&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=5"
+    },
+    "8802-41287": {
+      "name": "Bisection Method",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=41287",
+      "section": "Bisection Method",
+      "course_id": "8802",
+      "cmid": "41287",
+      "done": true,
+      "manual": true
+    },
+    "8802-42264": {
+      "name": "Bisection Method Part (1/4)",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=42264",
+      "section": "Bisection Method",
+      "course_id": "8802",
+      "cmid": "42264",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=LTn2cHNkEvA&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=6"
+    },
+    "8802-43241": {
+      "name": "Bisection Method Part (2/4)",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=43241",
+      "section": "Bisection Method",
+      "course_id": "8802",
+      "cmid": "43241",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=Xac3HCZxrIo&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=7"
+    },
+    "8802-44218": {
+      "name": "Bisection Method Part (3/4)",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=44218",
+      "section": "Bisection Method",
+      "course_id": "8802",
+      "cmid": "44218",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=BMCXyb8XkG8&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=8"
+    },
+    "8802-45195": {
+      "name": "Bisection Method Part (4/4)",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=45195",
+      "section": "Bisection Method",
+      "course_id": "8802",
+      "cmid": "45195",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=OOnn81SBVn8&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=9"
+    },
+    "8802-46172": {
+      "name": "Newton-Raphson Method",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=46172",
+      "section": "Newton-Raphson Method",
+      "course_id": "8802",
+      "cmid": "46172",
+      "done": true,
+      "manual": true
+    },
+    "8802-47149": {
+      "name": "Newton-Raphson Method",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=47149",
+      "section": "Newton-Raphson Method",
+      "course_id": "8802",
+      "cmid": "47149",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=8fBEujPxV8k&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=10"
+    },
+    "8802-48126": {
+      "name": "Secant Method",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=48126",
+      "section": "Secant Method",
+      "course_id": "8802",
+      "cmid": "48126",
+      "done": true,
+      "manual": true
+    },
+    "8802-49103": {
+      "name": "Secant Method",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=49103",
+      "section": "Secant Method",
+      "course_id": "8802",
+      "cmid": "49103",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=EDSgWf72mLo&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=11"
+    },
+    "8802-50080": {
+      "name": "Multiplicity of Roots",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=50080",
+      "section": "Multiplicity of Roots",
+      "course_id": "8802",
+      "cmid": "50080",
+      "done": true,
+      "manual": true
+    },
+    "8802-51057": {
+      "name": "Multiplicity of Roots Part (1/2)",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=51057",
+      "section": "Multiplicity of Roots",
+      "course_id": "8802",
+      "cmid": "51057",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=DRojFaQalp0&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=12"
+    },
+    "8802-52034": {
+      "name": "Multiplicity of Roots Part (2/2)",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=52034",
+      "section": "Multiplicity of Roots",
+      "course_id": "8802",
+      "cmid": "52034",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=M2fN7LxctuU&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=13"
+    },
+    "8802-53011": {
+      "name": "Modified Newton’s Method",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=53011",
+      "section": "Modified Newton’s Method",
+      "course_id": "8802",
+      "cmid": "53011",
+      "done": true,
+      "manual": true
+    },
+    "8802-53988": {
+      "name": "Modified Newton’s Method",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=53988",
+      "section": "Modified Newton’s Method",
+      "course_id": "8802",
+      "cmid": "53988",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=qxE3REcZXgY&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=14"
+    },
+    "8802-54965": {
+      "name": "The Fixed Point",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=54965",
+      "section": "The Fixed Point",
+      "course_id": "8802",
+      "cmid": "54965",
+      "done": true,
+      "manual": true
+    },
+    "8802-55942": {
+      "name": "The Fixed Point",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=55942",
+      "section": "The Fixed Point",
+      "course_id": "8802",
+      "cmid": "55942",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=EknKlUONqrc&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=15"
+    },
+    "8802-56919": {
+      "name": "The Fixed Point Method for Approximating Roots",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=56919",
+      "section": "The Fixed Point Method for Approximating Roots",
+      "course_id": "8802",
+      "cmid": "56919",
+      "done": true,
+      "manual": true
+    },
+    "8802-57896": {
+      "name": "Existence and Uniqueness of the Fixed Point",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=57896",
+      "section": "The Fixed Point Method for Approximating Roots",
+      "course_id": "8802",
+      "cmid": "57896",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=nfh0kKff208&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=16"
+    },
+    "8802-58873": {
+      "name": "The Fixed Point Method for Approximating Roots",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=58873",
+      "section": "The Fixed Point Method for Approximating Roots",
+      "course_id": "8802",
+      "cmid": "58873",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=9FtJdarhZH4&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=17"
+    },
+    "8802-59850": {
+      "name": "Taylor Polynomial",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=59850",
+      "section": "Taylor Polynomial",
+      "course_id": "8802",
+      "cmid": "59850",
+      "done": true,
+      "manual": true
+    },
+    "8802-60827": {
+      "name": "Taylor Polynomial Part (1/2)",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=60827",
+      "section": "Taylor Polynomial",
+      "course_id": "8802",
+      "cmid": "60827",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=HHj7mdcuXJA&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=20"
+    },
+    "8802-61804": {
+      "name": "Taylor Polynomial Part (2/2)",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=61804",
+      "section": "Taylor Polynomial",
+      "course_id": "8802",
+      "cmid": "61804",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=Y7Nq3veRol0&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=21"
+    },
+    "8802-62781": {
+      "name": "Lagrange Polynomial",
+      "type": "resource",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=62781",
+      "section": "Lagrange Polynomial",
+      "course_id": "8802",
+      "cmid": "62781",
+      "done": true,
+      "manual": true
+    },
+    "8802-63758": {
+      "name": "Lagrange Polynomial Part (1/2)",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=63758",
+      "section": "Lagrange Polynomial",
+      "course_id": "8802",
+      "cmid": "63758",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=TyfsPu0-TaY&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=22"
+    },
+    "8802-64735": {
+      "name": "Lagrange Polynomial Part (2/2)",
+      "type": "url",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/url/view.php?id=64735",
+      "section": "Lagrange Polynomial",
+      "course_id": "8802",
+      "cmid": "64735",
+      "done": false,
+      "target": "https://www.youtube.com/watch?v=Etv9EbqBZLs&list=PL7MH3B_3PlSTHo-EqFUHcG3Qd7iJ2Lf7p&index=23"
+    },
+    "8802-65712": {
+      "name": "َكويز 4",
+      "type": "quiz",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/mod/quiz/view.php?id=65712",
+      "section": "Quizes",
+      "course_id": "8802",
+      "cmid": "65712",
+      "done": false
+    },
+    "8802-section-15885": {
+      "name": "Information on Lecturers",
+      "type": "section",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/course/view.php?id=8802",
+      "section": "Information on Lecturers",
+      "course_id": "8802",
+      "sectionid": "15885",
+      "hash": "f80f54f0f392924de917d6fd54fe28828d85b73e"
+    },
+    "8802-section-72551": {
+      "name": "Course Home",
+      "type": "section",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/course/view.php?id=8802#sectionid-72551-title",
+      "section": "Course Home",
+      "course_id": "8802",
+      "sectionid": "72551",
+      "hash": "2ff2826d0be7fe3878e3ed1de26cc7116d0b994e"
+    },
+    "8802-section-16862": {
+      "name": "Chapter 1: Solutions of Equations in One Variable",
+      "type": "section",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/course/view.php?id=8802#sectionid-16862-title",
+      "section": "Chapter 1: Solutions of Equations in One Variable",
+      "course_id": "8802",
+      "sectionid": "16862",
+      "hash": "fa98b1a2acc9b18321932ddd2a345cf42126853e"
+    },
+    "8802-section-73528": {
+      "name": "Chapter 2: Interpolation and Polynomial Approximation",
+      "type": "section",
+      "course": "20261-Numerical Analysis(1)-AllSec-3-",
+      "url": "https://elearning.zuj.edu.jo/course/view.php?id=8802#sectionid-73528-title",
+      "section": "Chapter 2: Interpolation and Polynomial Approximation",
+      "course_id": "8802",
+      "sectionid": "73528",
+      "hash": "af7ee3ad8c9a5c44c0cb5404303200c1d6e0aeef"
+    },
+    "8806-14908": {
+      "name": "Announcements",
+      "type": "forum",
+      "course": "20261-الاتصال والتواصل باللغة الإنجليزية-ش27-3-و",
+      "url": "https://elearning.zuj.edu.jo/mod/forum/view.php?id=14908",
+      "section": "General",
+      "course_id": "8806",
+      "cmid": "14908",
+      "done": false
+    },
+    "8806-86229": {
+      "name": "Attendance",
+      "type": "attendance",
+      "course": "20261-الاتصال والتواصل باللغة الإنجليزية-ش27-3-و",
+      "url": "https://elearning.zuj.edu.jo/mod/attendance/view.php?id=86229",
+      "section": "General",
+      "course_id": "8806",
+      "cmid": "86229",
+      "done": false
+    },
+    "8806-66689": {
+      "name": "اعلان هام",
+      "type": "forum",
+      "course": "20261-الاتصال والتواصل باللغة الإنجليزية-ش27-3-و",
+      "url": "https://elearning.zuj.edu.jo/mod/forum/view.php?id=66689",
+      "section": "General",
+      "course_id": "8806",
+      "cmid": "66689",
+      "done": false,
+      "hash": "ad6381fc96521b5f952b8d1a4c2437ef4fd97122"
+    },
+    "8806-80367": {
+      "name": "Announcement",
+      "type": "forum",
+      "course": "20261-الاتصال والتواصل باللغة الإنجليزية-ش27-3-و",
+      "url": "https://elearning.zuj.edu.jo/mod/forum/view.php?id=80367",
+      "section": "General",
+      "course_id": "8806",
+      "cmid": "80367",
+      "done": false,
+      "hash": "b67adbeedd6e3387668703c451e53e070091b380"
+    },
+    "8805-19793": {
+      "name": "الاتصال و التواصل باللغة العربيّة",
+      "type": "label",
+      "course": "20261-الاتصال والتواصل باللغة العربية-ش31-3-ك",
+      "url": "https://elearning.zuj.edu.jo/course/view.php?id=8805#module-19793",
+      "section": "عام",
+      "course_id": "8805",
+      "cmid": "19793",
+      "done": true,
+      "manual": true,
+      "hash": "99ef7836f610b12af4eb6e224564226c8862e6cb"
+    },
+    "8805-20770": {
+      "name": "منتدى الأسئلة / الحوار و النقاش",
+      "type": "forum",
+      "course": "20261-الاتصال والتواصل باللغة العربية-ش31-3-ك",
+      "url": "https://elearning.zuj.edu.jo/mod/forum/view.php?id=20770",
+      "section": "عام",
+      "course_id": "8805",
+      "cmid": "20770",
+      "done": true,
+      "manual": true
+    },
+    "8805-21747": {
+      "name": "مقدمة المادة",
+      "type": "page",
+      "course": "20261-الاتصال والتواصل باللغة العربية-ش31-3-ك",
+      "url": "https://elearning.zuj.edu.jo/mod/page/view.php?id=21747",
+      "section": "مقدمة المادة",
+      "course_id": "8805",
+      "cmid": "21747",
+      "done": true,
+      "manual": true,
+      "hash": "73d501118485a3f60e374a07585b4f5335979191"
+    },
+    "8805-74505": {
+      "name": "خطة المادة",
+      "type": "resource",
+      "course": "20261-الاتصال والتواصل باللغة العربية-ش31-3-ك",
+      "url": "https://elearning.zuj.edu.jo/mod/resource/view.php?id=74505",
+      "section": "مقدمة المادة",
+      "course_id": "8805",
+      "cmid": "74505",
+      "done": false
+    },
+    "8805-75482": {
+      "name": "الحضور",
+      "type": "attendance",
+      "course": "20261-الاتصال والتواصل باللغة العربية-ش31-3-ك",
+      "url": "https://elearning.zuj.edu.jo/mod/attendance/view.php?id=75482",
+      "section": "روابط هامة ورئيسية",
+      "course_id": "8805",
+      "cmid": "75482",
+      "done": false,
+      "hash": "190d662bd070b76753ed75018e20e061c2e03870"
+    },
+    "8805-76459": {
+      "name": "رابط الدخول إلى المحاضرة",
+      "type": "teamscheduler",
+      "course": "20261-الاتصال والتواصل باللغة العربية-ش31-3-ك",
+      "url": "https://elearning.zuj.edu.jo/mod/teamscheduler/view.php?id=76459",
+      "section": "روابط هامة ورئيسية",
+      "course_id": "8805",
+      "cmid": "76459",
+      "done": false,
+      "target": "https://teams.microsoft.com/l/meetup-join/19%3ameeting_RXhhbXBsZU1lZXRpbmdJZA%40thread.v2/0?context=%7b%22Tid%22%3a%2200000000-0000-4000-8000-000000000001%22%2c%22Oid%22%3a%2200000000-0000-4000-8000-000000000002%22%7d"
+    },
+    "8805-22724": {
+      "name": "الوحدة الأولى ، مفاهيم عامة ، مستويات اللغة العربيّة",
+      "type": "page",
+      "course": "20261-الاتصال والتواصل باللغة العربية-ش31-3-ك",
+      "url": "https://elearning.zuj.edu.jo/mod/page/view.php?id=22724",
+      "section": "الوحدة الأولى ، مفاهيم عامة ، مستويات اللغة العربيّة",
+      "course_id": "8805",
+      "cmid": "22724",
+      "done": true,
+      "manual": true,
+      "hash": "ee552b1f17eec00e03f75ffd7ef3ff7b456d2839"
+    }
+  },
+  "teachers": {
+    "fetched": 1792412839.369611,
+    "by_course": {
+      "8804": [
+        {
+          "name": "Sam Taylor",
+          "role": "Teacher",
+          "groups": "0135321_1"
+        }
+      ],
+      "8803": [
+        {
+          "name": "Lee Carter",
+          "role": "Teacher",
+          "groups": "0135220_1"
+        }
+      ],
+      "8801": [
+        {
+          "name": "Jo Parker",
+          "role": "Teacher",
+          "groups": "0101221_1, 0101221_2"
+        }
+      ],
+      "8802": [
+        {
+          "name": "Kai Bennett",
+          "role": "Teacher",
+          "groups": "0101272_3"
+        }
+      ],
+      "8806": [
+        {
+          "name": "Robin Hayes",
+          "role": "Teacher",
+          "groups": "0420123_27, 20261-الاتصال والتواصل باللغة الإنجليزية-ش27-3-و"
+        }
+      ],
+      "8805": [
+        {
+          "name": "Dana Morris",
+          "role": "Teacher",
+          "groups": "0420115_31"
+        }
+      ]
+    }
+  }
+}
