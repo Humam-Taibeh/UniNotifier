@@ -373,6 +373,10 @@ Then look at `data\logs\monitor.log` and `data\logs\bot.log`.
   git-ignored, and a test fails if one ever is. Before you `git push`, `git status` should list none of them.
 - **Read-only on Moodle**, except the manual *Mark as done* tick you press yourself and the automatic
   tick for files it saved; assignments and quizzes are never touched.
+- **Unofficial, and yours to use responsibly.** UniNotifier is an independent student project. It is not
+  affiliated with, endorsed or supported by Al-Zaytoonah University, Moodle, Microsoft, Telegram or
+  Cambridge. It signs in with *your own* account, the way you would — use it only with your own account,
+  in line with the university's rules, and at your own risk (see the warranty notice in [LICENSE](LICENSE)).
 - **Found a security problem?** Please report it privately — see [SECURITY.md](SECURITY.md).
 
 ---
