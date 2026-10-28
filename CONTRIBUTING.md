@@ -2,7 +2,8 @@
 
 Thanks for helping! UniNotifier is built for Al-Zaytoonah University's Moodle and student portal,
 running on a student's own Windows PC. Fixes and improvements within that scope are very welcome;
-for anything bigger, open a feature request first so we can agree on the shape.
+for anything bigger, open a feature request first so we can agree on the shape. Everyone taking part
+agrees to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Set up
 
