@@ -6720,7 +6720,7 @@ def test_cambridge_one_assignments():
                 else:
                     os.environ[key] = value
 
-    jwt = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.c2lnbmF0dXJlX3Rlc3Q"
+    jwt = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.c2lnbmF0dXJlX3Rlc3Q"       # made up: {"sub": "test"}  gitleaks:allow
     clean = notifier.redact(f"Authorization: Bearer {jwt} Cookie: c1_sid=s3cr3tSID; "
                             "glt_3_AbC-def=GltValue123; gig_loginToken_3_X=TokVal99")
     for secret in (jwt, "s3cr3tSID", "GltValue123", "TokVal99"):
@@ -7637,6 +7637,13 @@ def test_the_repository_is_ready_for_students():
         assert re.search(r"^permissions:\n  contents: read$", text, re.M), (workflow.name, "read-only token by default")
         for action in re.findall(r"uses: (\S+)", text):
             assert re.fullmatch(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}", action), (workflow.name, "pin to a commit", action)
+    hook = (project / ".githooks" / "pre-commit").read_text(encoding="utf-8")
+    for step in ("-m pyflakes src tests monitor.py bot.py", "tests/test_architecture.py", "gitleaks git --pre-commit --staged"):
+        assert step in hook and (step.startswith("gitleaks") or step.split()[-1] in ci), f"the pre-commit hook lost: {step}"
+    if (project / ".git").exists():
+        checked = subprocess.run(["git", "check-attr", "eol", ".githooks/pre-commit"], cwd=project,
+                                 capture_output=True, text=True).stdout
+        assert "eol: lf" in checked, "a CRLF checkout would break the hook's #!/bin/sh line"
 
     promise = "I have verified that no passwords, student IDs, or private tokens are included."
     for form in ("bug_report.yml", "feature_request.yml"):

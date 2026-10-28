@@ -20,6 +20,8 @@ agrees to the [Code of Conduct](CODE_OF_CONDUCT.md).
 ```
 
 Both must pass — CI runs them on Windows with Python 3.11, 3.13, 3.14 and 3.15, and runs the student installer.
+To run them (and [gitleaks](https://github.com/gitleaks/gitleaks), if it is installed) before every commit,
+turn on the project's hook once: `git config core.hooksPath .githooks`.
 
 ## The rules the tests enforce
 

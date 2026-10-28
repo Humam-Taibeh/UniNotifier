@@ -1,0 +1,27 @@
+#!/bin/sh
+# Runs before every commit the checks CI runs, so a broken commit never leaves this PC.
+# Turn it on once per clone:   git config core.hooksPath .githooks
+# Skip it for one commit (not recommended):   git commit --no-verify
+py=.venv/Scripts/python.exe
+[ -x "$py" ] || py=.venv/bin/python
+if [ ! -x "$py" ]; then
+    echo "pre-commit: no .venv in this folder - run install.bat first"
+    exit 1
+fi
+
+"$py" -m pyflakes src tests monitor.py bot.py || exit 1
+
+log=$(mktemp)
+if ! "$py" tests/test_architecture.py > "$log" 2>&1; then
+    tail -n 25 "$log"
+    rm -f "$log"
+    echo "pre-commit: the tests failed (full run: .venv\\Scripts\\python tests\\test_architecture.py)"
+    exit 1
+fi
+rm -f "$log"
+
+if command -v gitleaks > /dev/null 2>&1; then
+    gitleaks git --pre-commit --staged --redact --no-banner --log-level warn || exit 1
+else
+    echo "pre-commit: gitleaks is not installed - the secret scan was skipped (GitHub push protection still checks)"
+fi
