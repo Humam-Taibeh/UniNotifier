@@ -23,6 +23,7 @@ from urllib.parse import urlparse
 from uninotifier import richtext
 from uninotifier import schedule
 from uninotifier.archive import course_folder_name
+from uninotifier.moodle import quiz_times
 from uninotifier.notifier import audit_timestamp, escape_md, format_timestamp
 
 # modname -> (emoji, English type label)
@@ -193,14 +194,21 @@ def _fields(item: dict, type_label: str, emoji: str, deadline: dict | None,
     if item.get("section"):
         lines.append(f'🗓️ *Section:* {escape_md(item["section"])}')
     if deadline:
-        field = "Opens" if item["type"] == "quiz" else "Due Date"
-        lines.append(f'🕐 *{field}:* {format_timestamp(deadline["timestamp"])}')
+        lines += deadline_lines(deadline)
         status = status or (STATUS_SUBMITTED if deadline.get("submitted") else STATUS_PENDING)
     if status:
         lines.append(f"📊 *Status:* {status}")
     if item.get("manual") and item["type"] not in NEVER_DONE_TYPES:
         lines.append(f'☑️ *Progress:* {"✅ Marked as done" if item.get("done") else "⬜ Not done yet"}')
     return lines
+
+
+def deadline_lines(deadline: dict) -> list[str]:
+    """🕐 Due Date for an assignment; 🕐 Opens and/or Closes for a quiz."""
+    if deadline.get("type") != "quiz":
+        return [f'🕐 *Due Date:* {format_timestamp(deadline["timestamp"])}']
+    opens, closes = quiz_times(deadline)
+    return [f"🕐 *{field}:* {format_timestamp(ts)}" for field, ts in (("Opens", opens), ("Closes", closes)) if ts]
 
 
 def _audit(detected_at: float | None = None) -> str:
@@ -373,14 +381,13 @@ def build_reminder_message(deadline: dict, flag: str, detected_at: float | None 
     emoji, label = ("📋", "Quiz / Exam") if is_quiz else ("📝", "Assignment")
     head = "🚨 *Final Reminder*" if flag == "1h" else "⏰ *Reminder*"
     hours = "1 hour" if flag == "1h" else "24 hours"
-    action = "Opens" if is_quiz else "Due"
-    field = "Opens" if is_quiz else "Due Date"
+    action = ("Closes" if deadline.get("event") == "close" else "Opens") if is_quiz else "Due"
     return "\n".join([
         head, "",
         course_line(deadline.get("course", "")),
         f"{emoji} *Type:* {label}",
         f'📌 *Title:* {escape_md(deadline.get("name", ""))}',
-        f'🕐 *{field}:* {format_timestamp(deadline["timestamp"])}',
+        *deadline_lines(deadline),
         f"📊 *Status:* {STATUS_PENDING}",
         "",
         f"{action} in {hours}.",

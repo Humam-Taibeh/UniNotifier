@@ -571,9 +571,13 @@ accounts never opens a picker in the hidden task. Without `data/.git` nothing ha
    (`li[data-for="cmitem"]`) is read directly from the server-rendered
    HTML — Moodle renders all sections server-side regardless of whether
    they're visually collapsed, so no "expand all" interaction is needed.
-4. **Deadlines.** Upcoming assignment due dates and quiz opening times are
-   fetched in one batch via `core_calendar_get_action_events_by_timesort`
-   (the same data source as the dashboard's "Timeline" block).
+4. **Deadlines.** Assignment due dates and quiz closing times are fetched in
+   one batch via `core_calendar_get_action_events_by_timesort` (the same data
+   source as the dashboard's "Timeline" block — this Moodle lists a quiz there
+   by its *close* event only); a quiz's opening time comes from
+   `core_calendar_get_calendar_upcoming_view`. Each open assignment's page says
+   whether it is submitted, each open quiz's page whether you attempted it —
+   also for those without any date (kept under `undated`).
 5. **Diff & notify.** Everything is compared against `saved_items.json`.
    New courses/content trigger an immediate Telegram message; tracked
    deadlines are checked against the current time and trigger a 24h and/or

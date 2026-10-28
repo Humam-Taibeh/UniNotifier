@@ -365,6 +365,85 @@ def test_deadline_flag_and_reminders():
     assert len(sent) == 2   # 24h and 1h windows both due
 
 
+def test_quizzes_keep_their_opening_and_closing_times():
+    """This Moodle lists a quiz among the action events by its CLOSE event only (a quiz
+    used to get no date and no reminder at all); its opening time comes from the
+    upcoming-events view. Both land on one entry, whose reminders count down to the
+    opening — or to the close while that is all there is. A quiz page that lists an
+    attempt of yours, or a submitted assignment, ends the task; one without a date is
+    read too."""
+    from uninotifier.monitor import scan
+    url = "https://x/mod/quiz/view.php?id=9"
+    close = {"modulename": "quiz", "eventtype": "close", "timesort": 2_000_003_600, "name": "Quiz 4 closes",
+             "instance": 77, "action": {"url": url, "name": "Attempt quiz now"}, "course": {"fullname": "c"}}
+    opening = {"modulename": "quiz", "eventtype": "open", "timestart": 2_000_000_000, "name": "Quiz 4 opens",
+               "instance": 77, "course": {"fullname": "c"}}
+    calls, actions = [], {"events": [close]}
+
+    def fake_ajax(context, sesskey, method, args):
+        calls.append(method)
+        if method == "core_calendar_get_action_events_by_timesort":
+            return {"data": actions}
+        return {"data": {"events": [opening, {**opening, "instance": 78},
+                                    {"modulename": "attendance", "eventtype": "attendance", "instance": 77}]}}
+    keep = moodle.ajax_call
+    moodle.ajax_call = fake_ajax
+    try:
+        events = moodle.fetch_deadline_events(None, "key")
+        assert [e["eventtype"] for e in events] == ["close", "open"] and events[1]["url"] == url, events
+        actions["events"], calls[:] = [], []
+        assert moodle.fetch_deadline_events(None, "key") == [] and len(calls) == 1, "no quiz, no second call"
+    finally:
+        moodle.ajax_call = keep
+
+    saved = moodle.update_deadlines({}, [close])
+    q = saved["quiz-9"]
+    assert (q["opens"], q["closes"], q["timestamp"], q["event"], q["name"]) == (
+        None, 2_000_003_600, 2_000_003_600, "close", "Quiz 4"), q
+    q["reminded_24h"] = True
+    q = moodle.update_deadlines(saved, events)["quiz-9"]
+    assert (q["opens"], q["closes"], q["timestamp"], q["event"]) == (2_000_000_000, 2_000_003_600, 2_000_000_000, "open")
+    assert q["reminded_24h"] is False, "the reminder sent before the close was about another moment"
+    q["reminded_24h"] = True
+    again = moodle.update_deadlines({"quiz-9": q}, [close])["quiz-9"]       # the upcoming view failed this time
+    assert again["opens"] == 2_000_000_000 and again["reminded_24h"] is True
+    assert moodle.quiz_times({"type": "quiz", "timestamp": 5}) == (5, None), "an entry written before"
+    assert moodle.update_deadlines({}, [{**close, "eventtype": "due"}]) == {}
+    hw = moodle.update_deadlines({}, [{"modulename": "assign", "eventtype": "due", "timesort": 2e9, "name": "HW 2 is due",
+                                       "action": {"url": "https://x/mod/assign/view.php?id=4"}}])
+    assert hw["assign-4"]["name"] == "HW 2", "the activity's own name, not the calendar's sentence"
+
+    rem = media.build_reminder_message(q, "1h")
+    assert "*Opens:*" in rem and "*Closes:*" in rem and "Opens in 1 hour." in rem, rem
+    closing = media.build_reminder_message({**q, "opens": None, "timestamp": 2_000_003_600, "event": "close"}, "24h")
+    assert "*Opens:*" not in closing and "Closes in 24 hours." in closing, closing
+    item = {"name": "Quiz 4", "type": "quiz", "course": "20261-Big Data-AllSec-3-", "url": url, "cmid": "9"}
+    assert "*Opens:*" in media.build_item_message(item, q) and "*Closes:*" in media.build_item_message(item, q)
+
+    assert moodle.quiz_attempted('<div class="box quizinfo"><p>Attempts allowed: 1</p></div>') is False
+    assert moodle.quiz_attempted('<div class="quizinfo"></div><table class="generaltable quizattemptsummary">'
+                                 '<tr><td>Finished</td></tr></table>') is True
+    assert moodle.quiz_attempted("<html><body><p>Log in</p></body></html>") is None
+
+    def assign(cmid, **extra):
+        return {"name": f"HW {cmid}", "type": "assign", "course": "c", "url": f"https://x/mod/assign/view.php?id={cmid}",
+                "cmid": str(cmid), **extra}
+    content = {"c-9": item, "c-4": assign(4), "c-5": assign(5), "c-6": {**assign(6), "done": True}}
+    deadlines = {"quiz-9": dict(q), "assign-4": {"type": "assign", "timestamp": time.time() - 60}}
+    read = []
+    keep = (moodle.fetch_quiz_attempted, moodle.fetch_submission_status)
+    moodle.fetch_quiz_attempted = lambda http, u: read.append(u) or True
+    moodle.fetch_submission_status = lambda http, u: read.append(u) or False
+    try:
+        saved_state = {"content": dict(content)}
+        found = scan.check_submissions(None, content, deadlines, saved_state)
+    finally:
+        moodle.fetch_quiz_attempted, moodle.fetch_submission_status = keep
+    assert sorted(read) == sorted([url, assign(5)["url"]]), "a past deadline and a task marked done are not read"
+    assert found == {"quiz-9": True, "assign-5": False} and deadlines["quiz-9"]["submitted"] is True
+    assert saved_state["undated"] == {"assign-5": False}, "an undated task's status is kept beside the deadlines"
+
+
 def test_bot_views():
     bot = _package("uninotifier.bot")
     text, rows = bot.view_menu()
@@ -7752,7 +7831,8 @@ if __name__ == "__main__":
                test_archive_root_defaults_to_documents_university, test_state_backup_lives_in_its_own_repository,
                test_sign_in_needs_no_form_when_microsoft_still_remembers_you,
                test_doctor_says_what_to_fix, test_no_personal_files_are_tracked,
-               test_the_readme_translations_say_the_same, test_the_repository_is_ready_for_students):
+               test_the_readme_translations_say_the_same, test_the_repository_is_ready_for_students,
+               test_quizzes_keep_their_opening_and_closing_times):
         _chat = _package("uninotifier.bot")
         for _name, _original in _CHAT_ORIGINALS.items():      # a test that forgets to restore a stub cannot leak it into the next
             setattr(_chat, _name, _original)

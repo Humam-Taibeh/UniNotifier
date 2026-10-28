@@ -40,10 +40,12 @@ class SessionExpiredError(Exception):
     """The saved portal session no longer logs in."""
 
 # Only these (modname, eventtype) pairs are tracked for due-date reminders:
-# assignment due dates and quiz opening times.
+# assignment due dates, and a quiz's opening and closing times. This Moodle
+# lists a quiz among the action events by its CLOSE event only; the opening
+# time comes from the upcoming-events view (fetch_deadline_events).
 DEADLINE_EVENT_TYPES = {
-    "assign": "due",
-    "quiz": "open",
+    "assign": ("due",),
+    "quiz": ("open", "close"),
 }
 
 CONTENT_ITEM_SELECTOR = 'li[data-for="cmitem"]'
@@ -183,20 +185,50 @@ def fetch_deadline_events(context, sesskey: str, limit: int = 50) -> list:
     if result.get("error"):
         log.warning("Calendar deadlines not available: %s", result.get("exception"))
         return []
-    return result.get("data", {}).get("events", [])
+    events = result.get("data", {}).get("events", [])
+    return events + _quiz_openings(context, sesskey, events)
+
+
+def _quiz_openings(context, sesskey: str, action_events: list) -> list:
+    """The OPEN events of the quizzes that appear among the action events (by
+    their close event), from the upcoming-events view — the action list does
+    not carry them. Each gets the action URL of its quiz, so update_deadlines
+    can tell which quiz it belongs to. A failure only costs the opening times."""
+    urls = {ev.get("instance"): (ev.get("action") or {}).get("url") or ev.get("url")
+            for ev in action_events if ev.get("modulename") == "quiz"}
+    if not urls:
+        return []
+    try:
+        result = ajax_call(context, sesskey, "core_calendar_get_calendar_upcoming_view",
+                           {"courseid": 1, "categoryid": 0})
+    except Exception:
+        log.exception("Could not read the upcoming events (quiz opening times)")
+        return []
+    if result.get("error"):
+        log.warning("Upcoming events not available: %s", result.get("exception"))
+        return []
+    return [{**ev, "url": urls[ev.get("instance")]}
+            for ev in (result.get("data") or {}).get("events", [])
+            if ev.get("modulename") == "quiz" and ev.get("eventtype") == "open" and urls.get(ev.get("instance"))]
 
 
 def update_deadlines(saved_deadlines: dict, events: list) -> dict:
     """Merge freshly-fetched due dates into the existing deadline state,
     keeping each item's reminder flags so a reminder already sent is never
-    repeated. Any event with an unexpected shape is skipped, not fatal."""
+    repeated. Any event with an unexpected shape is skipped, not fatal.
+
+    A quiz has one entry with "opens" and "closes"; its "timestamp" (what the
+    24 h / 1 h reminders count down to) is the opening time while that is
+    known, else the closing time, and "event" says which. When that changes,
+    the reminder flags start again: they were about the other moment."""
     deadlines = {k: dict(v) for k, v in saved_deadlines.items()}
     for ev in events:
         try:
             modname = ev.get("modulename")
-            if DEADLINE_EVENT_TYPES.get(modname) != ev.get("eventtype"):
+            eventtype = ev.get("eventtype")
+            if eventtype not in DEADLINE_EVENT_TYPES.get(modname, ()):
                 continue
-            timestamp = ev.get("timesort")
+            timestamp = ev.get("timesort") or ev.get("timestart")
             if not timestamp:
                 continue
 
@@ -209,8 +241,8 @@ def update_deadlines(saved_deadlines: dict, events: list) -> dict:
             key = f"{modname}-{cmid}"
             course = ev.get("course") or {}
             existing = deadlines.get(key, {})
-            deadlines[key] = {
-                "name": ev.get("name") or existing.get("name") or "(بدون اسم)",
+            entry = {
+                "name": _event_title(ev.get("name")) or existing.get("name") or "(بدون اسم)",
                 "course": course.get("fullname") or existing.get("course") or "",
                 "url": url or existing.get("url", ""),
                 "type": modname,
@@ -219,9 +251,42 @@ def update_deadlines(saved_deadlines: dict, events: list) -> dict:
                 "reminded_1h": existing.get("reminded_1h", False),
                 "submitted": existing.get("submitted", False),
             }
+            if modname == "quiz":
+                opens, closes = quiz_times(existing) if existing else (None, None)
+                if eventtype == "open":
+                    opens = timestamp
+                else:
+                    closes = timestamp
+                    entry["name"] = existing.get("name") or entry["name"]
+                entry.update(opens=opens, closes=closes, timestamp=opens or closes,
+                             event="open" if opens else "close")
+                if existing and existing.get("event", "open") != entry["event"]:
+                    entry.update(reminded_24h=False, reminded_1h=False)
+            deadlines[key] = entry
         except Exception:
             log.exception("Skipping a malformed calendar event: %r", ev)
     return deadlines
+
+
+EVENT_SUFFIXES = (" is due", " opens", " closes", " مستحق", " يفتح", " يغلق")
+
+
+def _event_title(name: str | None) -> str:
+    """The calendar names an event after its activity plus what happens
+    ("Quiz 4 closes"); the activity's own name reads better in a list."""
+    name = (name or "").strip()
+    for suffix in EVENT_SUFFIXES:
+        if name.endswith(suffix):
+            return name[: -len(suffix)].strip()
+    return name
+
+
+def quiz_times(deadline: dict) -> tuple[float | None, float | None]:
+    """(opens, closes) of a quiz entry. An entry written before quizzes had
+    both carried only the opening time, as "timestamp"."""
+    if "event" not in deadline:
+        return deadline.get("timestamp"), None
+    return deadline.get("opens"), deadline.get("closes")
 
 
 def course_url(course_id: str) -> str:
@@ -474,6 +539,28 @@ def fetch_submission_status(context, assign_url: str) -> bool | None:
         raise
     except Exception:
         log.exception("Submission status check failed for %s", assign_url)
+        return None
+
+
+def quiz_attempted(html: str) -> bool | None:
+    """True once the quiz page lists an attempt of yours ("Summary of your
+    previous attempts" — the quizattemptsummary table), False when it is a
+    readable quiz page without one, None when it is not a quiz page at all."""
+    tree = lxml_html.fromstring(html)
+    if _with_class(tree, "quizattemptsummary"):
+        return True
+    return False if _with_class(tree, "quizinfo", "quizattempt") else None
+
+
+def fetch_quiz_attempted(context, quiz_url: str) -> bool | None:
+    """Whether a quiz has been attempted (see quiz_attempted); None = unreadable."""
+    try:
+        html = fetch_html(context, quiz_url)
+        return quiz_attempted(html) if html else None
+    except SessionExpiredError:
+        raise
+    except Exception:
+        log.exception("Quiz attempt check failed for %s", quiz_url)
         return None
 
 

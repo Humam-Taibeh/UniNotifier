@@ -132,22 +132,35 @@ def pmap(fn, items: list) -> list[tuple]:
         return list(pool.map(call, items))
 
 
+def _still_open(deadline: dict, now: float) -> bool:
+    if deadline.get("type") == "quiz":
+        opens, closes = moodle.quiz_times(deadline)
+        return (closes or opens or 0) > now
+    return deadline["timestamp"] > now
+
+
 def check_submissions(http, content: dict, deadlines: dict, saved: dict) -> dict:
-    """Read the submission status of every upcoming (or brand-new) assignment.
-    A submitted assignment is flagged on its deadline, which stops its 24h / 1h
-    reminders; a pending one keeps them. An unreadable page keeps what was
-    known before."""
+    """Read the status of every assignment and quiz that can still be done: is
+    the assignment submitted, has the quiz been attempted? That covers those
+    with a date still ahead, brand-new ones, and those with no date at all
+    (tasks.py lists them every day until they are done). A done one is flagged
+    on its deadline, which stops its reminders — or, without a deadline, in
+    saved["undated"]. An unreadable page keeps what was known before."""
     now = time.time()
+    readers = {"assign": moodle.fetch_submission_status, "quiz": moodle.fetch_quiz_attempted}
     wanted = []
     for item_id, item in content.items():
-        if item["type"] != "assign":
+        if item["type"] not in readers:
             continue
-        key = f'assign-{moodle.extract_cmid(item["url"])}'
-        upcoming = key in deadlines and deadlines[key]["timestamp"] > now
-        if upcoming or item_id not in saved["content"]:
+        key = f'{item["type"]}-{moodle.extract_cmid(item["url"])}'
+        if key in deadlines:
+            if _still_open(deadlines[key], now) or item_id not in saved["content"]:
+                wanted.append((key, item))
+        elif not item.get("done"):
             wanted.append((key, item))
     submissions = {}
-    for (key, item), status, error in pmap(lambda w: moodle.fetch_submission_status(http, w[1]["url"]), wanted):
+    undated = saved.setdefault("undated", {})
+    for (key, item), status, error in pmap(lambda w: readers[w[1]["type"]](http, w[1]["url"]), wanted):
         if isinstance(error, moodle.SessionExpiredError):
             raise error
         if error or status is None:
@@ -155,7 +168,10 @@ def check_submissions(http, content: dict, deadlines: dict, saved: dict) -> dict
         submissions[key] = status
         if key in deadlines:
             deadlines[key]["submitted"] = status
-        log.info("  assignment %s: %s", item["name"], "submitted" if status else "pending")
+        else:
+            undated[key] = status
+        done = ("pending", "submitted") if item["type"] == "assign" else ("not attempted", "attempted")
+        log.info("  %s %s: %s", "assignment" if item["type"] == "assign" else "quiz", item["name"], done[status])
     return submissions
 
 

@@ -11,6 +11,10 @@ All notable changes to this project are documented here. The format follows
 - A pull request template with the checks the repository relies on.
 - An "unofficial, use at your own risk" notice in both READMEs.
 
+### Fixed
+- Quizzes had no date and no reminders: this Moodle lists a quiz by its closing event, which was
+  ignored. A quiz now has its opening and closing times, and one you have attempted stops reminding.
+
 ## [1.0.0] - 2026-10-28
 
 First public release.
