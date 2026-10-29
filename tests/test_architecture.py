@@ -31,6 +31,13 @@ for _key in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "ADMIN_USER_ID", "ZUJ_USE
              "BOT_HEALTHCHECK_URL", "BOT_POLL_TIMEOUT", "UNINOTIFIER_MANUAL", "CAMBRIDGE_ASSIGNMENTS_URL",
              "CAMBRIDGE_UNTIL", "CAMBRIDGE_EMAIL", "CAMBRIDGE_PASSWORD"):
     os.environ.pop(_key, None)                      # nothing inherited from a shell that loaded the real one
+# git gives a hook its own variables (GIT_DIR, GIT_INDEX_FILE, …, as `git rev-parse --local-env-vars`
+# lists them): a test that runs git in its throw-away folder would otherwise write into this repository
+for _key in ("GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT",
+             "GIT_OBJECT_DIRECTORY", "GIT_DIR", "GIT_WORK_TREE", "GIT_IMPLICIT_WORK_TREE", "GIT_GRAFT_FILE",
+             "GIT_INDEX_FILE", "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE", "GIT_PREFIX", "GIT_SHALLOW_FILE",
+             "GIT_COMMON_DIR"):
+    os.environ.pop(_key, None)
 _FIXTURES = Path(__file__).resolve().parent / "fixtures"
 os.environ["UNINOTIFIER_ENV"] = str(_HOME / ".env")
 os.environ["UNINOTIFIER_DATA"] = str(_HOME / "data")
@@ -7809,6 +7816,8 @@ def test_the_repository_is_ready_for_students():
         for action in re.findall(r"uses: (\S+)", text):
             assert re.fullmatch(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}", action), (workflow.name, "pin to a commit", action)
     hook = (project / ".githooks" / "pre-commit").read_text(encoding="utf-8")
+    assert "unset $(git rev-parse --local-env-vars)" in hook, "the checks must run without git's own variables"
+    assert 'nogit "$py" tests/test_architecture.py' in hook, "or a test would write into this repository"
     for step in ("-m pyflakes src tests monitor.py bot.py", "tests/test_architecture.py", "gitleaks git --pre-commit --staged"):
         assert step in hook and (step.startswith("gitleaks") or step.split()[-1] in ci), f"the pre-commit hook lost: {step}"
     if (project / ".git").exists():

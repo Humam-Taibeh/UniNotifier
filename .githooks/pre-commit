@@ -9,10 +9,15 @@ if [ ! -x "$py" ]; then
     exit 1
 fi
 
-"$py" -m pyflakes src tests monitor.py bot.py || exit 1
+# git gives a hook its own variables (GIT_DIR, GIT_INDEX_FILE, ...). The checks run without them:
+# a test that runs git in a throw-away folder would otherwise write into this repository.
+# (gitleaks keeps them: it has to see what is being committed.)
+nogit() { (unset $(git rev-parse --local-env-vars); "$@"); }
+
+nogit "$py" -m pyflakes src tests monitor.py bot.py || exit 1
 
 log=$(mktemp)
-if ! "$py" tests/test_architecture.py > "$log" 2>&1; then
+if ! nogit "$py" tests/test_architecture.py > "$log" 2>&1; then
     tail -n 25 "$log"
     rm -f "$log"
     echo "pre-commit: the tests failed (full run: .venv\\Scripts\\python tests\\test_architecture.py)"
