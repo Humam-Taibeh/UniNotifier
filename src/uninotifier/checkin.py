@@ -1,8 +1,12 @@
 """
 Automatic attendance check-in for the online lectures, with proof either way.
 
-Which   every attendance activity (mod_attendance) of a course that has an `Online`
-        slot in schedule.json — while "auto_check_in" is true there (off by default).
+Which   every attendance activity (mod_attendance) of an online course — while
+        "auto_check_in" is true in schedule.json (off by default). Moodle itself says
+        which courses are online: ZUJ ends a course's name with its teaching mode
+        ("…-ش12-3-ك": ك online, و or F in person, nothing blended), and an online
+        course has a Teams meeting. A course with an `Online` slot in schedule.json
+        counts too.
 When    each of its sessions, from EARLY before the start to LATE after the end. The
         sessions come from the attendance page itself (read again every SESSIONS_EVERY),
         so a moved or an extra session is followed too.
@@ -109,24 +113,36 @@ class Watch:
 
 # ----------------------------------------------------------------- what is watched
 
-def online_courses(sched: dict) -> set[str]:
-    return {lec.get("course") for lectures in (sched.get("days") or {}).values()
-            for lec in lectures if lec.get("mode") == "Online"}
+ONLINE_MARK = "-ك"         # the end of an online course's Moodle name (ك = إلكتروني)
+TEAMS_TYPES = {"teamscheduler"}
+
+
+def online_courses(sched: dict, content: dict) -> set[str]:
+    """The online courses, by their English name (see the module's docstring)."""
+    found = {lec.get("course") for lectures in (sched.get("days") or {}).values()
+             for lec in lectures if lec.get("mode") == "Online"}
+    for item in content.values():
+        full = (item.get("course") or "").strip()
+        if full.endswith(ONLINE_MARK) or item.get("type") in TEAMS_TYPES:
+            found.add(media.clean_course_name(full))
+    return found
 
 
 def enabled(sched: dict) -> bool:
     return sched.get("auto_check_in") is True
 
 
-def covers(course: str, sched: dict | None = None) -> bool:
+def covers(course: str, sched: dict | None = None, content: dict | None = None) -> bool:
     """Whether this course's attendance is checked in automatically."""
     sched = schedule.load_schedule() if sched is None else sched
-    return enabled(sched) and course in online_courses(sched)
+    if not enabled(sched):
+        return False
+    return course in online_courses(sched, _load_content() if content is None else content)
 
 
 def watched(sched: dict, content: dict) -> list[dict]:
     """The attendance activities of the online courses: {"cmid", "course", "name", "url"}."""
-    courses = online_courses(sched)
+    courses = online_courses(sched, content)
     return [{"cmid": str(it.get("cmid") or key), "course": media.clean_course_name(it.get("course", "")),
              "name": it.get("name", ""), "url": it["url"]}
             for key, it in sorted(content.items())
@@ -190,7 +206,8 @@ def refresh(watch: Watch, sched: dict, now: float, force: bool = False) -> dict:
     """The cache, read again when it is old or the online courses changed. An
     activity whose page cannot be read keeps the sessions it had."""
     cache = _load_cache()
-    courses = sorted(online_courses(sched))
+    content = _load_content()
+    courses = sorted(online_courses(sched, content))
     stale = (cache.get("courses") != courses or now - cache.get("read", 0) >= SESSIONS_EVERY)
     if not (force or stale) or now - watch.last_refresh < RETRY_SECONDS:
         return cache
@@ -198,7 +215,7 @@ def refresh(watch: Watch, sched: dict, now: float, force: bool = False) -> dict:
     old = {a["cmid"]: a for a in cache.get("activities", [])}
     fresh, failed = [], 0
     http = None
-    for activity in watched(sched, _load_content()):
+    for activity in watched(sched, content):
         try:
             http = http or _http()
             sessions = [{"start": s["start"].isoformat(), "end": s["end"].isoformat() if s["end"] else None}
@@ -431,9 +448,13 @@ def wrap_up(token: str, chat_id: str, watch: Watch, activity: dict, start: datet
 
 
 def timetabled(activity: dict, start: datetime, sched: dict) -> bool:
-    """The session is one of the course's Online lectures in schedule.json."""
+    """The session is one of the course's Online lectures in schedule.json — or any
+    session, for an online course the timetable does not list at all."""
+    days = sched.get("days") or {}
+    if not any(lec.get("course") == activity["course"] for lectures in days.values() for lec in lectures):
+        return True
     day = start.strftime("%a").lower()
-    for lec in (sched.get("days") or {}).get(day, []):
+    for lec in days.get(day, []):
         if lec.get("mode") == "Online" and lec.get("course") == activity["course"]:
             at = datetime.combine(start.date(), datetime.strptime(lec["start"], "%H:%M").time())
             if abs(at - start) <= SLOT_MATCH:

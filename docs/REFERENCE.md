@@ -202,8 +202,10 @@ Two activity types ZUJ uses for online teaching are read from their own pages
 ### Automatic check-in
 
 With `"auto_check_in": true` in `schedule.json` (off by default), `checkin.py` checks you
-in to every session of your **Online** courses' attendance — a course with an `Online`
-slot in the timetable:
+in to every session of your **online** courses' attendance. Moodle itself says which
+courses are online — nothing to set up: ZUJ ends a course's name with its teaching mode
+(`20261-…-ش12-3-ك`: **ك** online, **و** or **F** in person, nothing blended), and an online
+course has a Teams meeting. A course with an `Online` slot in the timetable counts too:
 
 1. The sessions come from the attendance page itself (read every 6 hours), so a moved or
    an extra session is followed too.
@@ -219,7 +221,8 @@ slot in the timetable:
    **✍️ Check In by Hand** button to the attendance page. It goes on watching, so ✅
    follows once you have checked in yourself.
 5. A timetabled online lecture whose check-in never opened ends with a silent
-   **ℹ️ No Check-in Opened**. Activity days (no `Online` slot) stay silent.
+   **ℹ️ No Check-in Opened** (for a course the timetable does not list, every session).
+   Activity days (no `Online` slot) stay silent.
 
 The lecture alert at the start says that auto check-in is on. A saved session that has
 expired starts a check (which signs in again). The bot does this on its own thread; a

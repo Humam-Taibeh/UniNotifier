@@ -4909,8 +4909,19 @@ def test_automatic_check_in():
                  "section": "01", "mode": "In-Person"}]}}
     assert schedule.validate({**sched, "auto_check_in": "yes"}) == ['"auto_check_in" must be true or false']
     assert schedule.validate(sched) == [], schedule.validate(sched)
-    assert checkin.covers("Big Data", sched) and not checkin.covers("Databases", sched)
-    assert not checkin.covers("Big Data", {**sched, "auto_check_in": False})
+    assert checkin.covers("Big Data", sched, {}) and not checkin.covers("Databases", sched, {})
+    assert not checkin.covers("Big Data", {**sched, "auto_check_in": False}, {})
+    # Moodle says which courses are online by itself: ZUJ's mark at the end of the name (ك), or a Teams meeting
+    marked = {"a": {"type": "attendance", "course": "20261-الاتصال والتواصل باللغة العربية-ش12-3-ك"},
+              "b": {"type": "attendance", "course": "20261-الاتصال والتواصل باللغة الإنجليزية-ش15-3-و"},
+              "c": {"type": "attendance", "course": "20261-Databases-AllSec-3-F"},
+              "d": {"type": "teamscheduler", "course": "20261-Statistics-AllSec-3-"},
+              "e": {"type": "attendance", "course": "20261-Numerical Analysis(1)-AllSec-3-"}}
+    arabic, statistics = (media.clean_course_name(marked[k]["course"]) for k in "ad")
+    assert checkin.online_courses({"days": {}}, marked) == {arabic, statistics}, "no timetable needed"
+    assert checkin.covers(arabic, {"auto_check_in": True, "days": {}}, marked)
+    assert checkin.timetabled({"course": arabic}, datetime(2026, 11, 2, 19, 0), sched), \
+        "an online course the timetable does not list: every session is a lecture"
 
     view = "https://elearning.zuj.edu.jo/mod/attendance/view.php?id=4242"
     content = {"5302-4242": {"type": "attendance", "course": "20261-Big Data-AllSec-3-", "name": "Attendance",
