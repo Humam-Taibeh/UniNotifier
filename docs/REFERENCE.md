@@ -197,10 +197,36 @@ Two activity types ZUJ uses for online teaching are read from their own pages
   saved before its link was read is read again, quietly, until the link is known.
 * **Attendance** (`attendance`) — `📝 Attendance Check-in` with the next session and a
   **✍️ Check In / تأكيد الحضور** button to the attendance page, where check-in opens
-  during each session. `activities.check_in()` prepares automatic self check-in: it finds
-  the open session's submit link, reads the form and picks *Present*, but submits nothing
-  until `SUBMIT_VERIFIED` is set — once a real check-in page has been seen, that is the
-  one step left. Password-protected sessions are never submitted.
+  during each session.
+
+### Automatic check-in
+
+With `"auto_check_in": true` in `schedule.json` (off by default), `checkin.py` checks you
+in to every session of your **Online** courses' attendance — a course with an `Online`
+slot in the timetable:
+
+1. The sessions come from the attendance page itself (read every 6 hours), so a moved or
+   an extra session is followed too.
+2. From 10 minutes before a session to 30 minutes after it, the page is read once a
+   minute. When the instructor opens check-in (the *Submit attendance* link in your row),
+   the form behind it is filled in as you would: **Present**, then *Save changes*.
+3. The page is read again — only Moodle showing you as taken counts — and you get
+   **✅ Checked In** with a screenshot of your row (highlighted), or **⚠️ Recorded as
+   Late/Absent/…** when it was taken some other way.
+4. When it cannot be done for you — the session asks for a password or a QR code, the
+   form has no *Present* choice, Moodle does not record it, or the page cannot be read
+   for 10 minutes — you get **🚨 Check In by Hand** at once: why, the page it saw, and a
+   **✍️ Check In by Hand** button to the attendance page. It goes on watching, so ✅
+   follows once you have checked in yourself.
+5. A timetabled online lecture whose check-in never opened ends with a silent
+   **ℹ️ No Check-in Opened**. Activity days (no `Online` slot) stay silent.
+
+The lecture alert at the start says that auto check-in is on. A saved session that has
+expired starts a check (which signs in again). The bot does this on its own thread; a
+monitor run is the fallback while the bot is down, and claim files in `data/daily_sent/`
+make each message — and each attempt — happen once. The check-in page of every attempt is
+kept, its session key removed, in `data/checkin_pages/`. Checking in says you are
+there: switch it off (`false`) for a lecture you will miss.
 
 ### Mark as done
 
@@ -238,7 +264,8 @@ claim file guarantees each goes out once):
 `schedule.json` holds the weekly timetable (days, times, rooms, mode). Only
 `Online` slots get alerts (`remind_modes`), 60 minutes ahead
 (`lecture_reminder_minutes`); a morning overview can be switched on with
-`morning_summary_hour` (off by default). These work even when the portal check fails.
+`morning_summary_hour` (off by default), and automatic check-in with `auto_check_in`
+(see above). These work even when the portal check fails.
 
 ### Online lecture links
 
@@ -598,6 +625,7 @@ UniNotifier/
 │   ├── archive.py, grades.py                                           the archive and marks in files
 │   ├── lectures.py, lecturelinks.py, schedule.py, reminders.py, daily.py   time-based messages
 │   ├── tasks.py              every open task: the Upcoming Tasks list and the noon digest
+│   ├── checkin.py            automatic attendance check-in for the online lectures
 │   ├── gpa.py, gpa_ui.py, gradebook.py, transcript.py, portal.py, finals.py, guest.py   grades, GPA, the portal
 │   ├── cambridge.py                                                    Cambridge One assignments (optional)
 │   ├── watchdog.py, maintenance.py, healthcheck.py, gitsync.py          keeping itself honest; state backup

@@ -76,6 +76,10 @@ def release(key: str) -> None:
     _marker(key).unlink(missing_ok=True)
 
 
+def claimed(key: str) -> bool:
+    return _marker(key).exists()
+
+
 def prune() -> None:
     cutoff = time.time() - KEEP_DAYS * 86400
     for path in CLAIM_DIR.glob("*.sent") if CLAIM_DIR.is_dir() else []:

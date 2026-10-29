@@ -33,7 +33,8 @@ MODE_EMOJI = {"In-Person": "🏫", "Blended": "🔀", "Online": "💻", "Activit
 LAST_GOOD_FILE = paths.DATA / "schedule.last_good.json"     # the newest copy that passed validate()
 
 KNOWN_KEYS = {"semester", "lecture_reminder_minutes", "morning_summary_hour", "remind_modes", "link_modes",
-              "portal_aliases", "course_codes", "teachers", "days", "finals", "degree_hours"}
+              "portal_aliases", "course_codes", "teachers", "days", "finals", "degree_hours",
+              "auto_check_in"}
 _TIME = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
 
 
@@ -91,6 +92,8 @@ def validate(data) -> list[str]:
     for key in ("remind_modes", "link_modes"):
         if key in data and not (isinstance(data[key], list) and all(m in MODE_EMOJI for m in data[key])):
             errors.append(f'"{key}" must be a list of: {", ".join(MODE_EMOJI)}')
+    if "auto_check_in" in data and not isinstance(data["auto_check_in"], bool):
+        errors.append('"auto_check_in" must be true or false')
     degree = data.get("degree_hours")
     if degree is not None and (isinstance(degree, bool) or not isinstance(degree, (int, float)) or not 30 <= degree <= 400):
         errors.append('"degree_hours" must be null or the number of credit hours of the whole degree plan (30 to 400)')

@@ -9,11 +9,9 @@ Two Moodle activities ZUJ uses for online teaching, read from their pages:
                  self-marking, its Status cell holds a "Submit attendance"
                  link (attendance.php?sessid=…&sesskey=…) — the only way in.
 
-Self check-in is prepared but not switched on: no session has been open yet,
-so the form behind that link has never been seen. `check_in()` already finds
-the open session, reads whatever form it leads to and picks the "Present"
-choice, but stops before submitting until SUBMIT_VERIFIED is set — see its
-docstring for the one step left.
+`check_in()` follows that link and fills in the form behind it the way the
+student would: the "Present" choice, then Save changes. It never decides
+whether that worked — checkin.py reads the attendance page again for that.
 """
 
 import html as htmlmod
@@ -30,9 +28,9 @@ log = logging.getLogger("uninotifier")
 
 TEAMS_JOIN_RE = re.compile(r"https://teams\.microsoft\.com/l/meetup-join/[^\s\"'<>]+")
 SUBMIT_LINK_RE = re.compile(r"/mod/attendance/attendance\.php\?[^\"'<>\s]*sessid=\d+")
-PRESENT_RE = re.compile(r"^\s*(present|حاضر)\s*$", re.I)
+PRESENT_RE = re.compile(r"^\s*(present|حاضر)\s*(\(.*\))?\s*$", re.I)    # "Present (Available for 10 minutes)"
+PASSWORD_FIELDS = {"studentpassword", "qrpass"}     # a session password, or a QR code's
 ONGOING_GRACE = timedelta(minutes=90)     # a session that started this long ago still counts as "next"
-SUBMIT_VERIFIED = False                    # see check_in()
 
 MEETING_ICONS = {"meeting type": "🗂️", "repeat": "🔁", "repeat on": "📆", "recurrence period": "📅",
                  "meeting time": "🕖", "organizer": "👤", "date": "📅", "start": "🕖", "duration": "⏱️"}
@@ -79,8 +77,8 @@ def meeting_icon(label: str) -> str:
 # ------------------------------------------------------------ attendance
 
 def parse_sessions(page_html: str, base_url: str = "https://elearning.zuj.edu.jo") -> list[dict]:
-    """Every session row: {"date", "time", "start", "description", "status",
-    "points", "submit_url"}. start is a datetime when the date parses."""
+    """Every session row: {"date", "time", "start", "end", "description", "status",
+    "points", "remarks", "submit_url"}. start and end are datetimes when they parse."""
     sessions = []
     for row in _doc(page_html).xpath('//table[contains(@class, "generaltable")]/tbody/tr'):
         date_cell = row.xpath('./td[contains(@class, "datecol")]')
@@ -95,23 +93,42 @@ def parse_sessions(page_html: str, base_url: str = "https://elearning.zuj.edu.jo
         links = [urljoin(base_url, h) for h in row.xpath('./td[contains(@class, "statuscol")]//a/@href')
                  if SUBMIT_LINK_RE.search(h)]
         sessions.append({"date": day, "time": time_range, "start": _start(day, time_range),
-                         "description": cell("desccol"), "status": cell("statuscol"),
-                         "points": cell("pointscol"), "submit_url": links[0] if links else None})
+                         "end": _end(day, time_range), "description": cell("desccol"),
+                         "status": cell("statuscol"), "points": cell("pointscol"),
+                         "remarks": cell("remarkscol"), "submit_url": links[0] if links else None})
     return sessions
+
+
+def _at(day: str, clock: str) -> datetime | None:
+    clock = clock.strip().upper().replace(" ", "")
+    for fmt in ("%a %d %b %Y %I:%M%p", "%a %d %b %Y %I%p"):
+        try:
+            return datetime.strptime(f"{day} {clock}", fmt)
+        except ValueError:
+            continue
+    return None
 
 
 def _start(day: str, time_range: str) -> datetime | None:
     """'Wed 14 Oct 2026' + '7PM - 8:30PM' -> 2026-10-14 19:00."""
-    first = time_range.split("-")[0].strip().upper().replace(" ", "")
-    for fmt in ("%a %d %b %Y %I:%M%p", "%a %d %b %Y %I%p"):
-        try:
-            return datetime.strptime(f"{day} {first}", fmt)
-        except ValueError:
-            continue
+    found = _at(day, time_range.split("-")[0])
+    if found:
+        return found
     try:
         return datetime.strptime(day, "%a %d %b %Y")
     except ValueError:
         return None
+
+
+def _end(day: str, time_range: str) -> datetime | None:
+    """'Wed 14 Oct 2026' + '7PM - 8:30PM' -> 2026-10-14 20:30 (None without an end time)."""
+    parts = time_range.split("-")
+    return _at(day, parts[1]) if len(parts) > 1 else None
+
+
+def recorded(session: dict) -> bool:
+    """Attendance has been taken for this session (its status is anything but "?")."""
+    return session["status"].strip() not in ("", "?") and not session["submit_url"]
 
 
 def next_session(sessions: list[dict], now: datetime | None = None) -> dict | None:
@@ -126,7 +143,7 @@ def open_session(sessions: list[dict]) -> dict | None:
     return next((s for s in sessions if s["submit_url"]), None)
 
 
-# ---------------------------------------------------- self check-in (stub)
+# --------------------------------------------------------- self check-in
 
 @dataclass
 class CheckInForm:
@@ -137,10 +154,13 @@ class CheckInForm:
 
 
 def read_form(page_html: str, page_url: str) -> CheckInForm | None:
-    """The self-marking form on a check-in page: where it posts, its hidden
-    fields, and the status choices by their label."""
+    """The self-marking form on a check-in page (mod_attendance's studentattendance
+    form: sessid and sesskey hidden, one "status" radio per choice, Save changes and
+    Cancel): where it posts, its fields, and the status choices by their label. A
+    session set to give the status itself has no choices — only Save changes."""
     doc = _doc(page_html)
-    forms = [f for f in doc.xpath("//form") if f.xpath('.//input[@type="radio"]')]
+    forms = (doc.xpath('//form[.//input[@name="sessid"]]')
+             or [f for f in doc.xpath("//form") if f.xpath('.//input[@type="radio"]')])
     if not forms:
         return None
     form = forms[0]
@@ -149,45 +169,58 @@ def read_form(page_html: str, page_url: str) -> CheckInForm | None:
         name, kind = inp.get("name"), (inp.get("type") or "text").lower()
         if not name:
             continue
-        if kind == "radio":
+        if kind == "password" or name in PASSWORD_FIELDS:
+            result.password = True
+        elif kind == "radio":
             ids = inp.get("id")
             label = doc.xpath(f'//label[@for="{ids}"]') if ids else []
             text = _text(label[0]) if label else _text(inp.getparent())
             result.choices[text or inp.get("value", "")] = (name, inp.get("value", ""))
-        elif kind == "password":
-            result.password = True
+        elif kind == "submit" and name == "cancel":
+            continue                       # sending it would cancel the form
         elif kind in ("hidden", "text", "submit") and inp.get("value") is not None:
             result.fields.setdefault(name, inp.get("value"))
     return result
 
 
-def check_in(http, sessions: list[dict], dry_run: bool = True) -> dict:
-    """Self-mark attendance for the open session as Present.
+def check_in(http, session: dict, dry_run: bool = True) -> dict:
+    """Self-mark one session as Present, as the student would: open its submit
+    link, choose "Present" (حاضر) and Save changes.
 
-    Done so far: find the open session's submit link, open it, read the form
-    and choose "Present" (حاضر). Returns {"ok", "reason", "plan"}; the plan is
-    the POST that would be sent.
+    Returns {"ok", "reason", "plan", "retry", "page"}: ok means Moodle took the
+    form (not yet that it recorded you — read the attendance page for that);
+    retry, that trying again later may help (Moodle did not answer); plan, the
+    POST sent (or that would be, with dry_run); page, the check-in page as seen.
+    Never submits a session that asks for a password or a QR code, nor one
+    without a "Present" choice. A session that gives the status itself has no
+    choices: its form is sent as it is, the way Save changes would."""
+    page = None
 
-    Left to do, once a real check-in page is available (open one during a
-    session and save its HTML): confirm that read_form() finds the form and
-    that posting the plan marks attendance, then set SUBMIT_VERIFIED = True.
-    Until then nothing is ever submitted, dry_run or not. Sessions protected
-    by a password are never submitted automatically."""
-    session = open_session(sessions)
-    if session is None:
-        return {"ok": False, "reason": "no session is open for check-in", "plan": None}
+    def result(ok: bool, reason: str, plan=None, retry: bool = False) -> dict:
+        return {"ok": ok, "reason": reason, "plan": plan, "retry": retry, "page": page}
+
+    if not session.get("submit_url"):
+        return result(False, "check-in is not open for this session", retry=True)
     resp = http.get(session["submit_url"])
-    form = read_form(resp.text(), session["submit_url"]) if resp.ok else None
+    if not resp.ok:
+        return result(False, f"Moodle answered HTTP {resp.status}", retry=True)
+    page = resp.text()
+    form = read_form(page, session["submit_url"])
     if form is None:
-        return {"ok": False, "reason": "the check-in page has no form", "plan": None}
-    choice = next((v for label, v in form.choices.items() if PRESENT_RE.match(label)), None)
-    if choice is None:
-        return {"ok": False, "reason": "no 'Present' choice on the form", "plan": None}
-    plan = {"url": form.action, "data": {**form.fields, choice[0]: choice[1]}}
+        return result(False, "the check-in page has no form")
     if form.password:
-        return {"ok": False, "reason": "this session needs a password", "plan": plan}
-    if dry_run or not SUBMIT_VERIFIED:
-        return {"ok": False, "reason": "dry run" if dry_run else "submitting is not verified yet", "plan": plan}
+        return result(False, "this session asks for a password or a QR code")
+    data = dict(form.fields)
+    if form.choices:
+        choice = next((v for label, v in form.choices.items() if PRESENT_RE.match(label)), None)
+        if choice is None:
+            return result(False, "the form has no 'Present' choice (only: " + ", ".join(form.choices) + ")")
+        data[choice[0]] = choice[1]
+    plan = {"url": form.action, "data": data}
+    if dry_run:
+        return result(False, "dry run", plan)
     sent = http.post(plan["url"], data=plan["data"],
                      headers={"Content-Type": "application/x-www-form-urlencoded"})
-    return {"ok": sent.ok, "reason": "submitted" if sent.ok else f"HTTP {sent.status}", "plan": plan}
+    if not sent.ok:
+        return result(False, f"Moodle refused the form (HTTP {sent.status})", plan, retry=True)
+    return result(True, "submitted", plan)

@@ -24,6 +24,7 @@ from datetime import datetime
 from pathlib import Path
 
 from uninotifier import archive
+from uninotifier import checkin
 from uninotifier import failsafe
 from uninotifier import lecturelinks
 from uninotifier import media
@@ -85,11 +86,14 @@ def send_with_link(token: str, chat_id: str, text: str, course: str, hint: bool 
                    check_in: bool = False) -> bool:
     """A lecture message with its meeting buttons (🎥 Join Meeting, 🌐 Open
     Course Page) and, when the link came from the portal, the screenshot of the
-    post or section that published it; check_in adds the course's ✍️ Check In.
+    post or section that published it; check_in adds the course's ✍️ Check In
+    (and, when checkin.py checks that course in by itself, a line saying so).
     Text and attendance only when there is no link; text only if the image
     can't be sent."""
     link = lecturelinks.entry(course)
     attendance = attendance_rows(course) if check_in else []
+    if attendance and checkin.covers(course):
+        text += f"\n\n{checkin.LECTURE_NOTE}"
     if not link.get("url"):
         return notifier.send_message(token, chat_id, f"{text}\n\n{NO_LINK_NOTE}", rows=attendance or None)
     rows = lecturelinks.join_rows(link) + attendance

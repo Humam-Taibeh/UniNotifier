@@ -9,6 +9,7 @@ import sys
 import time
 
 from uninotifier import paths
+from uninotifier import checkin
 from uninotifier import daily
 from uninotifier import envcheck
 from uninotifier import failsafe
@@ -244,6 +245,12 @@ def run(announce: bool = False) -> None:
         log.exception("Open-tasks digest failed")
         failsafe.bug("monitor:tasks", "The daily open-tasks message failed", e,
                      "The noon list of open assignments and quizzes may not arrive.")
+    try:
+        checkin.tick(config.BOT_TOKEN, config.CHAT_ID, checkin.Watch())   # attendance, if the bot is down
+    except Exception as e:
+        log.exception("Automatic check-in failed")
+        failsafe.bug("monitor:checkin", "Automatic attendance check-in is failing", e,
+                     "Check in yourself until it is fixed: the Check In button in the lecture alert.")
 
 
 def main() -> None:

@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Automatic attendance check-in for online lectures (`"auto_check_in": true` in `schedule.json`):
+  Present as soon as the instructor opens it, checked on Moodle, with a screenshot of your row as
+  proof — or a 🚨 with the reason, the page and a button to check in by hand.
 - Every day at noon, one message with every open assignment, quiz and Cambridge One task, closest
   first, until it is done; anything due within a day comes first under a loud 🚨 LAST DAY heading.
 - Upcoming Tasks lists every open task: Cambridge One assignments and tasks without a due date too.

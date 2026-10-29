@@ -106,6 +106,14 @@ PAGES: dict[str, Page] = {
         "down, the next scheduled check sends them instead — never both.",
         "• In-person lectures and activity slots stay silent; their rooms are in Course List & Details.",
         "",
+        "*✅ Automatic check-in* (switch it on in schedule.json)",
+        "• During each session of an online course, the attendance page is read every minute. When your "
+        "instructor opens check-in, the bot chooses Present and saves — then checks that Moodle recorded it.",
+        "• ✅ Checked In comes with a screenshot of your row. If it could not be done (a password, a QR "
+        "code, no Present choice, Moodle did not record it), 🚨 Check In by Hand tells you why, with the "
+        "page and a button — and ✅ follows once you did.",
+        "• A lecture whose check-in never opened ends with a quiet ℹ️ note.",
+        "",
         "*📅 The day in the chat*",
         "• A date line appears silently above the first message of each day.",
         "• At 11:59 PM a day with nothing new ends with a ✨ Daily Recap.",
@@ -113,7 +121,8 @@ PAGES: dict[str, Page] = {
         "*Everything that can send you a message*",
         "A new course or item · edited text · a re-uploaded file · a forum post · a Teams lecture · an "
         "attendance check-in · your mark found inside a results file · a deadline 24 h or 1 h away · "
-        "an online lecture an hour away and at its start · your own reminders · a problem that lasted. "
+        "an online lecture an hour away and at its start · an attendance check-in done or failed · "
+        "your own reminders · a problem that lasted. "
         "Nothing else.",
     ]),
 

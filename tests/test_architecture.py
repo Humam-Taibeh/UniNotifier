@@ -4767,8 +4767,8 @@ CHECK_IN_PAGE = """<html><body><form action="attendance.php" method="post">
 def test_teams_meeting_and_attendance_items():
     """teamscheduler and attendance are no longer "Unclassified": a Teams meeting comes
     with its details and a 🔗 Join Teams Lecture button (its link also feeds the lecture
-    reminders); attendance with the next session and ✍️ Check In. Self check-in finds the
-    open session and plans the POST, but never submits until verified."""
+    reminders); attendance with the next session and ✍️ Check In. A dry-run check-in
+    finds the open session and plans the POST without sending it."""
     from uninotifier import activities
     monitor = _package("uninotifier.monitor")
 
@@ -4834,7 +4834,7 @@ def test_teams_meeting_and_attendance_items():
     assert sent[1][0].startswith("📝") and sent[1][2][0][0]["text"].startswith("✍️ Check In")
     assert "الرجاء تأكيد الحضور" in sent[1][1], "the instructor's note follows as the body"
 
-    # self check-in: plans the POST for "Present", never sends it until verified
+    # a dry-run check-in plans the POST for "Present" and sends nothing (the real one: test_automatic_check_in)
     posted = []
 
     class Http:
@@ -4848,13 +4848,228 @@ def test_teams_meeting_and_attendance_items():
 
         def post(self, url, data=None, headers=None):
             posted.append((url, data))
-    result = activities.check_in(Http(), sessions)
+    result = activities.check_in(Http(), activities.open_session(sessions))
     assert result["reason"] == "dry run" and result["plan"]["url"].endswith("/mod/attendance/attendance.php")
     assert result["plan"]["data"] == {"sessid": "55", "sesskey": "SECRET", "status": "101",
                                       "submitbutton": "Save changes"}, result["plan"]
-    assert activities.check_in(Http(), sessions, dry_run=False)["reason"] == "submitting is not verified yet"
-    assert posted == [], "nothing is ever submitted before SUBMIT_VERIFIED"
-    assert activities.check_in(Http(), sessions[:1])["reason"] == "no session is open for check-in"
+    assert posted == [], "a dry run sends nothing"
+    assert activities.check_in(Http(), sessions[0])["reason"] == "check-in is not open for this session"
+    assert sessions[2]["end"] == datetime(2026, 10, 19, 20, 30) and not activities.recorded(sessions[2])
+    assert activities.recorded(sessions[0]) and not activities.recorded(sessions[1]), "a link is not a status"
+
+
+def _check_in_form(choices=("Present (Available for 10 minutes)", "Late", "Absent"), extra=""):
+    """mod_attendance's studentattendance form as Moodle 4 (Boost) renders it, inside a page
+    with another form (the search box) — the shape check_in() has to cope with."""
+    radios = "".join(f'<div class="form-check form-check-inline fitem"><label class="form-check-label">'
+                     f'<input type="radio" class="form-check-input" name="status" id="id_status_{101 + n}" '
+                     f'value="{101 + n}">{label}</label></div>' for n, label in enumerate(choices))
+    group = (f'<div class="form-group row fitem" id="fgroup_id_statusarray"><label class="col-form-label">'
+             f'Student Name:</label>{radios}</div>') if choices else ""
+    return f"""<html><body><form action="https://elearning.zuj.edu.jo/search/index.php"><input name="q" type="text" value="">
+</form><div role="main"><form autocomplete="off" action="https://elearning.zuj.edu.jo/mod/attendance/attendance.php"
+ method="post" accept-charset="utf-8" id="mform1" class="mform"><div style="display: none;">
+<input name="sessid" type="hidden" value="55" /><input name="sesskey" type="hidden" value="SECRETKEY1" />
+<input name="_qf__mod_attendance\\form\\studentattendance" type="hidden" value="1" />
+<input name="mform_isexpanded_id_session" type="hidden" value="1" /></div>
+<fieldset class="clearfix collapsible" id="id_session"><legend class="ftoggler">Wednesday, 4 November 2026 7:00PM</legend>
+{extra}{group}</fieldset><div class="form-group row fitem femptylabel" id="fgroup_id_buttonar">
+<input type="submit" class="btn btn-primary" name="submitbutton" id="id_submitbutton" value="Save changes">
+<input type="submit" class="btn btn-secondary" name="cancel" id="id_cancel" value="Cancel" data-cancel="1">
+</div></form></div><script>M.cfg = {{"sesskey":"SECRETKEY1"}};</script></body></html>"""
+
+
+def test_automatic_check_in():
+    """Online lectures check themselves in: during each session the attendance page is read
+    every minute; when check-in opens, Present + Save changes; then Moodle itself must show it
+    — ✅ with a screenshot of your row. When it cannot be done (a password, no Present choice,
+    Moodle does not record it, the session cannot be read for 10 minutes) — 🚨 check in by
+    hand, why, the page, a button; and ✅ follows once you did. A timetabled lecture whose
+    check-in never opened ends with a silent ℹ️. Off unless "auto_check_in" is true."""
+    from datetime import datetime
+    from uninotifier import activities, checkin, probe, schedule
+
+    # the form: the right one of two, Present even with its time limit, never Cancel
+    form = activities.read_form(_check_in_form(), "https://elearning.zuj.edu.jo/mod/attendance/attendance.php?sessid=55")
+    assert form.action == "https://elearning.zuj.edu.jo/mod/attendance/attendance.php" and not form.password
+    assert list(form.choices) == ["Present (Available for 10 minutes)", "Late", "Absent"]
+    assert "cancel" not in form.fields and form.fields["submitbutton"] == "Save changes" and "q" not in form.fields
+    assert activities.read_form(_check_in_form(("حاضر", "غائب")), "x").choices["حاضر"] == ("status", "101")
+    assert activities.read_form(_check_in_form(extra='<input type="text" name="studentpassword" id="id_studentpassword">'),
+                                "x").password, "a session password is a text field on Moodle"
+    assert activities.read_form(_check_in_form(()), "x").choices == {}, "a session that sets the status itself"
+    assert activities.read_form("<html><body><form><input name='q'></form></body></html>", "x") is None
+
+    sched = {"auto_check_in": True, "days": {
+        "wed": [{"start": "19:00", "end": "20:30", "course": "Big Data", "course_ar": "البيانات الضخمة",
+                 "section": "01", "mode": "Online"}],
+        "mon": [{"start": "19:00", "end": "20:30", "course": "Big Data", "course_ar": "البيانات الضخمة",
+                 "section": "01", "mode": "Activity"}],
+        "sun": [{"start": "09:30", "end": "11:00", "course": "Databases", "course_ar": "قواعد البيانات",
+                 "section": "01", "mode": "In-Person"}]}}
+    assert schedule.validate({**sched, "auto_check_in": "yes"}) == ['"auto_check_in" must be true or false']
+    assert schedule.validate(sched) == [], schedule.validate(sched)
+    assert checkin.covers("Big Data", sched) and not checkin.covers("Databases", sched)
+    assert not checkin.covers("Big Data", {**sched, "auto_check_in": False})
+
+    view = "https://elearning.zuj.edu.jo/mod/attendance/view.php?id=4242"
+    content = {"5302-4242": {"type": "attendance", "course": "20261-Big Data-AllSec-3-", "name": "Attendance",
+                             "url": view, "cmid": "4242"},
+               "5296-77": {"type": "attendance", "course": "20261-Databases-AllSec-3-F", "name": "Attendance",
+                           "url": "https://elearning.zuj.edu.jo/mod/attendance/view.php?id=77", "cmid": "77"}}
+    # the sessions: date -> [status cell, remarks, form behind the link, what a POST does]
+    days = {"Wed 4 Nov 2026": ["?", "", _check_in_form(), "records"],
+            "Mon 9 Nov 2026": ["?", "", _check_in_form(extra='<input type="text" name="studentpassword">'), "records"],
+            "Wed 11 Nov 2026": ["?", "", _check_in_form(), "ignores"],
+            "Mon 16 Nov 2026": ["?", "", "", ""],
+            "Wed 18 Nov 2026": ["?", "", "", ""],
+            "Wed 25 Nov 2026": ["?", "", "", ""]}
+    sessid = {d: 60 + n for n, d in enumerate(days)}
+    moodle = {"expired": False, "gets": [], "posts": []}
+
+    def open_check_in(day):
+        days[day][0] = (f'<a href="https://elearning.zuj.edu.jo/mod/attendance/attendance.php?sessid={sessid[day]}'
+                        f'&amp;sesskey=SECRETKEY1">Submit attendance</a>')
+
+    def page():
+        rows = "".join(f'<tr><td class="datecol cell c0"><nobr>{d}</nobr> <nobr>7PM - 8:30PM</nobr></td>'
+                       f'<td class="desccol cell c1">Regular class session</td><td class="statuscol cell c2">{v[0]}'
+                       f'</td><td class="pointscol cell c3">? / 2</td><td class="remarkscol cell c4">{v[1]}</td></tr>'
+                       for d, v in days.items())
+        return (f'<html><body><div role="main"><table class="generaltable attwidth"><tbody>{rows}</tbody></table>'
+                f'</div></body></html>')
+
+    class R:
+        def __init__(self, text, url, status=200):
+            self._text, self.url, self.status, self.ok = text, url, status, 200 <= status < 300
+
+        def text(self):
+            return self._text
+
+    class Http:
+        def get(self, url, timeout=None, max_redirects=None):
+            moodle["gets"].append(url)
+            if moodle["expired"]:
+                return R("<html>log in</html>", "https://elearning.zuj.edu.jo/login/index.php")
+            if "view.php" in url:
+                assert url == view + "&view=5", "always every session (Moodle remembers the last view)"
+                return R(page(), url)
+            day = next(d for d, n in sessid.items() if f"sessid={n}&" in url)
+            return R(days[day][2], url)
+
+        def post(self, url, data=None, headers=None):
+            moodle["posts"].append(data)
+            day = next(d for d, n in sessid.items() if n == int(data["sessid"]) or d == current["day"])
+            if days[day][3] == "records" and data.get("status") == "101" and "cancel" not in data:
+                days[day][:2] = ["Present", "Self-recorded"]
+            return R(page(), view)
+
+    current = {"day": None}
+    sent, shots, launched = [], [], []
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        keep = (checkin.STATE_FILE, checkin.CACHE_FILE, checkin.PAGES_DIR, checkin._http, checkin.screenshot,
+                daily.CLAIM_DIR, schedule.load_schedule, notifier.send_message, notifier.send_png_file,
+                probe.launch_check, probe.MONITOR_LOCK)
+        checkin.STATE_FILE, checkin.CACHE_FILE, checkin.PAGES_DIR = tmp / "saved.json", tmp / "checkin.json", tmp / "pages"
+        checkin.STATE_FILE.write_text(json.dumps({"content": content}), encoding="utf-8")
+        checkin._http = lambda: Http()
+        checkin.screenshot = lambda url, want=None: shots.append((url, want)) or b"PNG"
+        daily.CLAIM_DIR, probe.MONITOR_LOCK = tmp / "claims", tmp / "monitor.lock"
+        schedule.load_schedule = lambda: sched
+        notifier.send_message = lambda token, chat, text, url=None, rows=None, silent=False, **kw: \
+            sent.append(("text", text, rows, silent)) or True
+        notifier.send_png_file = lambda token, chat, png, name, caption="", url=None, rows=None: \
+            sent.append(("png", caption, rows, False)) or True
+        probe.launch_check = lambda: launched.append(1)
+        try:
+            watch = checkin.Watch()
+
+            def tick(day, hh, mm, ss=0):
+                current["day"] = day
+                checkin.tick("t", "c", watch, datetime.strptime(f"{day} {hh}:{mm}:{ss}", "%a %d %b %Y %H:%M:%S"))
+
+            # off: nothing is read at all
+            schedule.load_schedule = lambda: {**sched, "auto_check_in": False}
+            tick("Wed 4 Nov 2026", 19, 5)
+            assert moodle["gets"] == [] and not checkin.CACHE_FILE.exists()
+            schedule.load_schedule = lambda: sched
+
+            # the sessions are read once: only the online course's attendance is watched
+            tick("Wed 4 Nov 2026", 18, 40)
+            cache = json.loads(checkin.CACHE_FILE.read_text(encoding="utf-8"))
+            assert [a["cmid"] for a in cache["activities"]] == ["4242"] and len(cache["activities"][0]["sessions"]) == 6
+            assert cache["activities"][0]["sessions"][0] == {"start": "2026-11-04T19:00:00", "end": "2026-11-04T20:30:00"}
+            assert len(moodle["gets"]) == 1 and sent == [], "18:40 is before the watch (10 min early)"
+
+            # ✅ during the session: read every minute; check-in opens -> Present, Save changes, recorded
+            tick("Wed 4 Nov 2026", 18, 55)
+            tick("Wed 4 Nov 2026", 18, 55, 30)
+            assert len(moodle["gets"]) == 2 and sent == [], "one read a minute, nothing open yet"
+            open_check_in("Wed 4 Nov 2026")
+            tick("Wed 4 Nov 2026", 19, 2)
+            assert moodle["posts"] == [{"sessid": "55", "sesskey": "SECRETKEY1", "_qf__mod_attendance\\form\\studentattendance": "1",
+                                        "mform_isexpanded_id_session": "1", "submitbutton": "Save changes",
+                                        "status": "101"}], moodle["posts"]
+            kind, text, rows, _ = sent[-1]
+            assert kind == "png" and text.startswith("✅ *Checked In — Attendance Recorded*"), text
+            assert "📘 *Course:* Big Data" in text and "Wed 4 Nov 2026 · 7PM - 8:30PM" in text
+            assert "*Status:* Present · Self-recorded" in text and "🤖 I checked you in at" in text and _legacy_markdown_ok(text)
+            assert rows == [[{"text": "📝 Open Attendance", "url": view}]] and "SECRETKEY1" not in text
+            assert shots == [(view + "&view=5", "Wed 4 Nov 2026 7PM - 8:30PM")], "a screenshot of your row"
+            kept = list(checkin.PAGES_DIR.glob("*.html"))
+            assert len(kept) == 1 and "SECRETKEY1" not in kept[0].read_text(encoding="utf-8"), "kept, without the key"
+            reads = len(moodle["gets"])
+            tick("Wed 4 Nov 2026", 19, 10)
+            assert len(moodle["gets"]) == reads and len(sent) == 1, "done: the session is not read again"
+
+            # 🚨 a password: never submitted, told at once with the page; ✅ once you checked in yourself
+            open_check_in("Mon 9 Nov 2026")
+            tick("Mon 9 Nov 2026", 19, 1)
+            kind, text, rows, _ = sent[-1]
+            assert text.startswith("🚨 *Check In by Hand — Auto Check-in Failed*") and "password or a QR code" in text, text
+            assert rows == [[{"text": "✍️ Check In by Hand", "url": view}]] and _legacy_markdown_ok(text)
+            assert shots[-1] == (days["Mon 9 Nov 2026"][0].split('"')[1].replace("&amp;", "&"), None), "the form it saw"
+            assert len(moodle["posts"]) == 1, "nothing was posted"
+            tick("Mon 9 Nov 2026", 19, 3)
+            assert len(sent) == 2 and not any(f"sessid={sessid['Mon 9 Nov 2026']}" in u for u in moodle["gets"][-1:]), \
+                "one alert; the form is not tried again — only watched"
+            days["Mon 9 Nov 2026"][:2] = ["Present", "Self-recorded"]
+            tick("Mon 9 Nov 2026", 19, 5)
+            assert sent[-1][1].startswith("✅") and "Moodle shows you as checked in." in sent[-1][1]
+
+            # 🚨 Moodle takes the form but does not record it
+            open_check_in("Wed 11 Nov 2026")
+            tick("Wed 11 Nov 2026", 19, 1)
+            assert "still does not show you as checked in" in sent[-1][1] and len(moodle["posts"]) == 2
+            assert shots[-1] == (view + "&view=5", "Wed 11 Nov 2026 7PM - 8:30PM")
+
+            # ℹ️ a timetabled lecture whose check-in never opened: silently, once; an activity day: nothing
+            before = len(sent)
+            tick("Mon 16 Nov 2026", 21, 5)
+            assert len(sent) == before, "Monday is an activity day here"
+            tick("Wed 18 Nov 2026", 21, 5)
+            tick("Wed 18 Nov 2026", 21, 30)
+            kind, text, rows, silent = sent[-1]
+            assert len(sent) == before + 1 and text.startswith("ℹ️ *No Check-in Opened*") and silent, sent[-1]
+            assert _legacy_markdown_ok(text)
+
+            # 🚨 the saved session has expired: a check signs in again; told after 10 minutes, once
+            moodle["expired"] = True
+            before = len(sent)
+            tick("Wed 25 Nov 2026", 18, 55)
+            tick("Wed 25 Nov 2026", 19, 0)
+            assert launched == [1] and len(sent) == before, "one sign-in started; not told yet"
+            tick("Wed 25 Nov 2026", 19, 5)
+            kind, text, rows, _ = sent[-1]
+            assert kind == "text" and "*Why:* My saved Moodle session has expired." in text and "Session:" not in text, text
+            tick("Wed 25 Nov 2026", 19, 6)
+            assert len(sent) == before + 1, "told once"
+            moodle["expired"] = False
+        finally:
+            (checkin.STATE_FILE, checkin.CACHE_FILE, checkin.PAGES_DIR, checkin._http, checkin.screenshot,
+             daily.CLAIM_DIR, schedule.load_schedule, notifier.send_message, notifier.send_png_file,
+             probe.launch_check, probe.MONITOR_LOCK) = keep
 
 
 def test_tasks_and_reminders_planner():
@@ -7910,7 +8125,7 @@ if __name__ == "__main__":
                test_state_backup_and_recovery, test_telegram_transport, test_buttons_are_answered_first,
                test_files_telegram_already_holds_are_not_uploaded_again, test_monitor_pruning_and_background_pings, test_answers_go_out_beside_the_edit, test_course_list_is_a_timetable, test_rooms_are_always_short, test_one_menu_anchored_at_the_bottom, test_poll_outage_tracking_and_quiet_logs,
                test_network_resilience, test_maintenance_and_finals_pause,
-               test_teams_meeting_and_attendance_items, test_tasks_and_reminders_planner,
+               test_teams_meeting_and_attendance_items, test_automatic_check_in, test_tasks_and_reminders_planner,
                test_pin_rule_and_forum_announcements, test_retake_replacement_in_plan, test_guest_lookup,
                test_guest_summary_and_target_math,
                test_attendance_on_online_lecture_alert, test_guest_lookup_in_telegram,

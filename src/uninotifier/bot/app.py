@@ -12,6 +12,7 @@ import threading
 import time
 
 from uninotifier import access
+from uninotifier import checkin
 from uninotifier import paths
 from uninotifier import daily
 from uninotifier import envcheck
@@ -415,6 +416,8 @@ def main() -> None:
     threading.Thread(target=finals_flow.finals_loop, name="finals", daemon=True).start()
     threading.Thread(target=pulse_loop, name="pulse", daemon=True).start()
     threading.Thread(target=probe.loop, name="probe", daemon=True).start()     # the 2-minute look at Moodle
+    threading.Thread(target=checkin.loop, args=(chat.BOT_TOKEN, chat.CHAT_ID), name="checkin",
+                     daemon=True).start()                                       # attendance check-in
     if cambridge.active():              # Cambridge One assignments, until CAMBRIDGE_UNTIL
         threading.Thread(target=cambridge.loop, name="cambridge", daemon=True).start()
     log.info("Bot polling started")
