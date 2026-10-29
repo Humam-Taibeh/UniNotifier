@@ -18,6 +18,8 @@ All notable changes to this project are documented here. The format follows
 - An "unofficial, use at your own risk" notice in both READMEs.
 
 ### Fixed
+- A check no longer stops when Windows refuses for a moment to save its state (the file was open
+  elsewhere, e.g. in an antivirus scan): the save waits a little and tries again.
 - Quizzes had no date and no reminders: this Moodle lists a quiz by its closing event, which was
   ignored. A quiz now has its opening and closing times, and one you have attempted stops reminding.
 

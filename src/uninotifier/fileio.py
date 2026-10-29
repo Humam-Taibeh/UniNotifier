@@ -3,7 +3,9 @@ Writing a state file so that a power cut or a forced restart cannot leave it
 half-written: the data goes to a temporary file next to it, is flushed to the
 disk, and only then replaces the real file in one step. (Without the flush,
 Windows may replace the file with one the disk has not filled in yet, and a
-power loss leaves it empty.)
+power loss leaves it empty.) Windows also refuses the replace while another
+process has the file open — the bot reading it, an antivirus scan — so the
+replace is tried again for a few seconds before it gives up.
 """
 
 import contextlib
@@ -14,6 +16,8 @@ from pathlib import Path
 
 LOCK_STALE_SECONDS = 10      # a write lock this old belongs to a process that died holding it
 LOCK_WAIT_SECONDS = 15       # longer than LOCK_STALE_SECONDS: a dead holder's lock is always taken over in time
+REPLACE_TRIES = 6            # a replace Windows refuses (the file is open elsewhere) is tried this often,
+REPLACE_WAIT = 0.25          # waiting 0.25, 0.5, … s in between (about 4 s in all; a reader holds it for ms)
 
 
 def write_text_atomic(path: Path, text: str) -> None:
@@ -23,7 +27,14 @@ def write_text_atomic(path: Path, text: str) -> None:
         f.write(text)
         f.flush()
         os.fsync(f.fileno())
-    tmp.replace(path)
+    for attempt in range(REPLACE_TRIES):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == REPLACE_TRIES - 1:
+                raise
+            time.sleep(REPLACE_WAIT * (attempt + 1))
 
 
 def write_json_atomic(path: Path, data) -> None:

@@ -6082,6 +6082,29 @@ def test_mark_as_done_never_writes_back_an_older_state():
             except TimeoutError:
                 pass
             lock.unlink()
+
+            # Windows refuses to replace a file another process has open for a moment: the save waits
+            real_replace, refusals, waits = os.replace, [2], []
+
+            def busy_replace(src, dst):
+                if refusals[0]:
+                    refusals[0] -= 1
+                    raise PermissionError(13, "Access is denied")
+                real_replace(src, dst)
+            os.replace, keep_sleep, fileio.time.sleep = busy_replace, fileio.time.sleep, waits.append
+            try:
+                fileio.write_json_atomic(data, {"saved": "after a busy moment"})
+                assert json.loads(data.read_text(encoding="utf-8")) == {"saved": "after a busy moment"}
+                assert waits == [fileio.REPLACE_WAIT, 2 * fileio.REPLACE_WAIT], waits
+                refusals[0] = fileio.REPLACE_TRIES
+                try:
+                    fileio.write_json_atomic(data, {"saved": "never"})
+                    raise AssertionError("a file that stays locked is an error, not a silent loss")
+                except PermissionError:
+                    pass
+                assert json.loads(data.read_text(encoding="utf-8")) == {"saved": "after a busy moment"}
+            finally:
+                os.replace, fileio.time.sleep = real_replace, keep_sleep
         finally:
             bot.DATA_FILE, bot.load_state, mstate.DATA_FILE, mstate.LOCK_FILE = keep
 
