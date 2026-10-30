@@ -108,7 +108,8 @@ PAGES: dict[str, Page] = {
         "",
         "*✅ Automatic check-in* (switch it on in schedule.json)",
         "• Only online lectures (ك, live on Teams): never an in-person day (و, م), where your instructor "
-        "marks you, nor an activity day (ن).",
+        "marks you, nor an activity day (ن). The bot reads which days are which from the portal's own "
+        "timetable, by itself, once a week.",
         "• During each online lecture, the attendance page is read every minute. When your "
         "instructor opens check-in, the bot chooses Present and saves — then checks that Moodle recorded it.",
         "• ✅ Checked In comes with a screenshot of your row. If it could not be done (a password, a QR "
@@ -186,8 +187,9 @@ PAGES: dict[str, Page] = {
         "can remove every message of it from the chat.",
         "",
         "*🔒 How the portal is read*",
-        "• Only when you tap. The registration portal is never polled automatically — Finals Watch, "
-        "which you switch on yourself, is the one exception.",
+        "• Only when you tap. The registration portal is never polled automatically — Finals Watch "
+        "and the weekly look at your timetable for automatic check-in, which you switch on yourself, "
+        "are the two exceptions.",
         "• If it asks for a verification code, reply to the bot with it.",
         "• If the portal is down or under maintenance, you get a screenshot of what it shows.",
     ]),

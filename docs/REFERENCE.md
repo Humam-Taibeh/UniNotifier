@@ -216,18 +216,30 @@ each day's letter with that day's mode in brackets (`schedule.parse_codes`):
 |---|---|---|
 | **ك** إلكتروني | a live lecture on Teams | ✅ |
 | **و** وجاهي | at the university | — |
-| **م** مدمج | the in-person day of a blended course | — |
+| **م** مدمج | the in-person day of a blended course (its other day is **ن**) | — |
 | **ن** نشاط | an activity day: no class, work the instructor sets | — |
 
 A course meets on a pair of days (Sunday + Tuesday, or Monday + Wednesday), each with its
-own mode — a blended course is in person on one day and an activity on the other. Each
-session's day is decided by, in order:
+own mode — a blended course is in person on one day and an activity on the other (in either
+order). Each session's day is decided by, in order:
 
-1. the codes in the attendance activity's own name, when it has them;
-2. that course's slot on that day in `schedule.json` (its `mode`);
-3. the course itself, for any session the two say nothing of: Moodle shows an online
-   course by the **ك** at the end of its name (`20261-…-ش12-3-ك`; **و** or **F** in person,
-   nothing blended) and by its Teams meeting.
+1. **the portal's own timetable** (`classtable.py`, below): the class that starts then, on
+   that weekday — whatever its course is called, since two classes never overlap;
+2. the codes in the attendance activity's own name, when it has them;
+3. that course's slot on that day in `schedule.json` (its `mode`);
+4. the course itself, for any session the rules above say nothing of: Moodle shows an
+   online course by the **ك** at the end of its name (`20261-…-ش12-3-ك`; **و** or **F** in
+   person, nothing blended) and by its Teams meeting.
+
+**The portal's timetable.** The portal's home page lists every section you take with its
+meetings in those codes. While `auto_check_in` is on and `PORTAL_USERNAME` /
+`PORTAL_PASSWORD` are in `.env`, the bot reads that table by itself — as soon as there is none
+(a new student, a new semester), then once a week — and keeps it in `data/class_table.json`,
+so nothing needs to be typed in for it. It signs in with your own portal session (never while
+a command of yours is using the portal), sets the table to 15 rows a page so one look reads
+them all, and never answers a verification code on its own: if the portal ever asks for one,
+you are told once and the check-in goes on with rules 2–4. A table older than 120 days is
+not trusted. `python -m uninotifier.classtable` reads it now.
 
 Then:
 
@@ -354,7 +366,8 @@ signs in again. A guest look-up never uses or replaces your session.
 
 ### Finals Watch (`/finals`)
 
-The portal is on-demand everywhere except here: while **finals mode** is on, the
+The portal is on-demand everywhere except here (and the weekly look at your timetable
+for automatic check-in, which you switch on yourself): while **finals mode** is on, the
 bot signs in every 30 minutes (`finals.py`) and tells you:
 
 * `🎓 Grade Released` — one message per course the moment its mark appears
@@ -418,7 +431,8 @@ locked into the planner as they are published (`portal_grade`), are never counte
 **one message** — the page's screenshot with its summary (and, for a balance, every figure) in the
 caption; only a transcript's semesters follow as a single text — and the hub you came from returns
 under it as the menu. While it works the chat shows "typing…", not a status message. **Nothing is
-polled** — the portal is contacted only when you ask.
+polled** — the portal is contacted only when you ask, except Finals Watch and the weekly timetable
+look of automatic check-in, both of which you switch on yourself.
 
 Put the login in `.env` (never in chat; it is re-read on every request, so no
 restart is needed):
@@ -653,6 +667,7 @@ UniNotifier/
 │   ├── lectures.py, lecturelinks.py, schedule.py, reminders.py, daily.py   time-based messages
 │   ├── tasks.py              every open task: the Upcoming Tasks list and the noon digest
 │   ├── checkin.py            automatic attendance check-in for the online lectures
+│   ├── classtable.py         your weekly timetable, read from the portal (which days are online)
 │   ├── gpa.py, gpa_ui.py, gradebook.py, transcript.py, portal.py, finals.py, guest.py   grades, GPA, the portal
 │   ├── cambridge.py                                                    Cambridge One assignments (optional)
 │   ├── watchdog.py, maintenance.py, healthcheck.py, gitsync.py          keeping itself honest; state backup

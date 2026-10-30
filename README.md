@@ -107,9 +107,10 @@ marks are made up. In Telegram they look the same, in your own theme, with tappa
   last time (`data\saved_items.json`), files new documents into your archive, and sends what is new.
 - **`bot.py` — the assistant.** Always on: answers your taps and commands, sends lecture and
   reminder alerts on the minute, takes a ~1 KB look at Moodle every 2 minutes (and starts a check at
-  once when something is new), reads the registration portal only when you ask — answering
-  instantly from the last copy and refreshing it behind ("stale-while-revalidate") — and, if you
-  turn it on, watches Cambridge One.
+  once when something is new), reads the registration portal when you ask — answering
+  instantly from the last copy and refreshing it behind ("stale-while-revalidate") — plus, if you
+  turn on automatic check-in, one look a week at your timetable there, and, if you turn it on,
+  watches Cambridge One.
 - **Telegram** is the only thing that leaves your PC: your bot, talking only to you.
 
 ---

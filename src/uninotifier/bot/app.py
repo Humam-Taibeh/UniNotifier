@@ -13,6 +13,7 @@ import time
 
 from uninotifier import access
 from uninotifier import checkin
+from uninotifier import classtable
 from uninotifier import paths
 from uninotifier import daily
 from uninotifier import envcheck
@@ -418,6 +419,8 @@ def main() -> None:
     threading.Thread(target=probe.loop, name="probe", daemon=True).start()     # the 2-minute look at Moodle
     threading.Thread(target=checkin.loop, args=(chat.BOT_TOKEN, chat.CHAT_ID), name="checkin",
                      daemon=True).start()                                       # attendance check-in
+    threading.Thread(target=classtable.loop, args=(portal_flow._portal_lock,), name="classtable",
+                     daemon=True).start()                                       # the timetable, from the portal
     if cambridge.active():              # Cambridge One assignments, until CAMBRIDGE_UNTIL
         threading.Thread(target=cambridge.loop, name="cambridge", daemon=True).start()
     log.info("Bot polling started")

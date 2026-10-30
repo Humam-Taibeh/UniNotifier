@@ -5,12 +5,14 @@ Which   every session that is an online lecture (ك: live on Teams) — while
         "auto_check_in" is true in schedule.json (off by default). Never an in-person
         day (و, or م for a blended course: your instructor marks you there) nor an
         activity day (ن: no class). Each session's day is decided by, in order:
-          1. ZUJ's codes in the attendance activity's own name, when it has them
+          1. the class that starts then in the portal's own timetable (classtable.py:
+             read by the bot itself, whatever the course — two classes never overlap);
+          2. ZUJ's codes in the attendance activity's own name, when it has them
              ("[ 09:30_11:00 ] ن (ن) ر (ك)": Monday an activity, Wednesday online);
-          2. that course's slot on that day in schedule.json (its "mode");
-          3. the course itself: ZUJ ends an online course's Moodle name with ك
+          3. that course's slot on that day in schedule.json (its "mode");
+          4. the course itself: ZUJ ends an online course's Moodle name with ك
              ("…-ش12-3-ك"; و or F in person, nothing blended), and an online course
-             has a Teams meeting — then every session the two above say nothing of.
+             has a Teams meeting — then every session the rules above say nothing of.
 When    each of its sessions, from EARLY before the start to LATE after the end. The
         sessions come from the attendance page itself (read again every SESSIONS_EVERY),
         so a moved or an extra session is followed too.
@@ -45,7 +47,7 @@ from datetime import datetime, timedelta
 
 import requests
 
-from uninotifier import activities, archive, daily, failsafe, fileio, media, notifier, paths, probe, schedule
+from uninotifier import activities, archive, classtable, daily, failsafe, fileio, media, notifier, paths, probe, schedule
 from uninotifier.httpctx import HttpContext
 from uninotifier.notifier import escape_md
 
@@ -54,7 +56,7 @@ log = logging.getLogger("uninotifier")
 SESSION_FILE = paths.DATA / "auth_state.json"
 STATE_FILE = paths.DATA / "saved_items.json"
 CACHE_FILE = paths.DATA / "checkin.json"        # the watched activities and their sessions
-CACHE_VERSION = 2                                # a cache from an older layout is read again
+CACHE_VERSION = 3                                # a cache from an older layout is read again
 PAGES_DIR = paths.DATA / "checkin_pages"
 
 EARLY = timedelta(minutes=10)         # watching starts this long before a session
@@ -151,17 +153,19 @@ def marked_online(content: dict) -> set[str]:
 
 
 def watched(sched: dict, content: dict) -> list[dict]:
-    """The attendance activities that may have an online session: of an online course, or
-    with an online day in their own name. {"cmid", "course", "name", "url", "marked"} —
-    marked: Moodle shows the course as online (rule 3 of the module's docstring)."""
+    """The attendance activities that may have an online session: all of them once the
+    portal's timetable is known (it says which days), else those of an online course or with
+    an online day in their own name. {"cmid", "course", "name", "url", "marked"} — marked:
+    Moodle shows the course as online (rule 4 of the module's docstring)."""
     courses, marked = online_courses(sched, content), marked_online(content)
+    everywhere = classtable.known()
     found = []
     for key, it in sorted(content.items()):
         if it.get("type") not in media.ATTENDANCE_TYPES or not it.get("url"):
             continue
         course = media.clean_course_name(it.get("course", ""))
         name = it.get("name", "")
-        if course in courses or any(s["mode"] == "Online" for s in schedule.parse_codes(name)):
+        if everywhere or course in courses or any(s["mode"] == "Online" for s in schedule.parse_codes(name)):
             found.append({"cmid": str(it.get("cmid") or key), "course": course, "name": name,
                           "url": it["url"], "marked": course in marked})
     return found
@@ -170,7 +174,10 @@ def watched(sched: dict, content: dict) -> list[dict]:
 def day_mode(activity: dict, start: datetime, sched: dict) -> str | None:
     """How the session's day is taught — "Online", "In-Person", "Blended", "Activity" —
     or None when nothing says (the rules in the module's docstring)."""
-    day = start.strftime("%a").lower()
+    official = classtable.mode_at(start)
+    if official:
+        return official
+    day = schedule.DAY_KEYS[start.weekday()]
     coded = [s for s in schedule.parse_codes(activity.get("name", "")) if s["day"] == day]
     slots = coded or [lec for lec in (sched.get("days") or {}).get(day, [])
                       if lec.get("course") == activity["course"] and lec.get("start")]
@@ -244,8 +251,9 @@ def refresh(watch: Watch, sched: dict, now: float, force: bool = False) -> dict:
     activity whose page cannot be read keeps the sessions it had."""
     cache = _load_cache()
     content = _load_content()
-    courses = sorted(online_courses(sched, content))
-    stale = (cache.get("courses") != courses or cache.get("version") != CACHE_VERSION
+    watching = watched(sched, content)
+    names = sorted(a["cmid"] for a in watching)
+    stale = (cache.get("watch") != names or cache.get("version") != CACHE_VERSION
              or now - cache.get("read", 0) >= SESSIONS_EVERY)
     if not (force or stale) or now - watch.last_refresh < RETRY_SECONDS:
         return cache
@@ -253,7 +261,7 @@ def refresh(watch: Watch, sched: dict, now: float, force: bool = False) -> dict:
     old = {a["cmid"]: a for a in cache.get("activities", [])}
     fresh, failed = [], 0
     http = None
-    for activity in watched(sched, content):
+    for activity in watching:
         try:
             http = http or _http()
             sessions = [{"start": s["start"].isoformat(), "end": s["end"].isoformat() if s["end"] else None}
@@ -263,7 +271,7 @@ def refresh(watch: Watch, sched: dict, now: float, force: bool = False) -> dict:
             sessions, failed = old.get(activity["cmid"], {}).get("sessions", []), failed + 1
         fresh.append({**activity, "sessions": sessions})
     cache = {"version": CACHE_VERSION, "read": now if not failed else cache.get("read", 0),
-             "courses": courses, "activities": fresh}
+             "watch": names, "activities": fresh}
     fileio.write_json_atomic(CACHE_FILE, cache)
     return cache
 

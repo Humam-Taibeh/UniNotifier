@@ -2,8 +2,10 @@
 On-demand access to the ZUJ registration portal (https://portal.zuj.edu.jo):
 official grades, the transcript (passed hours) and the financial balance.
 
-Only ever run by a command from the user (/grades, /transcript, /balance) —
-nothing here is scheduled or polled, and monitor.py does not import it.
+Run by a command from the user (/grades, /transcript, /balance) — nothing here is scheduled
+or polled, and monitor.py does not import it — and, for the two features the user switches on
+themselves, by the bot: Finals Watch (finals.py) and the weekly look at the home page's
+timetable for automatic check-in (classtable.py).
 
 Credentials come from .env, never from the chat:
     PORTAL_USERNAME=...
@@ -81,6 +83,12 @@ SECTIONS = {
         "match": r"كشف\s*(?:العلامات|الدرجات)|السجل\s*الأكاديمي|Transcript|Academic\s*Record",
         "skip": r"$^",
     },
+    "home": {                                   # the student's home page: the weekly timetable
+        "title": "Timetable",
+        "path": "/faces/ui/pages/student/index.xhtml",
+        "match": r"$^",
+        "skip": r"$^",
+    },
     "balance": {
         "title": "Balance",
         "path": "/faces/ui/pages/student/financialRecord/index.xhtml",       # "السجل المالي"
@@ -112,6 +120,12 @@ STATUS_RE = re.compile(r"الحالة\s*:?\s*([^\s\d:]+)")
 def english_status(raw: str) -> str:
     """The academic status the transcript shows (منتظم …) in English."""
     return next((name for word, name in STATUS_NAMES.items() if word in raw), raw)
+
+
+# The home page's table of sections: a title span and a label with the value in every cell.
+TIMETABLE_COLUMNS = {"رمز المقرر": "code", "اسم المقرر": "name", "الشعبة": "section",
+                     "النشاط": "activity", "قاعة": "room", "الوقت": "time"}
+TIMETABLE_PAGES = 6                  # pages followed when the rows-per-page choice does not take
 
 
 class PortalError(Exception):
@@ -400,6 +414,52 @@ _MENU_JS = """() => [...new Set([...document.querySelectorAll('a, .ui-menuitem-t
     .filter(t => t && t.length <= 60))]"""
 
 
+def timetable_rows(html: str) -> list[dict]:
+    """The sections table of the portal's home page: [{"code", "name", "section", "activity",
+    "room", "time"}], where time is ZUJ's "[ 19:00_20:30 ] ن (ن) ر (ك)" (see schedule.parse_codes)."""
+    import lxml.etree
+    import lxml.html
+    try:
+        doc = lxml.html.fromstring(html or "<html></html>")
+    except (ValueError, lxml.etree.ParserError):
+        return []
+    rows = []
+    for tr in doc.xpath('//tbody[contains(@id, "schedules_data")]/tr'):
+        row = {}
+        for td in tr.xpath("./td"):
+            title = td.xpath('.//span[contains(@class, "ui-column-title")]')
+            key = TIMETABLE_COLUMNS.get(re.sub(r"\s+", " ", title[0].text_content()).strip()) if title else None
+            if key:
+                value = (td.xpath(".//label") or [td])[0].text_content()
+                row[key] = re.sub(r"\s+", " ", value).strip()
+        if row.get("time"):
+            rows.append(row)
+    return rows
+
+
+def read_timetable(page) -> list[dict]:
+    """Every row of the home page's timetable: 15 rows a page are asked for (the choices are
+    5, 10, 15); should it still be paged, the next pages are followed."""
+    dropdown = page.locator('select[name$="schedules_rppDD"]')
+    try:
+        if dropdown.count():
+            dropdown.first.select_option("15")
+            page.wait_for_timeout(800)
+            _settle(page)
+    except Exception:
+        log.exception("Portal: could not show more timetable rows per page")
+    rows = []
+    for _ in range(TIMETABLE_PAGES):
+        rows += [r for r in timetable_rows(page.content()) if r not in rows]
+        more = page.locator('[id$="schedules_paginator_bottom"] a.ui-paginator-next:not(.ui-state-disabled)')
+        if not more.count():
+            break
+        more.first.click()
+        page.wait_for_timeout(800)
+        _settle(page)
+    return rows
+
+
 def _visible(page, selector: str) -> bool:
     try:
         loc = page.locator(selector)
@@ -594,6 +654,8 @@ def _interpret(page, result: Result, text: str) -> None:
             if info["total"] is not None:
                 result.figures = {"balance": info["total"]}
                 result.lines = balance_lines(info)
+        elif result.section == "home":
+            result.data["timetable"] = read_timetable(page)
         elif result.section == "grades":
             raw = _read(page, _RESULTS_JS, {})
             rows = parse_results(_read(page, _GRID_JS, []))

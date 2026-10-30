@@ -990,6 +990,126 @@ def test_lecture_links():
         assert "/setlink" not in lectures.NO_LINK_NOTE
 
 
+def _portal_home(rows):
+    """The portal's home page as PrimeFaces renders it: the sections table, a title span and a label per cell."""
+    titles = ("رمز المقرر", "اسم المقرر", "الشعبة", "النشاط", "قاعة", "الوقت")
+    body = "".join("<tr>" + "".join(f'<td><span class="ui-column-title">{title}</span><label>{value}</label></td>'
+                                    for title, value in zip(titles, row)) + "</tr>" for row in rows)
+    return ('<html><body><form id="contents"><div id="contents:schedules" class="ui-datatable"><table>'
+            f'<thead><tr>{"".join(f"<th>{title}</th>" for title in titles)}</tr></thead>'
+            f'<tbody id="contents:schedules_data">{body or ""}</tbody></table></div></form></body></html>')
+
+
+PORTAL_ROWS = [("0900111", "مادة وجاهية", "1", "نظري", "101", "[ 09:30_11:00 ] ح (و) ث (و)"),
+               ("0900222", "مادة مدمجة", "2", "نظري", "202", "[ 12:30_14:00 ] ح (م) ث (ن)"),
+               ("0900333", "مادة إلكترونية", "3", "نظري", "", "[ 19:00_20:30 ] ن (ن) ر (ك)"),
+               ("0900444", "مادة وجاهية", "1", "عملي", "60", "[ 16:00_18:00 ] س (و)")]
+
+
+def test_portal_timetable():
+    """The bot reads the weekly timetable from the portal's home page by itself — only with
+    "auto_check_in" on and the portal login in .env — and keeps it: which class, on which day and
+    time, is online (ك), in person (و, م) or an activity (ن). A session is matched by its day and
+    time alone, so no course names need to match. A failure is told once and retried later."""
+    import threading
+    from datetime import datetime
+    from uninotifier import checkin, classtable, failsafe, maintenance, portal, schedule
+
+    rows = portal.timetable_rows(_portal_home(PORTAL_ROWS))
+    assert [r["code"] for r in rows] == ["0900111", "0900222", "0900333", "0900444"], rows
+    assert rows[2] == {"code": "0900333", "name": "مادة إلكترونية", "section": "3", "activity": "نظري", "room": "",
+                       "time": "[ 19:00_20:30 ] ن (ن) ر (ك)"}
+    assert portal.timetable_rows("") == [] and portal.timetable_rows("<html><body>nothing</body></html>") == []
+    assert portal.timetable_rows(_portal_home([]).replace("</tbody>", '<tr class="ui-datatable-empty-message">'
+                                                          '<td colspan="6">No records found.</td></tr></tbody>')) == []
+    assert [s["mode"] for s in schedule.parse_codes(rows[1]["time"])] == ["Blended", "Activity"], "م is the in-person day"
+    slots = classtable.slots_from_rows(rows)
+    assert len(slots) == 7 and slots[5]["course_ar"] == "مادة إلكترونية" and slots[5]["day"] == "wed" and slots[5]["mode"] == "Online"
+
+    def at(day, hh, mm):
+        return datetime(2026, 11, day, hh, mm)       # 1 Nov 2026 is a Sunday
+
+    calls, reports = [], []
+    answers = {"home": [{"home": portal.Result(section="home", found=True, data={"timetable": rows})}]}
+
+    def fake_fetch(sections, ask_code, creds=None, keep_debug=True):
+        calls.append((sections, ask_code(0, False)))
+        answer = answers["home"][0]
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+    with tempfile.TemporaryDirectory() as tmp:
+        keep = (classtable.CACHE_FILE, schedule.load_schedule, portal.credentials, portal.fetch_many, failsafe.report)
+        classtable.CACHE_FILE = Path(tmp) / "class_table.json"
+        sched = {"auto_check_in": True}
+        schedule.load_schedule = lambda: sched
+        portal.credentials = lambda: ("student", "secret")
+        portal.fetch_many = fake_fetch
+        failsafe.report = lambda kind, headline, **kw: reports.append((kind, headline, kw.get("detail", ""))) or True
+        try:
+            now = 1_800_000_000.0
+            assert classtable.mode_at(at(4, 19, 0), now) is None and not classtable.known(now), "no table yet"
+
+            # switched off, or no login: the portal is never opened
+            sched["auto_check_in"] = False
+            assert not classtable.tick(now=now) and calls == []
+            sched["auto_check_in"] = True
+            portal.credentials = lambda: None
+            assert not classtable.tick(now=now) and calls == []
+            portal.credentials = lambda: ("student", "secret")
+            lock = threading.Lock()
+            lock.acquire()
+            assert not classtable.tick(lock, now) and calls == [], "a command of yours is using the portal"
+            lock.release()
+
+            # no table yet: read at once, with nobody to type a verification code
+            assert classtable.tick(lock, now) and calls == [(["home"], None)] and not lock.locked()
+            assert classtable.known(now) and len(classtable.load()["slots"]) == 7
+            assert classtable.mode_at(at(4, 19, 5), now) == "Online" and classtable.mode_at(at(2, 19, 0), now) == "Activity"
+            assert classtable.mode_at(at(1, 12, 30), now) == "Blended" and classtable.mode_at(at(3, 12, 30), now) == "Activity"
+            assert classtable.mode_at(at(1, 9, 30), now) == "In-Person" and classtable.mode_at(at(7, 16, 0), now) == "In-Person"
+            assert classtable.mode_at(at(4, 15, 0), now) is None, "no class then"
+            assert classtable.mode_at(at(4, 19, 40), now) is None, "too far from the start of a class"
+            assert classtable.mode_at(at(4, 19, 0), now + classtable.STALE_AFTER + 1) is None, "an old table is not trusted"
+
+            # then once a week
+            assert not classtable.tick(now=now + classtable.READ_EVERY - 60) and len(calls) == 1
+            assert classtable.tick(now=now + classtable.READ_EVERY) and len(calls) == 2
+
+            # a portal that is down: quietly, and not again before RETRY_AFTER; the old table stays
+            later = now + 2 * classtable.READ_EVERY
+            answers["home"] = [maintenance.PortalUnavailable("registration portal", "maintenance")]
+            assert not classtable.tick(now=later) and len(calls) == 3 and reports == []
+            assert not classtable.tick(now=later + classtable.RETRY_AFTER - 60) and len(calls) == 3
+            assert classtable.known(later) and classtable.mode_at(at(4, 19, 0), later - 1) == "Online"
+
+            # something to read (a verification code nobody can type): told once, tried again later
+            answers["home"] = [portal.PortalError("No verification code arrived in time — try the command again.")]
+            retry = later + classtable.RETRY_AFTER
+            assert not classtable.tick(now=retry) and len(calls) == 4
+            assert len(reports) == 1 and reports[0][0] == "classtable:portal" and "check-in goes on" in reports[0][2]
+
+            # a home page without a timetable keeps the old one
+            answers["home"] = [{"home": portal.Result(section="home", found=True, data={"timetable": []})}]
+            assert not classtable.tick(now=retry + classtable.RETRY_AFTER) and len(classtable.load()["slots"]) == 7
+
+            # the check-in uses it before anything else, whatever the course is called
+            classtable.CACHE_FILE.write_text(json.dumps({"read": now, "tried": now, "slots": slots}), encoding="utf-8")
+            wed, mon = at(4, 19, 0), at(2, 19, 0)
+            loud = {"course": "Whatever", "name": "[ 19:00_20:30 ] ن (ن) ر (و)", "marked": False}
+            assert checkin.day_mode(loud, wed, {"days": {}}) == "Online", "the portal over the activity's own codes"
+            assert checkin.day_mode({"course": "X", "name": "الحضور", "marked": True}, mon, {"days": {}}) == "Activity", \
+                "the portal over the ك of the course name"
+            assert checkin.day_mode({"course": "X", "name": "الحضور", "marked": True}, at(5, 13, 0), {"days": {}}) == "Online", \
+                "no class then: the rules below take over"
+            content = {"a": {"type": "attendance", "course": "20261-Algebra-AllSec-3-F", "name": "Attendance", "url": "u", "cmid": "1"},
+                       "b": {"type": "attendance", "course": "20261-X-ش1-3-ك", "name": "Attendance", "url": "u", "cmid": "2"}}
+            assert [a["cmid"] for a in checkin.watched({"days": {}}, content)] == ["1", "2"], "every attendance: the table says which days"
+            assert not checkin.online_session(checkin.watched({"days": {}}, content)[0], at(1, 9, 30), {"days": {}})
+        finally:
+            (classtable.CACHE_FILE, schedule.load_schedule, portal.credentials, portal.fetch_many, failsafe.report) = keep
+
+
 def test_portal_parsers():
     from uninotifier import portal
 
@@ -1045,7 +1165,7 @@ def test_portal_parsers():
     full = [[["رمز المقرر", "اسم المقرر", "العلامة"], ["1", "Algebra", "80"]]]
     out = portal.results_lines({"term": "الفصل الأول 2026/2027", "text": ""}, full)
     assert out[0] == "📅 *First semester 2026/2027*" and out[1] == "*Code | Course | Mark*" and out[2] == "1 | Algebra | 80"
-    assert set(portal.SECTIONS) == {"grades", "transcript", "balance"}
+    assert set(portal.SECTIONS) == {"grades", "transcript", "balance", "home"}
     assert all(s["path"].startswith("/faces/ui/pages/student/") for s in portal.SECTIONS.values())
 
 
@@ -5748,7 +5868,7 @@ def test_no_personal_values_in_the_code():
     example = (project / ".env.example").read_text(encoding="utf-8")
     assert "\nARCHIVE_ROOT=\n" in example and "\nSTUDENT_ID=\n" in example, "optional settings are empty: off until filled in"
     assert archive.ARCHIVE_ROOT.is_absolute() and bot.semester() == schedule.load_schedule().get("semester", "")
-    assert set(portal_sections()) == {"transcript", "grades", "balance"}
+    assert set(portal_sections()) == {"transcript", "grades", "balance", "home"}, "a new portal page is a decision (home: the timetable)"
 
 
 def test_layout_watchdog():
@@ -8175,7 +8295,7 @@ if __name__ == "__main__":
                test_edit_detection, test_failure_policy, test_notifier_helpers,
                test_mfa_flow, test_mfa_policy_and_bot_relay, test_lecture_links,
                test_gpa_formulas, test_gpa_parsing_and_need, test_gpa_screens_and_flow,
-               test_portal, test_portal_parsers, test_http_layer, test_healthcheck,
+               test_portal, test_portal_parsers, test_portal_timetable, test_http_layer, test_healthcheck,
                test_fast_scan_helpers, test_gradebook_record, test_results_page_parser,
                test_finals_watch, test_finals_commands_and_file_destination, test_finals_check_ends_on_the_grades_screen, test_transcript_layout, test_portal_answer_is_one_message, test_archive,
                test_archive_layout, test_resource_page_file_link, test_migration_helpers,
