@@ -20,6 +20,12 @@ How    the owner's own portal session (portal.fetch_many, the page's rows-per-pa
        check-in falls back to the codes in Moodle and schedule.json.
 Use    mode_at(start): the mode of the class that day and time, whatever its course — a
        lecture is never two courses at once, so the day and the time are enough.
+Days   the university days only (reminders.CAMPUS_DAYS: Sunday to Wednesday): a student's
+       courses are split over them — Sun + Tue, Mon + Wed, or all four, each course on two of
+       them with its own mode on each (a blended course: in person one day, an activity the
+       other, in either order). Thursday to Saturday (a Saturday lab) never count.
+Reads  every "(x)" in a row's time must be understood: a row with a code the bot does not
+       know is not silently dropped — it is listed in the message and in data/class_table.json.
 """
 
 import json
@@ -28,6 +34,7 @@ import time
 from datetime import datetime, timedelta
 
 from uninotifier import failsafe, fileio, notifier, paths, schedule
+from uninotifier.reminders import CAMPUS_DAYS
 
 log = logging.getLogger("uninotifier")
 
@@ -44,10 +51,20 @@ def slots_from_rows(rows: list[dict]) -> list[dict]:
     slots = []
     for row in rows:
         for slot in schedule.parse_codes(row.get("time", "")):
+            if slot["day"] not in CAMPUS_DAYS:
+                continue
             slots.append({**slot, "code": row.get("code", ""), "course_ar": row.get("name", ""),
                           "section": row.get("section", ""), "activity": row.get("activity", ""),
                           "room": row.get("room", "")})
     return slots
+
+
+def unreadable(rows: list[dict]) -> list[dict]:
+    """The rows with a "(x)" the bot does not understand — an unknown day letter or mode letter,
+    or no codes at all: [{"code", "time"}]. Never left out silently."""
+    return [{"code": row.get("code", ""), "time": row.get("time", "")} for row in rows
+            if not row.get("time", "").count("(")
+            or len(schedule.parse_codes(row["time"])) != row["time"].count("(")]
 
 
 def load() -> dict:
@@ -73,7 +90,7 @@ def mode_at(start: datetime, now: float | None = None) -> str | None:
     day = schedule.DAY_KEYS[start.weekday()]
     best = None
     for slot in load()["slots"]:
-        if slot.get("day") != day:
+        if slot.get("day") != day or day not in CAMPUS_DAYS:      # a table kept by an older version may hold a Saturday
             continue
         try:
             at = datetime.combine(start.date(), datetime.strptime(slot["start"], "%H:%M").time())
@@ -100,12 +117,12 @@ def _no_code(attempt: int, rejected: bool) -> None:
     return None                       # nobody can type a code for a background look
 
 
-def read() -> list[dict]:
-    """The slots on the portal's home page now. Raises portal.PortalError (something to read)
-    or maintenance.PortalUnavailable (try later)."""
+def read() -> tuple[list[dict], list[dict]]:
+    """(the slots, the rows not understood) on the portal's home page now. Raises
+    portal.PortalError (something to read) or maintenance.PortalUnavailable (try later)."""
     from uninotifier import portal
-    result = portal.fetch_many(["home"], _no_code)["home"]
-    return slots_from_rows(result.data.get("timetable") or [])
+    rows = portal.fetch_many(["home"], _no_code)["home"].data.get("timetable") or []
+    return slots_from_rows(rows), unreadable(rows)
 
 
 def refresh(now: float | None = None) -> bool:
@@ -115,7 +132,7 @@ def refresh(now: float | None = None) -> bool:
     cache = load()
     cache["tried"] = now
     try:
-        slots = read()
+        slots, unclear = read()
     except maintenance.PortalUnavailable as e:
         log.info("Timetable: the portal is not available (%s) — trying again later", e)
     except portal.PortalError as e:
@@ -126,8 +143,9 @@ def refresh(now: float | None = None) -> bool:
                                f"{RETRY_AFTER // 3600} hours.", wait=False)
     else:
         if slots:
-            cache.update(read=now, slots=slots)
-            log.info("Timetable: read %d class day(s) from the portal", len(slots))
+            cache.update(read=now, slots=slots, unreadable=unclear)
+            log.info("Timetable: read %d class day(s) from the portal%s", len(slots),
+                     f", {len(unclear)} row(s) not understood" if unclear else "")
             fileio.write_json_atomic(CACHE_FILE, cache)
             return True
         log.warning("Timetable: the portal's home page showed no timetable")
@@ -135,7 +153,7 @@ def refresh(now: float | None = None) -> bool:
     return False
 
 
-def summary(slots: list[dict], first: bool) -> str:
+def summary(slots: list[dict], first: bool, unclear: list[dict] | None = None) -> str:
     """What the bot understood, for the chat."""
     online = sorted((s for s in slots if s["mode"] == "Online"),
                     key=lambda s: (schedule.DAY_KEYS.index(s["day"]), s["start"]))
@@ -148,8 +166,12 @@ def summary(slots: list[dict], first: bool) -> str:
         lines.append("💻 No online lectures — there is nothing for me to check in to.")
     campus = sum(s["mode"] in ("In-Person", "Blended") for s in slots)
     activity = sum(s["mode"] == "Activity" for s in slots)
-    lines += ["", f"🏫 {campus} in-person day(s) · 🧩 {activity} activity day(s) — I leave those alone.",
-              "Courses changed? Send /check and I read it again."]
+    lines += ["", f"🏫 {campus} in-person day(s) · 🧩 {activity} activity day(s) — I leave those alone."]
+    if unclear:
+        lines += ["", f"⚠️ I could not read {len(unclear)} row(s) of the timetable (course "
+                      f"{', '.join(r['code'] or '?' for r in unclear)}): for those days the check-in "
+                      "uses the codes in Moodle and your schedule.json."]
+    lines.append("Courses changed? Send /check and I read it again.")
     return "\n".join(lines)
 
 
@@ -163,12 +185,13 @@ def update(token: str, chat_id: str, lock=None, now: float | None = None, force:
     if lock is not None and not lock.acquire(blocking=False):
         return False                  # a command of yours is using the portal: the next look
     try:
-        before = load().get("slots")
+        before = load()
         if not refresh(now):
             return False
-        after = load()["slots"]
-        if after != before:
-            notifier.send_message(token, chat_id, summary(after, first=not before))
+        after = load()
+        if (after["slots"], after.get("unreadable")) != (before.get("slots"), before.get("unreadable")):
+            notifier.send_message(token, chat_id, summary(after["slots"], first=not before.get("slots"),
+                                                          unclear=after.get("unreadable")))
         return True
     finally:
         if lock is not None:

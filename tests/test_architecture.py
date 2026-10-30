@@ -1024,7 +1024,8 @@ def test_portal_timetable():
                                                           '<td colspan="6">No records found.</td></tr></tbody>')) == []
     assert [s["mode"] for s in schedule.parse_codes(rows[1]["time"])] == ["Blended", "Activity"], "م is the in-person day"
     slots = classtable.slots_from_rows(rows)
-    assert len(slots) == 7 and slots[5]["course_ar"] == "مادة إلكترونية" and slots[5]["day"] == "wed" and slots[5]["mode"] == "Online"
+    assert len(slots) == 6, "the Saturday lab is left out: Sunday to Wednesday are the university days"
+    assert slots[5]["course_ar"] == "مادة إلكترونية" and slots[5]["day"] == "wed" and slots[5]["mode"] == "Online"
 
     def at(day, hh, mm):
         return datetime(2026, 11, day, hh, mm)       # 1 Nov 2026 is a Sunday
@@ -1066,15 +1067,16 @@ def test_portal_timetable():
 
             # no table yet: read at once, with nobody to type a verification code — and told what it found
             assert classtable.update("t", "c", lock, now) and calls == [(["home"], None)] and not lock.locked()
-            assert classtable.known(now) and len(classtable.load()["slots"]) == 7
+            assert classtable.known(now) and len(classtable.load()["slots"]) == 6
             assert classtable.mode_at(at(4, 19, 5), now) == "Online" and classtable.mode_at(at(2, 19, 0), now) == "Activity"
             assert classtable.mode_at(at(1, 12, 30), now) == "Blended" and classtable.mode_at(at(3, 12, 30), now) == "Activity"
-            assert classtable.mode_at(at(1, 9, 30), now) == "In-Person" and classtable.mode_at(at(7, 16, 0), now) == "In-Person"
+            assert classtable.mode_at(at(1, 9, 30), now) == "In-Person" and classtable.mode_at(at(7, 16, 0), now) is None, \
+                "Saturday never counts"
             assert classtable.mode_at(at(4, 15, 0), now) is None, "no class then"
             assert classtable.mode_at(at(4, 19, 40), now) is None, "too far from the start of a class"
             assert len(told) == 1 and told[0].startswith("🗓️ *Timetable read from the portal*"), told
             assert "• Wed · 7:00 PM – 8:30 PM" in told[0] and "Mon" not in told[0] and "/check" in told[0], told[0]
-            assert "🏫 4 in-person day(s) · 🧩 2 activity day(s)" in told[0] and _legacy_markdown_ok(told[0]), told[0]
+            assert "🏫 3 in-person day(s) · 🧩 2 activity day(s)" in told[0] and _legacy_markdown_ok(told[0]), told[0]
 
             # once is enough: not weeks later; /check reads it again — and says nothing when nothing changed
             assert not classtable.update("t", "c", now=now + 70 * 86400) and len(calls) == 1
@@ -1100,7 +1102,7 @@ def test_portal_timetable():
             assert len(reports) == 1 and reports[0][0] == "classtable:portal" and "/check" in reports[0][2], reports
             answers["home"] = [{"home": portal.Result(section="home", found=True, data={"timetable": []})}]
             assert not classtable.update("t", "c", now=retry + classtable.RETRY_AFTER) and len(calls) == 6
-            assert len(classtable.load()["slots"]) == 7, "a home page without a timetable keeps the old one"
+            assert len(classtable.load()["slots"]) == 6, "a home page without a timetable keeps the old one"
             answers["home"] = [{"home": portal.Result(section="home", found=True, data={"timetable": rows})}]
             assert classtable.update("t", "c", now=retry + 2 * classtable.RETRY_AFTER) and classtable.known(retry + 2 * classtable.RETRY_AFTER)
 
@@ -1189,6 +1191,76 @@ def test_portal_timetable():
         finally:
             (classtable.CACHE_FILE, schedule.load_schedule, portal.credentials, portal.fetch_many, failsafe.report,
              notifier.send_message) = keep
+
+
+def test_week_logic():
+    """The whole week, as a student can have it: courses split over Sunday–Wednesday (Sun + Tue,
+    Mon + Wed, or all four), each on two days with its own mode on each, in any order; a course on
+    one day only; Thursday and Saturday never; a row with a code the bot does not know is told, not
+    dropped. Only a day that is an online lecture (ك) is ever checked in — whatever the course."""
+    from datetime import datetime
+    from uninotifier import checkin, classtable
+
+    def row(code, time):
+        return {"code": code, "name": "x", "section": "1", "activity": "نظري", "room": "", "time": time}
+    rows = [row("A", "[ 09:30_11:00 ] ح (و) ث (و)"),            # in person both days
+            row("B", "[ 11:00_12:30 ] ح (ن) ث (و)"),            # an activity first, then in person
+            row("C", "[ 12:30_14:00 ] ح (و) ث (ن)"),            # in person first, then an activity
+            row("D", "[ 14:00_15:30 ] ح (ك) ث (ك)"),            # online both days
+            row("E", "[ 15:30_17:00 ] ح (م) ث (ن)"),            # blended: م is the in-person day
+            row("F", "[ 09:30_11:00 ] ن (ك) ر (ن)"),            # online, then an activity
+            row("G", "[ 11:00_12:30 ] ن (ن) ر (ك)"),            # an activity, then online
+            row("H", "[ 12:30_14:00 ] ن (و) ر (و)"),
+            row("I", "[ 14:00_15:30 ] ن (ن) ر (م)"),            # an activity, then the blended in-person day
+            row("J", "[ 19:00_20:30 ] ن (ك) ر (ك)"),            # online both days, in the evening
+            row("K", "[ 16:00_17:30 ] ن (ك)"),                  # one day only
+            row("L", "[ 10:00_11:30 ] خ (ك)"),                  # Thursday: not a university day
+            row("M", "[ 16:00_18:00 ] س (و)"),                  # a Saturday lab
+            row("N", "[ 7:30_9:00 ] ث (ك)")]                    # a one-digit hour: still read
+    unclear = [row("X", "[ 08:00_09:30 ] ح (ز) ث (و)"),         # an unknown mode letter
+               row("Y", "[ 10:00_11:30 ]"),                      # no codes at all
+               row("Z", "[ 10:00_11:30 ] ح ث (ك)")]              # one mode for two days: not the portal's way
+    slots = classtable.slots_from_rows(rows + unclear)
+    assert {s["code"] for s in slots} == set("ABCDEFGHIJKN"), "Thursday, Saturday and the unreadable rows are not slots"
+    assert classtable.unreadable(rows) == [] and [r["code"] for r in classtable.unreadable(rows + unclear)] == ["X", "Y", "Z"]
+
+    #            day of Nov 2026 (1 = Sunday), time -> the mode that day
+    expected = {(1, 9, 30): "In-Person", (1, 11, 0): "Activity", (1, 12, 30): "In-Person", (1, 14, 0): "Online",
+                (1, 15, 30): "Blended",
+                (3, 9, 30): "In-Person", (3, 7, 30): "Online", (3, 11, 0): "In-Person", (3, 12, 30): "Activity", (3, 14, 0): "Online",
+                (3, 15, 30): "Activity",
+                (2, 9, 30): "Online", (2, 11, 0): "Activity", (2, 12, 30): "In-Person", (2, 14, 0): "Activity",
+                (2, 19, 0): "Online", (2, 16, 0): "Online",
+                (4, 9, 30): "Activity", (4, 11, 0): "Online", (4, 12, 30): "In-Person", (4, 14, 0): "Blended",
+                (4, 19, 0): "Online",
+                (5, 10, 0): None, (7, 16, 0): None}
+    with tempfile.TemporaryDirectory() as tmp:
+        keep = classtable.CACHE_FILE
+        classtable.CACHE_FILE = Path(tmp) / "class_table.json"
+        classtable.CACHE_FILE.write_text(json.dumps({"read": 1_800_000_000.0, "slots": slots}), encoding="utf-8")
+        try:
+            for (day, hh, mm), mode in expected.items():
+                start = datetime(2026, 11, day, hh, mm)
+                assert classtable.mode_at(start) == mode, (start.strftime("%a %H:%M"), mode, classtable.mode_at(start))
+                activity = {"course": "Any name at all", "name": "Attendance", "marked": False}
+                assert checkin.online_session(activity, start, {"days": {}}) is (mode == "Online"), \
+                    ("only an online day is checked in", start.strftime("%a %H:%M"), mode)
+            assert sum(mode == "Online" for mode in expected.values()) == 8, "D×2, F, G, J×2, K, N"
+            # a session a little off the class's start is still that class; far off is none
+            assert classtable.mode_at(datetime(2026, 11, 2, 9, 55)) == "Online" and classtable.mode_at(datetime(2026, 11, 2, 10, 5)) is None
+            assert classtable.mode_at(datetime(2026, 11, 3, 7, 30)) == "Online", "the one-digit hour of row N"
+
+            told = classtable.summary(slots, first=True, unclear=[{"code": "X", "time": "x"}, {"code": "Y", "time": "y"}])
+            assert "⚠️ I could not read 2 row(s) of the timetable (course X, Y)" in told and _legacy_markdown_ok(told), told
+            assert "• Mon · 9:30 AM – 11:00 AM" in told and "• Wed · 7:00 PM – 8:30 PM" in told, told
+            assert "⚠️" not in classtable.summary(slots, first=True)
+
+            # a table kept by an older version may still hold a Saturday class: it never counts
+            classtable.CACHE_FILE.write_text(json.dumps({"read": 1_800_000_000.0, "slots": [
+                *slots, {"day": "sat", "start": "16:00", "end": "18:00", "mode": "Online"}]}), encoding="utf-8")
+            assert classtable.mode_at(datetime(2026, 11, 7, 16, 0)) is None
+        finally:
+            classtable.CACHE_FILE = keep
 
 
 def test_portal_parsers():
@@ -8376,7 +8448,7 @@ if __name__ == "__main__":
                test_edit_detection, test_failure_policy, test_notifier_helpers,
                test_mfa_flow, test_mfa_policy_and_bot_relay, test_lecture_links,
                test_gpa_formulas, test_gpa_parsing_and_need, test_gpa_screens_and_flow,
-               test_portal, test_portal_parsers, test_portal_timetable, test_http_layer, test_healthcheck,
+               test_portal, test_portal_parsers, test_portal_timetable, test_week_logic, test_http_layer, test_healthcheck,
                test_fast_scan_helpers, test_gradebook_record, test_results_page_parser,
                test_finals_watch, test_finals_commands_and_file_destination, test_finals_check_ends_on_the_grades_screen, test_transcript_layout, test_portal_answer_is_one_message, test_archive,
                test_archive_layout, test_resource_page_file_link, test_migration_helpers,

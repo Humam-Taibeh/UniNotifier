@@ -238,7 +238,15 @@ meetings in those codes. While `auto_check_in` is on and `PORTAL_USERNAME` /
 be typed in for it. Once is enough: it is not read again until you send `/check` (the way to
 tell the bot that your courses changed) or the table is 120 days old (a past semester's). It
 tells you what it found — the online lectures, and how many days are in person or activities —
-on the first look and whenever the timetable changed. It signs in with your own portal session (never while
+on the first look and whenever the timetable changed.
+
+Only the university days count — Sunday to Wednesday (`reminders.CAMPUS_DAYS`). A student's
+courses are split over them: Sunday + Tuesday, Monday + Wednesday, or all four, each course on
+two of those days with its own mode on each (a blended course: in person one day and an
+activity the other, in either order), or on one day only. Thursday to Saturday (a Saturday
+lab) are left out. A row with a code the bot does not know — an unknown day or mode letter,
+no codes at all — is never dropped silently: the message names its course and says the
+check-in uses the codes in Moodle and `schedule.json` for those days. It signs in with your own portal session (never while
 a command of yours is using the portal), sets the table to 15 rows a page so one look reads
 them all, and never answers a verification code on its own: if the portal ever asks for one,
 you are told once and the check-in goes on with rules 2–4. A table older than 120 days is
