@@ -9,9 +9,10 @@
     "portal_aliases: a different name Moodle uses -> the English name above.",
     "degree_hours (optional): the credit hours of your whole degree plan, e.g. 132 (shows remaining hours); null = not shown.",
     "finals (optional, during finals season): {\"from\": \"2027-01-04\", \"to\": \"2027-01-31\", \"interval_minutes\": 30}.",
-    "auto_check_in (optional): true = the bot checks you in to every session of your online courses' attendance",
-    "  (it knows them by itself: the ك at the end of the Moodle course name, or a Teams meeting; Online slots count too)",
-    "  as soon as the instructor opens it, and sends the proof (a screenshot); false or left out = off.",
+    "auto_check_in (optional): true = the bot checks you in to every online lecture (ك, live on Teams) as soon as",
+    "  the instructor opens attendance - never an In-Person or Activity day. A day's mode comes from ZUJ's codes",
+    "  in the attendance's name, then from this file, then from the ك at the end of the Moodle course name.",
+    "  It sends the proof (a screenshot); false or left out = off.",
     "The bot checks this file whenever it changes and tells you on Telegram if something is wrong."
   ],
   "semester": "First Semester 2026/2027",

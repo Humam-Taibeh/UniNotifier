@@ -29,6 +29,29 @@ DAY_NAMES = {"sun": "Sunday", "mon": "Monday", "tue": "Tuesday", "wed": "Wednesd
              "thu": "Thursday", "fri": "Friday", "sat": "Saturday"}
 MODE_EMOJI = {"In-Person": "🏫", "Blended": "🔀", "Online": "💻", "Activity": "🧩"}
 
+# ZUJ writes a section's meetings as "[ 09:30_11:00 ] ن (و) ر (ك)": the time, then each day's
+# letter with that day's teaching mode in brackets (the portal's timetable, some Moodle names).
+CODE_DAYS = {"ح": "sun", "ن": "mon", "ث": "tue", "ر": "wed", "خ": "thu", "ج": "fri", "س": "sat"}
+CODE_MODES = {"و": "In-Person",     # وجاهي: at the university
+              "م": "Blended",       # the in-person day of a blended (مدمج) course
+              "ن": "Activity",      # نشاط: no class, work the instructor sets
+              "ك": "Online"}        # إلكتروني: a live lecture on Teams
+_CODE_SLOT = re.compile(r"\[\s*(\d{1,2}:\d{2})\s*_\s*(\d{1,2}:\d{2})\s*\]((?:\s*[%s]\s*\(\s*[%s]\s*\))+)"
+                        % ("".join(CODE_DAYS), "".join(CODE_MODES)))
+_CODE_DAY = re.compile(r"([%s])\s*\(\s*([%s])\s*\)" % ("".join(CODE_DAYS), "".join(CODE_MODES)))
+
+
+def parse_codes(text: str) -> list[dict]:
+    """Every meeting written in ZUJ's codes: "[ 09:30_11:00 ] ن (ن) ر (ك)" ->
+    [{"day": "mon", "start": "09:30", "end": "11:00", "mode": "Activity"},
+     {"day": "wed", "start": "09:30", "end": "11:00", "mode": "Online"}]."""
+    found = []
+    for start, end, days in _CODE_SLOT.findall(text or ""):
+        for day, mode in _CODE_DAY.findall(days):
+            found.append({"day": CODE_DAYS[day], "start": start.zfill(5), "end": end.zfill(5),
+                          "mode": CODE_MODES[mode]})
+    return found
+
 
 LAST_GOOD_FILE = paths.DATA / "schedule.last_good.json"     # the newest copy that passed validate()
 

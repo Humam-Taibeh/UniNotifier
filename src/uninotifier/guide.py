@@ -107,7 +107,9 @@ PAGES: dict[str, Page] = {
         "• In-person lectures and activity slots stay silent; their rooms are in Course List & Details.",
         "",
         "*✅ Automatic check-in* (switch it on in schedule.json)",
-        "• During each session of an online course, the attendance page is read every minute. When your "
+        "• Only online lectures (ك, live on Teams): never an in-person day (و, م), where your instructor "
+        "marks you, nor an activity day (ن).",
+        "• During each online lecture, the attendance page is read every minute. When your "
         "instructor opens check-in, the bot chooses Present and saves — then checks that Moodle recorded it.",
         "• ✅ Checked In comes with a screenshot of your row. If it could not be done (a password, a QR "
         "code, no Present choice, Moodle did not record it), 🚨 Check In by Hand tells you why, with the "

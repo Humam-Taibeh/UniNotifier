@@ -202,10 +202,34 @@ Two activity types ZUJ uses for online teaching are read from their own pages
 ### Automatic check-in
 
 With `"auto_check_in": true` in `schedule.json` (off by default), `checkin.py` checks you
-in to every session of your **online** courses' attendance. Moodle itself says which
-courses are online — nothing to set up: ZUJ ends a course's name with its teaching mode
-(`20261-…-ش12-3-ك`: **ك** online, **و** or **F** in person, nothing blended), and an online
-course has a Teams meeting. A course with an `Online` slot in the timetable counts too:
+in to every session that is an **online lecture** — live on Teams. Never an in-person day
+(your instructor marks you there) nor an activity day (no class at all).
+
+ZUJ writes a section's meetings in codes: `[ 19:00_20:30 ] ن (ن) ر (ك)` is the time, then
+each day's letter with that day's mode in brackets (`schedule.parse_codes`):
+
+| Day | ح | ن | ث | ر | خ | س |
+|---|---|---|---|---|---|---|
+| | Sunday | Monday | Tuesday | Wednesday | Thursday | Saturday |
+
+| Mode | Means | Checked in |
+|---|---|---|
+| **ك** إلكتروني | a live lecture on Teams | ✅ |
+| **و** وجاهي | at the university | — |
+| **م** مدمج | the in-person day of a blended course | — |
+| **ن** نشاط | an activity day: no class, work the instructor sets | — |
+
+A course meets on a pair of days (Sunday + Tuesday, or Monday + Wednesday), each with its
+own mode — a blended course is in person on one day and an activity on the other. Each
+session's day is decided by, in order:
+
+1. the codes in the attendance activity's own name, when it has them;
+2. that course's slot on that day in `schedule.json` (its `mode`);
+3. the course itself, for any session the two say nothing of: Moodle shows an online
+   course by the **ك** at the end of its name (`20261-…-ش12-3-ك`; **و** or **F** in person,
+   nothing blended) and by its Teams meeting.
+
+Then:
 
 1. The sessions come from the attendance page itself (read every 6 hours), so a moved or
    an extra session is followed too.
@@ -220,9 +244,9 @@ course has a Teams meeting. A course with an `Online` slot in the timetable coun
    for 10 minutes — you get **🚨 Check In by Hand** at once: why, the page it saw, and a
    **✍️ Check In by Hand** button to the attendance page. It goes on watching, so ✅
    follows once you have checked in yourself.
-5. A timetabled online lecture whose check-in never opened ends with a silent
-   **ℹ️ No Check-in Opened** (for a course the timetable does not list, every session).
-   Activity days (no `Online` slot) stay silent.
+5. An online lecture whose check-in never opened ends with a silent
+   **ℹ️ No Check-in Opened**. In-person and activity days are never touched or reported,
+   even when check-in opens there.
 
 The lecture alert at the start says that auto check-in is on. A saved session that has
 expired starts a check (which signs in again). The bot does this on its own thread; a

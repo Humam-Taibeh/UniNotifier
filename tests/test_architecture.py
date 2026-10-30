@@ -4884,8 +4884,9 @@ def test_automatic_check_in():
     every minute; when check-in opens, Present + Save changes; then Moodle itself must show it
     — ✅ with a screenshot of your row. When it cannot be done (a password, no Present choice,
     Moodle does not record it, the session cannot be read for 10 minutes) — 🚨 check in by
-    hand, why, the page, a button; and ✅ follows once you did. A timetabled lecture whose
-    check-in never opened ends with a silent ℹ️. Off unless "auto_check_in" is true."""
+    hand, why, the page, a button; and ✅ follows once you did. A lecture whose check-in never
+    opened ends with a silent ℹ️. Only online days (ك) — never in person (و, م) nor an activity
+    day (ن), whatever opens there. Off unless "auto_check_in" is true."""
     from datetime import datetime
     from uninotifier import activities, checkin, probe, schedule
 
@@ -4920,8 +4921,31 @@ def test_automatic_check_in():
     arabic, statistics = (media.clean_course_name(marked[k]["course"]) for k in "ad")
     assert checkin.online_courses({"days": {}}, marked) == {arabic, statistics}, "no timetable needed"
     assert checkin.covers(arabic, {"auto_check_in": True, "days": {}}, marked)
-    assert checkin.timetabled({"course": arabic}, datetime(2026, 11, 2, 19, 0), sched), \
-        "an online course the timetable does not list: every session is a lecture"
+
+    # ZUJ's codes: the day letter, then that day's mode in brackets
+    assert schedule.parse_codes("[ 19:00_20:30 ] ن (ن) ر (ك)") == [
+        {"day": "mon", "start": "19:00", "end": "20:30", "mode": "Activity"},
+        {"day": "wed", "start": "19:00", "end": "20:30", "mode": "Online"}]
+    assert [s["mode"] for s in schedule.parse_codes("[ 12:30_14:00 ] ح (م) ث (ن) · [ 16:00_18:00 ] س (و)")] == \
+        ["Blended", "Activity", "In-Person"] and schedule.parse_codes("الحضور") == []
+
+    # which day is an online lecture: the activity's own codes, then the timetable, then the course's ك
+    mon, wed = datetime(2026, 11, 2, 19, 0), datetime(2026, 11, 4, 19, 0)
+    ar = {"course": arabic, "name": "الحضور", "marked": True}
+    assert checkin.day_mode(ar, mon, {"days": {}}) == "Online", "ك and nothing else known: every session"
+    listed = {"days": {"mon": [{"start": "19:00", "course": arabic, "mode": "Activity"}],
+                       "wed": [{"start": "19:00", "course": arabic, "mode": "Online"}]}}
+    assert checkin.day_mode(ar, mon, listed) == "Activity" and checkin.day_mode(ar, wed, listed) == "Online"
+    coded = {"course": "Databases", "name": "Attendance- SEC- 2 - [ 19:00_20:30 ] ن (و) ر (ك)", "marked": False}
+    assert checkin.online_session(coded, wed, listed) and not checkin.online_session(coded, mon, listed)
+    assert checkin.day_mode({**ar, "name": "[ 19:00_20:30 ] ن (ن) ر (ن)"}, wed, listed) == "Activity", \
+        "the activity's own codes come first"
+    assert checkin.day_mode({"course": "Databases", "name": "Attendance", "marked": False}, wed, listed) is None
+    assert [a["cmid"] for a in checkin.watched({"days": {}}, {
+        "x": {"type": "attendance", "course": "20261-Databases-AllSec-3-F", "cmid": "9", "url": "u",
+              "name": "[ 09:30_11:00 ] ن (و) ر (ك)"},
+        "y": {"type": "attendance", "course": "20261-Databases-AllSec-3-F", "cmid": "8", "url": "u",
+              "name": "[ 09:30_11:00 ] ن (و) ر (و)"}})] == ["9"], "an online day in the name is enough"
 
     view = "https://elearning.zuj.edu.jo/mod/attendance/view.php?id=4242"
     content = {"5302-4242": {"type": "attendance", "course": "20261-Big Data-AllSec-3-", "name": "Attendance",
@@ -4930,11 +4954,11 @@ def test_automatic_check_in():
                            "url": "https://elearning.zuj.edu.jo/mod/attendance/view.php?id=77", "cmid": "77"}}
     # the sessions: date -> [status cell, remarks, form behind the link, what a POST does]
     days = {"Wed 4 Nov 2026": ["?", "", _check_in_form(), "records"],
-            "Mon 9 Nov 2026": ["?", "", _check_in_form(extra='<input type="text" name="studentpassword">'), "records"],
-            "Wed 11 Nov 2026": ["?", "", _check_in_form(), "ignores"],
-            "Mon 16 Nov 2026": ["?", "", "", ""],
-            "Wed 18 Nov 2026": ["?", "", "", ""],
-            "Wed 25 Nov 2026": ["?", "", "", ""]}
+            "Wed 11 Nov 2026": ["?", "", _check_in_form(extra='<input type="text" name="studentpassword">'), "records"],
+            "Wed 18 Nov 2026": ["?", "", _check_in_form(), "ignores"],
+            "Mon 23 Nov 2026": ["?", "", _check_in_form(), "records"],
+            "Wed 25 Nov 2026": ["?", "", "", ""],
+            "Wed 2 Dec 2026": ["?", "", "", ""]}
     sessid = {d: 60 + n for n, d in enumerate(days)}
     moodle = {"expired": False, "gets": [], "posts": []}
 
@@ -5035,32 +5059,37 @@ def test_automatic_check_in():
             assert len(moodle["gets"]) == reads and len(sent) == 1, "done: the session is not read again"
 
             # 🚨 a password: never submitted, told at once with the page; ✅ once you checked in yourself
-            open_check_in("Mon 9 Nov 2026")
-            tick("Mon 9 Nov 2026", 19, 1)
+            open_check_in("Wed 11 Nov 2026")
+            tick("Wed 11 Nov 2026", 19, 1)
             kind, text, rows, _ = sent[-1]
             assert text.startswith("🚨 *Check In by Hand — Auto Check-in Failed*") and "password or a QR code" in text, text
             assert rows == [[{"text": "✍️ Check In by Hand", "url": view}]] and _legacy_markdown_ok(text)
-            assert shots[-1] == (days["Mon 9 Nov 2026"][0].split('"')[1].replace("&amp;", "&"), None), "the form it saw"
+            assert shots[-1] == (days["Wed 11 Nov 2026"][0].split('"')[1].replace("&amp;", "&"), None), "the form it saw"
             assert len(moodle["posts"]) == 1, "nothing was posted"
-            tick("Mon 9 Nov 2026", 19, 3)
-            assert len(sent) == 2 and not any(f"sessid={sessid['Mon 9 Nov 2026']}" in u for u in moodle["gets"][-1:]), \
+            tick("Wed 11 Nov 2026", 19, 3)
+            assert len(sent) == 2 and not any(f"sessid={sessid['Wed 11 Nov 2026']}" in u for u in moodle["gets"][-1:]), \
                 "one alert; the form is not tried again — only watched"
-            days["Mon 9 Nov 2026"][:2] = ["Present", "Self-recorded"]
-            tick("Mon 9 Nov 2026", 19, 5)
+            days["Wed 11 Nov 2026"][:2] = ["Present", "Self-recorded"]
+            tick("Wed 11 Nov 2026", 19, 5)
             assert sent[-1][1].startswith("✅") and "Moodle shows you as checked in." in sent[-1][1]
 
             # 🚨 Moodle takes the form but does not record it
-            open_check_in("Wed 11 Nov 2026")
-            tick("Wed 11 Nov 2026", 19, 1)
+            open_check_in("Wed 18 Nov 2026")
+            tick("Wed 18 Nov 2026", 19, 1)
             assert "still does not show you as checked in" in sent[-1][1] and len(moodle["posts"]) == 2
-            assert shots[-1] == (view + "&view=5", "Wed 11 Nov 2026 7PM - 8:30PM")
+            assert shots[-1] == (view + "&view=5", "Wed 18 Nov 2026 7PM - 8:30PM")
 
-            # ℹ️ a timetabled lecture whose check-in never opened: silently, once; an activity day: nothing
-            before = len(sent)
-            tick("Mon 16 Nov 2026", 21, 5)
-            assert len(sent) == before, "Monday is an activity day here"
-            tick("Wed 18 Nov 2026", 21, 5)
-            tick("Wed 18 Nov 2026", 21, 30)
+            # an activity day (ن): never touched, even when check-in opens there
+            before, reads = len(sent), len(moodle["gets"])
+            open_check_in("Mon 23 Nov 2026")
+            tick("Mon 23 Nov 2026", 19, 5)
+            tick("Mon 23 Nov 2026", 21, 5)
+            assert len(sent) == before and len(moodle["posts"]) == 2, "no check-in, no message"
+            assert all("view.php" in u for u in moodle["gets"][reads:]), "its form is never even opened"
+
+            # ℹ️ an online lecture whose check-in never opened: silently, once
+            tick("Wed 25 Nov 2026", 21, 5)
+            tick("Wed 25 Nov 2026", 21, 30)
             kind, text, rows, silent = sent[-1]
             assert len(sent) == before + 1 and text.startswith("ℹ️ *No Check-in Opened*") and silent, sent[-1]
             assert _legacy_markdown_ok(text)
@@ -5068,13 +5097,13 @@ def test_automatic_check_in():
             # 🚨 the saved session has expired: a check signs in again; told after 10 minutes, once
             moodle["expired"] = True
             before = len(sent)
-            tick("Wed 25 Nov 2026", 18, 55)
-            tick("Wed 25 Nov 2026", 19, 0)
+            tick("Wed 2 Dec 2026", 18, 55)
+            tick("Wed 2 Dec 2026", 19, 0)
             assert launched == [1] and len(sent) == before, "one sign-in started; not told yet"
-            tick("Wed 25 Nov 2026", 19, 5)
+            tick("Wed 2 Dec 2026", 19, 5)
             kind, text, rows, _ = sent[-1]
             assert kind == "text" and "*Why:* My saved Moodle session has expired." in text and "Session:" not in text, text
-            tick("Wed 25 Nov 2026", 19, 6)
+            tick("Wed 2 Dec 2026", 19, 6)
             assert len(sent) == before + 1, "told once"
             moodle["expired"] = False
         finally:

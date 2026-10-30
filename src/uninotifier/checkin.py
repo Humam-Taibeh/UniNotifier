@@ -1,12 +1,16 @@
 """
 Automatic attendance check-in for the online lectures, with proof either way.
 
-Which   every attendance activity (mod_attendance) of an online course — while
-        "auto_check_in" is true in schedule.json (off by default). Moodle itself says
-        which courses are online: ZUJ ends a course's name with its teaching mode
-        ("…-ش12-3-ك": ك online, و or F in person, nothing blended), and an online
-        course has a Teams meeting. A course with an `Online` slot in schedule.json
-        counts too.
+Which   every session that is an online lecture (ك: live on Teams) — while
+        "auto_check_in" is true in schedule.json (off by default). Never an in-person
+        day (و, or م for a blended course: your instructor marks you there) nor an
+        activity day (ن: no class). Each session's day is decided by, in order:
+          1. ZUJ's codes in the attendance activity's own name, when it has them
+             ("[ 09:30_11:00 ] ن (ن) ر (ك)": Monday an activity, Wednesday online);
+          2. that course's slot on that day in schedule.json (its "mode");
+          3. the course itself: ZUJ ends an online course's Moodle name with ك
+             ("…-ش12-3-ك"; و or F in person, nothing blended), and an online course
+             has a Teams meeting — then every session the two above say nothing of.
 When    each of its sessions, from EARLY before the start to LATE after the end. The
         sessions come from the attendance page itself (read again every SESSIONS_EVERY),
         so a moved or an extra session is followed too.
@@ -23,8 +27,8 @@ What you get, once per session:
                             could not be read for TROUBLE_AFTER: why, the page it saw,
                             and a button to the attendance page. It goes on watching, so
                             ✅ follows once you have checked in yourself.
-  ℹ️ No Check-in Opened     a timetabled online lecture ended without check-in ever
-                            opening (sent silently).
+  ℹ️ No Check-in Opened     an online lecture ended without check-in ever opening
+                            (sent silently).
 
 A saved session that has expired starts a check, which signs in again. The bot runs this
 on its own thread; a monitor run is the fallback while the bot is down; claim files
@@ -50,6 +54,7 @@ log = logging.getLogger("uninotifier")
 SESSION_FILE = paths.DATA / "auth_state.json"
 STATE_FILE = paths.DATA / "saved_items.json"
 CACHE_FILE = paths.DATA / "checkin.json"        # the watched activities and their sessions
+CACHE_VERSION = 2                                # a cache from an older layout is read again
 PAGES_DIR = paths.DATA / "checkin_pages"
 
 EARLY = timedelta(minutes=10)         # watching starts this long before a session
@@ -61,7 +66,6 @@ SESSIONS_EVERY = 6 * 3600             # the sessions are read again this often
 RETRY_SECONDS = 15 * 60               # ... or this soon after a failed read
 TROUBLE_AFTER = 10 * 60               # Moodle unreadable this long during a session: check in by hand
 SIGN_IN_EVERY = 15 * 60               # at most one sign-in started per this long
-SLOT_MATCH = timedelta(minutes=30)    # a session this close to an Online slot is that lecture
 KEEP_PAGES = 30
 TICK = 20                             # seconds between the bot thread's looks
 VIEWPORT, SCALE = {"width": 1100, "height": 900}, 2
@@ -140,14 +144,47 @@ def covers(course: str, sched: dict | None = None, content: dict | None = None) 
     return course in online_courses(sched, _load_content() if content is None else content)
 
 
+def marked_online(content: dict) -> set[str]:
+    """The courses Moodle itself shows as online: the ك at the end of the name, or a Teams meeting."""
+    return {media.clean_course_name((it.get("course") or "").strip()) for it in content.values()
+            if (it.get("course") or "").strip().endswith(ONLINE_MARK) or it.get("type") in TEAMS_TYPES}
+
+
 def watched(sched: dict, content: dict) -> list[dict]:
-    """The attendance activities of the online courses: {"cmid", "course", "name", "url"}."""
-    courses = online_courses(sched, content)
-    return [{"cmid": str(it.get("cmid") or key), "course": media.clean_course_name(it.get("course", "")),
-             "name": it.get("name", ""), "url": it["url"]}
-            for key, it in sorted(content.items())
-            if it.get("type") in media.ATTENDANCE_TYPES and it.get("url")
-            and media.clean_course_name(it.get("course", "")) in courses]
+    """The attendance activities that may have an online session: of an online course, or
+    with an online day in their own name. {"cmid", "course", "name", "url", "marked"} —
+    marked: Moodle shows the course as online (rule 3 of the module's docstring)."""
+    courses, marked = online_courses(sched, content), marked_online(content)
+    found = []
+    for key, it in sorted(content.items()):
+        if it.get("type") not in media.ATTENDANCE_TYPES or not it.get("url"):
+            continue
+        course = media.clean_course_name(it.get("course", ""))
+        name = it.get("name", "")
+        if course in courses or any(s["mode"] == "Online" for s in schedule.parse_codes(name)):
+            found.append({"cmid": str(it.get("cmid") or key), "course": course, "name": name,
+                          "url": it["url"], "marked": course in marked})
+    return found
+
+
+def day_mode(activity: dict, start: datetime, sched: dict) -> str | None:
+    """How the session's day is taught — "Online", "In-Person", "Blended", "Activity" —
+    or None when nothing says (the rules in the module's docstring)."""
+    day = start.strftime("%a").lower()
+    coded = [s for s in schedule.parse_codes(activity.get("name", "")) if s["day"] == day]
+    slots = coded or [lec for lec in (sched.get("days") or {}).get(day, [])
+                      if lec.get("course") == activity["course"] and lec.get("start")]
+    if slots:
+        def gap(slot):
+            at = datetime.combine(start.date(), datetime.strptime(slot["start"], "%H:%M").time())
+            return abs(at - start)
+        return min(slots, key=gap).get("mode")
+    return "Online" if activity.get("marked") else None
+
+
+def online_session(activity: dict, start: datetime, sched: dict) -> bool:
+    """Checked in automatically: the session is an online lecture."""
+    return day_mode(activity, start, sched) == "Online"
 
 
 def page_url(activity: dict) -> str:
@@ -208,7 +245,8 @@ def refresh(watch: Watch, sched: dict, now: float, force: bool = False) -> dict:
     cache = _load_cache()
     content = _load_content()
     courses = sorted(online_courses(sched, content))
-    stale = (cache.get("courses") != courses or now - cache.get("read", 0) >= SESSIONS_EVERY)
+    stale = (cache.get("courses") != courses or cache.get("version") != CACHE_VERSION
+             or now - cache.get("read", 0) >= SESSIONS_EVERY)
     if not (force or stale) or now - watch.last_refresh < RETRY_SECONDS:
         return cache
     watch.last_refresh = now
@@ -224,7 +262,8 @@ def refresh(watch: Watch, sched: dict, now: float, force: bool = False) -> dict:
             log.info("Check-in: the sessions of %s could not be read (%s)", activity["name"], e)
             sessions, failed = old.get(activity["cmid"], {}).get("sessions", []), failed + 1
         fresh.append({**activity, "sessions": sessions})
-    cache = {"read": now if not failed else cache.get("read", 0), "courses": courses, "activities": fresh}
+    cache = {"version": CACHE_VERSION, "read": now if not failed else cache.get("read", 0),
+             "courses": courses, "activities": fresh}
     fileio.write_json_atomic(CACHE_FILE, cache)
     return cache
 
@@ -423,7 +462,7 @@ def during(token: str, chat_id: str, watch: Watch, activity: dict, start: dateti
 
 
 def wrap_up(token: str, chat_id: str, watch: Watch, activity: dict, start: datetime, key: str,
-            sched: dict, now: float) -> None:
+            now: float) -> None:
     """The session is over: what it ended as, once."""
     if now - watch.last_read.get(key, float("-inf")) < POLL_SECONDS:
         return
@@ -439,27 +478,10 @@ def wrap_up(token: str, chat_id: str, watch: Watch, activity: dict, start: datet
         if not daily.claimed(f"{key}-alerted"):
             report_failure(token, chat_id, activity, row, key, "check-in closed before I could finish it")
         daily.claim(f"{key}-done")
-    elif timetabled(activity, start, sched) and daily.claim(f"{key}-done"):
+    elif daily.claim(f"{key}-done"):
         if not _send(token, chat_id, no_check_in_message(activity, row),
                      [[{"text": OPEN_BUTTON, "url": activity["url"]}]], None, activity, silent=True):
             daily.release(f"{key}-done")
-    else:
-        daily.claim(f"{key}-done")              # an activity day: nothing to say
-
-
-def timetabled(activity: dict, start: datetime, sched: dict) -> bool:
-    """The session is one of the course's Online lectures in schedule.json — or any
-    session, for an online course the timetable does not list at all."""
-    days = sched.get("days") or {}
-    if not any(lec.get("course") == activity["course"] for lectures in days.values() for lec in lectures):
-        return True
-    day = start.strftime("%a").lower()
-    for lec in days.get(day, []):
-        if lec.get("mode") == "Online" and lec.get("course") == activity["course"]:
-            at = datetime.combine(start.date(), datetime.strptime(lec["start"], "%H:%M").time())
-            if abs(at - start) <= SLOT_MATCH:
-                return True
-    return False
 
 
 # ------------------------------------------------------------------ the clock
@@ -477,7 +499,7 @@ def tick(token: str, chat_id: str, watch: Watch, now: datetime | None = None) ->
                 end = datetime.fromisoformat(s["end"]) if s.get("end") else start + LENGTH
             except (KeyError, TypeError, ValueError):
                 continue
-            if not start - EARLY <= now <= end + LATE + WRAP_UP:
+            if not start - EARLY <= now <= end + LATE + WRAP_UP or not online_session(activity, start, sched):
                 continue
             key = session_key(activity, start)
             if daily.claimed(f"{key}-done"):
@@ -485,7 +507,7 @@ def tick(token: str, chat_id: str, watch: Watch, now: datetime | None = None) ->
             if now <= end + LATE:
                 during(token, chat_id, watch, activity, start, key, now.timestamp())
             else:
-                wrap_up(token, chat_id, watch, activity, start, key, sched, now.timestamp())
+                wrap_up(token, chat_id, watch, activity, start, key, now.timestamp())
 
 
 def loop(token: str, chat_id: str) -> None:
