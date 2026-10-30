@@ -6,7 +6,9 @@ Which   every session that is an online lecture (ك: live on Teams) — while
         day (و, or م for a blended course: your instructor marks you there) nor an
         activity day (ن: no class). Each session's day is decided by, in order:
           1. the class that starts then in the portal's own timetable (classtable.py:
-             read by the bot itself, whatever the course — two classes never overlap);
+             read by the bot itself, once, whatever the course — two classes never
+             overlap). A course with no online session by it is left alone, not read
+             again, until that timetable changes;
           2. ZUJ's codes in the attendance activity's own name, when it has them
              ("[ 09:30_11:00 ] ن (ن) ر (ك)": Monday an activity, Wednesday online);
           3. that course's slot on that day in schedule.json (its "mode");
@@ -56,7 +58,7 @@ log = logging.getLogger("uninotifier")
 SESSION_FILE = paths.DATA / "auth_state.json"
 STATE_FILE = paths.DATA / "saved_items.json"
 CACHE_FILE = paths.DATA / "checkin.json"        # the watched activities and their sessions
-CACHE_VERSION = 3                                # a cache from an older layout is read again
+CACHE_VERSION = 4                                # a cache from an older layout is read again
 PAGES_DIR = paths.DATA / "checkin_pages"
 
 EARLY = timedelta(minutes=10)         # watching starts this long before a session
@@ -254,26 +256,37 @@ def refresh(watch: Watch, sched: dict, now: float, force: bool = False) -> dict:
     content = _load_content()
     watching = watched(sched, content)
     names = sorted(a["cmid"] for a in watching)
-    stale = (cache.get("watch") != names or cache.get("version") != CACHE_VERSION
+    table = classtable.load().get("read")          # the timetable the sessions are judged by
+    stale = (cache.get("watch") != names or cache.get("version") != CACHE_VERSION or cache.get("table") != table
              or now - cache.get("read", 0) >= SESSIONS_EVERY)
     gap = CHANGE_SECONDS if cache.get("watch") != names else RETRY_SECONDS
     if not (force or stale) or now - watch.last_refresh < gap:
         return cache
     watch.last_refresh = now
     old = {a["cmid"]: a for a in cache.get("activities", [])}
+    same_table = cache.get("table") == table and cache.get("version") == CACHE_VERSION
     fresh, failed = [], 0
     http = None
     for activity in watching:
+        previous = old.get(activity["cmid"])
+        if previous and previous.get("idle") and same_table:
+            fresh.append({**activity, "sessions": previous["sessions"], "idle": True})
+            continue                            # in person or activities only: nothing to watch for
+        idle = False
         try:
             http = http or _http()
+            rows = [s for s in read_sessions(http, activity) if s["start"]]
             sessions = [{"start": s["start"].isoformat(), "end": s["end"].isoformat() if s["end"] else None}
-                        for s in read_sessions(http, activity) if s["start"]]
+                        for s in rows]
+            # not one online session, judged by the portal's own timetable: left alone until it changes
+            idle = bool(rows) and classtable.known() and not any(
+                online_session(activity, s["start"], sched) for s in rows)
         except Trouble as e:
             log.info("Check-in: the sessions of %s could not be read (%s)", activity["name"], e)
-            sessions, failed = old.get(activity["cmid"], {}).get("sessions", []), failed + 1
-        fresh.append({**activity, "sessions": sessions})
+            sessions, failed = (previous or {}).get("sessions", []), failed + 1
+        fresh.append({**activity, "sessions": sessions, "idle": idle})
     cache = {"version": CACHE_VERSION, "read": now if not failed else cache.get("read", 0),
-             "watch": names, "activities": fresh}
+             "watch": names, "table": table, "activities": fresh}
     fileio.write_json_atomic(CACHE_FILE, cache)
     return cache
 

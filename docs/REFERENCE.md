@@ -234,12 +234,17 @@ order). Each session's day is decided by, in order:
 **The portal's timetable.** The portal's home page lists every section you take with its
 meetings in those codes. While `auto_check_in` is on and `PORTAL_USERNAME` /
 `PORTAL_PASSWORD` are in `.env`, the bot reads that table by itself — as soon as there is none
-(a new student, a new semester), then once a week — and keeps it in `data/class_table.json`,
-so nothing needs to be typed in for it. It signs in with your own portal session (never while
+(a new student, a new semester) — and keeps it in `data/class_table.json`, so nothing needs to
+be typed in for it. Once is enough: it is not read again until you send `/check` (the way to
+tell the bot that your courses changed) or the table is 120 days old (a past semester's). It
+tells you what it found — the online lectures, and how many days are in person or activities —
+on the first look and whenever the timetable changed. It signs in with your own portal session (never while
 a command of yours is using the portal), sets the table to 15 rows a page so one look reads
 them all, and never answers a verification code on its own: if the portal ever asks for one,
 you are told once and the check-in goes on with rules 2–4. A table older than 120 days is
-not trusted. `python -m uninotifier.classtable` reads it now.
+not trusted. A course whose sessions are none of them online by that table is marked idle and
+its attendance page is not read again until the table changes. `python -m uninotifier.classtable`
+reads it now.
 
 Then:
 
@@ -366,7 +371,7 @@ signs in again. A guest look-up never uses or replaces your session.
 
 ### Finals Watch (`/finals`)
 
-The portal is on-demand everywhere except here (and the weekly look at your timetable
+The portal is on-demand everywhere except here (and the one look at your timetable
 for automatic check-in, which you switch on yourself): while **finals mode** is on, the
 bot signs in every 30 minutes (`finals.py`) and tells you:
 
@@ -431,8 +436,8 @@ locked into the planner as they are published (`portal_grade`), are never counte
 **one message** — the page's screenshot with its summary (and, for a balance, every figure) in the
 caption; only a transcript's semesters follow as a single text — and the hub you came from returns
 under it as the menu. While it works the chat shows "typing…", not a status message. **Nothing is
-polled** — the portal is contacted only when you ask, except Finals Watch and the weekly timetable
-look of automatic check-in, both of which you switch on yourself.
+polled** — the portal is contacted only when you ask, except Finals Watch and the one timetable
+look of automatic check-in (again on `/check`), both of which you switch on yourself.
 
 Put the login in `.env` (never in chat; it is re-read on every request, so no
 restart is needed):

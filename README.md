@@ -109,7 +109,7 @@ marks are made up. In Telegram they look the same, in your own theme, with tappa
   reminder alerts on the minute, takes a ~1 KB look at Moodle every 2 minutes (and starts a check at
   once when something is new), reads the registration portal when you ask — answering
   instantly from the last copy and refreshing it behind ("stale-while-revalidate") — plus, if you
-  turn on automatic check-in, one look a week at your timetable there, and, if you turn it on,
+  turn on automatic check-in, one look at your timetable there, and, if you turn it on,
   watches Cambridge One.
 - **Telegram** is the only thing that leaves your PC: your bot, talking only to you.
 

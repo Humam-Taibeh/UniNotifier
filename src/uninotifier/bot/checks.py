@@ -35,6 +35,19 @@ CHECK_TIMEOUT = 15 * 60
 _check_lock = threading.Lock()
 
 
+def _read_timetable() -> None:
+    """A manual check also reads the portal's timetable again (when automatic check-in is on):
+    the way to tell the bot that your courses changed. It says so only if something changed."""
+    try:
+        from uninotifier import classtable
+        from uninotifier.bot import portal_flow
+        classtable.update(chat.BOT_TOKEN, chat.CHAT_ID, portal_flow._portal_lock, force=True)
+    except Exception as e:
+        log.exception("Reading the timetable failed")
+        failsafe.bug("bot:classtable", "Reading your timetable from the portal is failing", e,
+                     "Automatic check-in goes on with the codes in Moodle and schedule.json.")
+
+
 def summary_text(code: int) -> str:
     run = chat.load_last_run()
     if code == EXIT_BUSY:
@@ -80,6 +93,7 @@ def run_check(message_id: int | None) -> None:
             chat.edit_view(message_id, wait_text, rows)
 
         log.info("Manual check started")
+        threading.Thread(target=_read_timetable, name="timetable", daemon=True).start()
         try:
             code = subprocess.run(
                 [sys.executable, str(MONITOR)], cwd=paths.ROOT, capture_output=True,

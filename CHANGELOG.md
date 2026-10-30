@@ -9,8 +9,8 @@ All notable changes to this project are documented here. The format follows
 ### Added
 - Automatic attendance check-in for online lectures (`"auto_check_in": true` in `schedule.json`):
   only a day that is an online lecture (ZUJ's ك), never an in-person (و, م) or activity (ن) day —
-  read from the portal's own timetable (the bot reads it by itself, once a week, with
-  `auto_check_in` on), else from ZUJ's codes in Moodle, `schedule.json`, or the ك at the end of
+  read from the portal's own timetable (the bot reads it by itself, once — and again on `/check` —
+  with `auto_check_in` on, and tells you what it found), else from ZUJ's codes in Moodle, `schedule.json`, or the ك at the end of
   the Moodle course name; Present as soon as the instructor opens it, checked on Moodle, with a screenshot of your row as
   proof — or a 🚨 with the reason, the page and a button to check in by hand.
 - Every day at noon, one message with every open assignment, quiz and Cambridge One task, closest

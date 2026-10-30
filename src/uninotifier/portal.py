@@ -4,8 +4,8 @@ official grades, the transcript (passed hours) and the financial balance.
 
 Run by a command from the user (/grades, /transcript, /balance) — nothing here is scheduled
 or polled, and monitor.py does not import it — and, for the two features the user switches on
-themselves, by the bot: Finals Watch (finals.py) and the weekly look at the home page's
-timetable for automatic check-in (classtable.py).
+themselves, by the bot: Finals Watch (finals.py) and the one look at the home page's
+timetable for automatic check-in (classtable.py: once, and again on /check).
 
 Credentials come from .env, never from the chat:
     PORTAL_USERNAME=...
@@ -83,7 +83,7 @@ SECTIONS = {
         "match": r"كشف\s*(?:العلامات|الدرجات)|السجل\s*الأكاديمي|Transcript|Academic\s*Record",
         "skip": r"$^",
     },
-    "home": {                                   # the student's home page: the weekly timetable
+    "home": {                                   # the student's home page: the timetable
         "title": "Timetable",
         "path": "/faces/ui/pages/student/index.xhtml",
         "match": r"$^",

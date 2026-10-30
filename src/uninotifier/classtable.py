@@ -8,9 +8,12 @@ which days are online lectures — for any student, without a schedule.json.
 
 When   only while "auto_check_in" is true in schedule.json — switching it on is what lets
        the bot sign in to the portal for you — and PORTAL_USERNAME / PORTAL_PASSWORD are in
-       .env. Right away when there is no table yet (a new student, a new semester's first
-       look), then every READ_EVERY; after a failure it waits RETRY_AFTER before it tries
-       again. It never starts while a command of yours is using the portal.
+       .env. ONCE: as soon as there is no table (a new student, or the first look of a new
+       semester, when the old table is STALE_AFTER old), not again until you run /check — the
+       way to tell the bot that your courses changed. After a failed look it waits RETRY_AFTER.
+       It never starts while a command of yours is using the portal.
+Tells  what it found, on the first look and whenever the timetable changed: the online
+       lectures, and how many days are in person or activities — so you can see it understood.
 How    the owner's own portal session (portal.fetch_many, the page's rows-per-page set to 15 so
        one look reads every row). If the portal asks for a verification code nobody can
        answer — it never did, in 26 measured sign-ins — you are told once (failsafe) and the
@@ -24,14 +27,13 @@ import logging
 import time
 from datetime import datetime, timedelta
 
-from uninotifier import failsafe, fileio, paths, schedule
+from uninotifier import failsafe, fileio, notifier, paths, schedule
 
 log = logging.getLogger("uninotifier")
 
 CACHE_FILE = paths.DATA / "class_table.json"
-READ_EVERY = 7 * 86400              # the table is read again this often
-RETRY_AFTER = 6 * 3600              # ... or this long after a failed look
-STALE_AFTER = 120 * 86400           # a table this old is not trusted any more (a semester)
+RETRY_AFTER = 6 * 3600              # a failed look is tried again this long after
+STALE_AFTER = 120 * 86400           # a table this old is a past semester's: not trusted, read again
 MATCH = timedelta(minutes=30)       # a session this close to a class's start is that class
 TICK = 600                          # seconds between the bot thread's looks
 
@@ -90,8 +92,8 @@ def wanted() -> bool:
 
 
 def due(now: float) -> bool:
-    cache = load()
-    return now - cache.get("read", 0) >= READ_EVERY and now - cache.get("tried", 0) >= RETRY_AFTER
+    """No table (or a past semester's) and not tried lately."""
+    return not known(now) and now - load().get("tried", 0) >= RETRY_AFTER
 
 
 def _no_code(attempt: int, rejected: bool) -> None:
@@ -120,7 +122,8 @@ def refresh(now: float | None = None) -> bool:
         log.warning("Timetable: %s", e)
         failsafe.report("classtable:portal", "The bot could not read your timetable from the portal",
                         detail=f"{e} Automatic check-in goes on with the codes in Moodle and schedule.json; "
-                               f"the bot tries again in {RETRY_AFTER // 3600} hours.", wait=False)
+                               f"send /check to try again, or the bot tries by itself in "
+                               f"{RETRY_AFTER // 3600} hours.", wait=False)
     else:
         if slots:
             cache.update(read=now, slots=slots)
@@ -132,26 +135,51 @@ def refresh(now: float | None = None) -> bool:
     return False
 
 
-def tick(lock=None, now: float | None = None) -> bool:
-    """One look; True when it read the portal successfully."""
+def summary(slots: list[dict], first: bool) -> str:
+    """What the bot understood, for the chat."""
+    online = sorted((s for s in slots if s["mode"] == "Online"),
+                    key=lambda s: (schedule.DAY_KEYS.index(s["day"]), s["start"]))
+    lines = ["🗓️ *Timetable read from the portal*" if first else "🗓️ *Your timetable on the portal changed*", ""]
+    if online:
+        lines.append("💻 *Online lectures* (I check you in to these):")
+        lines += [f"• {schedule.DAY_ABBR[s['day']]} · {notifier.hhmm12(s['start'])} – {notifier.hhmm12(s['end'])}"
+                  for s in online]
+    else:
+        lines.append("💻 No online lectures — there is nothing for me to check in to.")
+    campus = sum(s["mode"] in ("In-Person", "Blended") for s in slots)
+    activity = sum(s["mode"] == "Activity" for s in slots)
+    lines += ["", f"🏫 {campus} in-person day(s) · 🧩 {activity} activity day(s) — I leave those alone.",
+              "Courses changed? Send /check and I read it again."]
+    return "\n".join(lines)
+
+
+def update(token: str, chat_id: str, lock=None, now: float | None = None, force: bool = False) -> bool:
+    """Read the portal's timetable when it is due — or whenever `force` (a manual /check) — and
+    tell what it found when it is new or changed. True when it was read."""
     from uninotifier import portal
     now = time.time() if now is None else now
-    if not wanted() or not due(now) or portal.credentials() is None:
+    if not wanted() or portal.credentials() is None or not (force or due(now)):
         return False
     if lock is not None and not lock.acquire(blocking=False):
         return False                  # a command of yours is using the portal: the next look
     try:
-        return refresh(now)
+        before = load().get("slots")
+        if not refresh(now):
+            return False
+        after = load()["slots"]
+        if after != before:
+            notifier.send_message(token, chat_id, summary(after, first=not before))
+        return True
     finally:
         if lock is not None:
             lock.release()
 
 
-def loop(lock=None) -> None:
+def loop(token: str, chat_id: str, lock=None) -> None:
     """The bot's timetable thread."""
     while True:
         try:
-            tick(lock)
+            update(token, chat_id, lock)
         except Exception as e:
             log.exception("Reading the timetable failed")
             failsafe.bug("bot:classtable", "Reading your timetable from the portal is failing", e,

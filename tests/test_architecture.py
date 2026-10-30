@@ -1029,7 +1029,7 @@ def test_portal_timetable():
     def at(day, hh, mm):
         return datetime(2026, 11, day, hh, mm)       # 1 Nov 2026 is a Sunday
 
-    calls, reports = [], []
+    calls, reports, told = [], [], []
     answers = {"home": [{"home": portal.Result(section="home", found=True, data={"timetable": rows})}]}
 
     def fake_fetch(sections, ask_code, creds=None, keep_debug=True):
@@ -1039,59 +1039,80 @@ def test_portal_timetable():
             raise answer
         return answer
     with tempfile.TemporaryDirectory() as tmp:
-        keep = (classtable.CACHE_FILE, schedule.load_schedule, portal.credentials, portal.fetch_many, failsafe.report)
+        keep = (classtable.CACHE_FILE, schedule.load_schedule, portal.credentials, portal.fetch_many, failsafe.report,
+                notifier.send_message)
         classtable.CACHE_FILE = Path(tmp) / "class_table.json"
         sched = {"auto_check_in": True}
         schedule.load_schedule = lambda: sched
         portal.credentials = lambda: ("student", "secret")
         portal.fetch_many = fake_fetch
         failsafe.report = lambda kind, headline, **kw: reports.append((kind, headline, kw.get("detail", ""))) or True
+        notifier.send_message = lambda token, chat, text, **kw: told.append(text) or True
         try:
             now = 1_800_000_000.0
             assert classtable.mode_at(at(4, 19, 0), now) is None and not classtable.known(now), "no table yet"
 
             # switched off, or no login: the portal is never opened
             sched["auto_check_in"] = False
-            assert not classtable.tick(now=now) and calls == []
+            assert not classtable.update("t", "c", now=now) and calls == []
             sched["auto_check_in"] = True
             portal.credentials = lambda: None
-            assert not classtable.tick(now=now) and calls == []
+            assert not classtable.update("t", "c", now=now, force=True) and calls == []
             portal.credentials = lambda: ("student", "secret")
             lock = threading.Lock()
             lock.acquire()
-            assert not classtable.tick(lock, now) and calls == [], "a command of yours is using the portal"
+            assert not classtable.update("t", "c", lock, now) and calls == [], "a command of yours is using the portal"
             lock.release()
 
-            # no table yet: read at once, with nobody to type a verification code
-            assert classtable.tick(lock, now) and calls == [(["home"], None)] and not lock.locked()
+            # no table yet: read at once, with nobody to type a verification code — and told what it found
+            assert classtable.update("t", "c", lock, now) and calls == [(["home"], None)] and not lock.locked()
             assert classtable.known(now) and len(classtable.load()["slots"]) == 7
             assert classtable.mode_at(at(4, 19, 5), now) == "Online" and classtable.mode_at(at(2, 19, 0), now) == "Activity"
             assert classtable.mode_at(at(1, 12, 30), now) == "Blended" and classtable.mode_at(at(3, 12, 30), now) == "Activity"
             assert classtable.mode_at(at(1, 9, 30), now) == "In-Person" and classtable.mode_at(at(7, 16, 0), now) == "In-Person"
             assert classtable.mode_at(at(4, 15, 0), now) is None, "no class then"
             assert classtable.mode_at(at(4, 19, 40), now) is None, "too far from the start of a class"
-            assert classtable.mode_at(at(4, 19, 0), now + classtable.STALE_AFTER + 1) is None, "an old table is not trusted"
+            assert len(told) == 1 and told[0].startswith("🗓️ *Timetable read from the portal*"), told
+            assert "• Wed · 7:00 PM – 8:30 PM" in told[0] and "Mon" not in told[0] and "/check" in told[0], told[0]
+            assert "🏫 4 in-person day(s) · 🧩 2 activity day(s)" in told[0] and _legacy_markdown_ok(told[0]), told[0]
 
-            # then once a week
-            assert not classtable.tick(now=now + classtable.READ_EVERY - 60) and len(calls) == 1
-            assert classtable.tick(now=now + classtable.READ_EVERY) and len(calls) == 2
+            # once is enough: not weeks later; /check reads it again — and says nothing when nothing changed
+            assert not classtable.update("t", "c", now=now + 70 * 86400) and len(calls) == 1
+            assert classtable.update("t", "c", force=True, now=now + 100) and len(calls) == 2 and len(told) == 1
 
-            # a portal that is down: quietly, and not again before RETRY_AFTER; the old table stays
-            later = now + 2 * classtable.READ_EVERY
+            # a timetable that changed is told (the Wednesday lecture became an activity)
+            moved = [(*PORTAL_ROWS[2][:5], "[ 19:00_20:30 ] ن (ن) ر (ن)") if row[0] == "0900333" else row for row in PORTAL_ROWS]
+            answers["home"] = [{"home": portal.Result(section="home", found=True, data={
+                "timetable": portal.timetable_rows(_portal_home(moved))})}]
+            assert classtable.update("t", "c", force=True, now=now + 200) and len(told) == 2
+            assert told[1].startswith("🗓️ *Your timetable on the portal changed*") and "No online lectures" in told[1], told[1]
+            assert classtable.mode_at(at(4, 19, 5), now) == "Activity"
+
+            # a past semester's table (120 days) is read again by itself — down, then in need of a person, then empty
+            later = now + 200 + classtable.STALE_AFTER + 10
+            assert not classtable.known(later) and classtable.mode_at(at(4, 19, 0), later) is None
             answers["home"] = [maintenance.PortalUnavailable("registration portal", "maintenance")]
-            assert not classtable.tick(now=later) and len(calls) == 3 and reports == []
-            assert not classtable.tick(now=later + classtable.RETRY_AFTER - 60) and len(calls) == 3
-            assert classtable.known(later) and classtable.mode_at(at(4, 19, 0), later - 1) == "Online"
-
-            # something to read (a verification code nobody can type): told once, tried again later
+            assert not classtable.update("t", "c", now=later) and len(calls) == 4 and reports == []
+            assert not classtable.update("t", "c", now=later + classtable.RETRY_AFTER - 60) and len(calls) == 4
             answers["home"] = [portal.PortalError("No verification code arrived in time — try the command again.")]
             retry = later + classtable.RETRY_AFTER
-            assert not classtable.tick(now=retry) and len(calls) == 4
-            assert len(reports) == 1 and reports[0][0] == "classtable:portal" and "check-in goes on" in reports[0][2]
-
-            # a home page without a timetable keeps the old one
+            assert not classtable.update("t", "c", now=retry) and len(calls) == 5
+            assert len(reports) == 1 and reports[0][0] == "classtable:portal" and "/check" in reports[0][2], reports
             answers["home"] = [{"home": portal.Result(section="home", found=True, data={"timetable": []})}]
-            assert not classtable.tick(now=retry + classtable.RETRY_AFTER) and len(classtable.load()["slots"]) == 7
+            assert not classtable.update("t", "c", now=retry + classtable.RETRY_AFTER) and len(calls) == 6
+            assert len(classtable.load()["slots"]) == 7, "a home page without a timetable keeps the old one"
+            answers["home"] = [{"home": portal.Result(section="home", found=True, data={"timetable": rows})}]
+            assert classtable.update("t", "c", now=retry + 2 * classtable.RETRY_AFTER) and classtable.known(retry + 2 * classtable.RETRY_AFTER)
+
+            # /check reads it again, behind the portal lock, and says so only when something changed
+            from uninotifier.bot import checks, portal_flow
+            forced, real_update = [], classtable.update
+            classtable.update = lambda token, chat, lock=None, now=None, force=False:                 forced.append((lock is portal_flow._portal_lock, force)) or True
+            try:
+                checks._read_timetable()
+            finally:
+                classtable.update = real_update
+            assert forced == [(True, True)], forced
 
             # the check-in uses it before anything else, whatever the course is called
             classtable.CACHE_FILE.write_text(json.dumps({"read": now, "tried": now, "slots": slots}), encoding="utf-8")
@@ -1132,8 +1153,42 @@ def test_portal_timetable():
                 assert seen["reads"] == 6 and json.loads(checkin.CACHE_FILE.read_text(encoding="utf-8"))["watch"] == ["1", "2", "3"]
             finally:
                 checkin.CACHE_FILE, checkin._load_content, checkin.watched, checkin.read_sessions, checkin._http = kept
+
+            # a course with no online session by the table is idle: its attendance page is not read again
+            rows_in = [{"start": datetime(2026, 11, 1, 9, 30), "end": datetime(2026, 11, 1, 11, 0)}]     # a Sunday: in person
+            rows_on = [{"start": datetime(2026, 11, 4, 19, 0), "end": datetime(2026, 11, 4, 20, 30)}]     # a Wednesday: online
+            looks = {"rows": rows_in, "reads": 0}
+
+            def read_rows(http, activity):
+                looks["reads"] += 1
+                return looks["rows"]
+            kept = (checkin.CACHE_FILE, checkin._load_content, checkin.watched, checkin.read_sessions, checkin._http)
+            checkin.CACHE_FILE, checkin._load_content = Path(tmp) / "checkin2.json", lambda: {}
+            checkin.watched = lambda s, c: [{"cmid": "7", "course": "Z", "name": "n", "url": "u", "marked": False}]
+            checkin.read_sessions, checkin._http = read_rows, object
+            classtable.CACHE_FILE.write_text(json.dumps({"read": now, "tried": now, "slots": slots}), encoding="utf-8")
+            try:
+                watch = checkin.Watch()
+                checkin.refresh(watch, {}, 5000.0)
+                cached = json.loads(checkin.CACHE_FILE.read_text(encoding="utf-8"))
+                assert cached["activities"][0]["idle"] is True and cached["table"] == now and looks["reads"] == 1
+                checkin.refresh(watch, {}, 5000.0 + checkin.SESSIONS_EVERY + 1)
+                assert looks["reads"] == 1, "idle: not read again, hours later"
+                classtable.CACHE_FILE.write_text(json.dumps({"read": now + 5, "tried": now, "slots": slots}), encoding="utf-8")
+                checkin.refresh(watch, {}, 5000.0 + 2 * checkin.SESSIONS_EVERY)
+                assert looks["reads"] == 2, "a new timetable: judged again"
+                looks["rows"] = rows_on
+                checkin.refresh(watch, {}, 5000.0 + 4 * checkin.SESSIONS_EVERY)
+                assert looks["reads"] == 2, "same timetable: still idle"
+                classtable.CACHE_FILE.write_text(json.dumps({"read": now + 9, "tried": now, "slots": slots}), encoding="utf-8")
+                checkin.refresh(watch, {}, 5000.0 + 6 * checkin.SESSIONS_EVERY)
+                cached = json.loads(checkin.CACHE_FILE.read_text(encoding="utf-8"))
+                assert looks["reads"] == 3 and cached["activities"][0]["idle"] is False, "an online session is never idle"
+            finally:
+                checkin.CACHE_FILE, checkin._load_content, checkin.watched, checkin.read_sessions, checkin._http = kept
         finally:
-            (classtable.CACHE_FILE, schedule.load_schedule, portal.credentials, portal.fetch_many, failsafe.report) = keep
+            (classtable.CACHE_FILE, schedule.load_schedule, portal.credentials, portal.fetch_many, failsafe.report,
+             notifier.send_message) = keep
 
 
 def test_portal_parsers():
