@@ -1106,6 +1106,32 @@ def test_portal_timetable():
                        "b": {"type": "attendance", "course": "20261-X-ش1-3-ك", "name": "Attendance", "url": "u", "cmid": "2"}}
             assert [a["cmid"] for a in checkin.watched({"days": {}}, content)] == ["1", "2"], "every attendance: the table says which days"
             assert not checkin.online_session(checkin.watched({"days": {}}, content)[0], at(1, 9, 30), {"days": {}})
+
+            # the check-in follows at once when the activities to watch change (the table arrived after its first look)
+            seen = {"list": [{"cmid": "1", "course": "A", "name": "n", "url": "u", "marked": False}], "reads": 0}
+
+            def count_reads(http, activity):
+                seen["reads"] += 1
+                return []
+            kept = (checkin.CACHE_FILE, checkin._load_content, checkin.watched, checkin.read_sessions, checkin._http)
+            checkin.CACHE_FILE, checkin._load_content = Path(tmp) / "checkin.json", lambda: {}
+            checkin.watched, checkin.read_sessions, checkin._http = (lambda s, c: seen["list"]), count_reads, object
+            try:
+                watch = checkin.Watch()
+                checkin.refresh(watch, {}, 1000.0)
+                assert json.loads(checkin.CACHE_FILE.read_text(encoding="utf-8"))["watch"] == ["1"] and seen["reads"] == 1
+                checkin.refresh(watch, {}, 1500.0)
+                assert seen["reads"] == 1, "nothing changed and it is fresh: not read again"
+                seen["list"] = [*seen["list"], {"cmid": "2", "course": "B", "name": "n", "url": "u", "marked": False}]
+                checkin.refresh(watch, {}, 1530.0)
+                assert json.loads(checkin.CACHE_FILE.read_text(encoding="utf-8"))["watch"] == ["1", "2"] and seen["reads"] == 3,                     "a changed list is followed at once, not after a quarter of an hour"
+                seen["list"] = [*seen["list"], {"cmid": "3", "course": "C", "name": "n", "url": "u", "marked": False}]
+                checkin.refresh(watch, {}, 1560.0)
+                assert seen["reads"] == 3, "but not twice within a minute"
+                checkin.refresh(watch, {}, 1591.0)
+                assert seen["reads"] == 6 and json.loads(checkin.CACHE_FILE.read_text(encoding="utf-8"))["watch"] == ["1", "2", "3"]
+            finally:
+                checkin.CACHE_FILE, checkin._load_content, checkin.watched, checkin.read_sessions, checkin._http = kept
         finally:
             (classtable.CACHE_FILE, schedule.load_schedule, portal.credentials, portal.fetch_many, failsafe.report) = keep
 

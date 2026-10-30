@@ -66,6 +66,7 @@ LENGTH = timedelta(minutes=90)        # a session shown without an end time
 POLL_SECONDS = 60                     # between two reads of the page during a session
 SESSIONS_EVERY = 6 * 3600             # the sessions are read again this often
 RETRY_SECONDS = 15 * 60               # ... or this soon after a failed read
+CHANGE_SECONDS = 60                   # the activities to watch changed (the portal's timetable arrived): at once
 TROUBLE_AFTER = 10 * 60               # Moodle unreadable this long during a session: check in by hand
 SIGN_IN_EVERY = 15 * 60               # at most one sign-in started per this long
 KEEP_PAGES = 30
@@ -255,7 +256,8 @@ def refresh(watch: Watch, sched: dict, now: float, force: bool = False) -> dict:
     names = sorted(a["cmid"] for a in watching)
     stale = (cache.get("watch") != names or cache.get("version") != CACHE_VERSION
              or now - cache.get("read", 0) >= SESSIONS_EVERY)
-    if not (force or stale) or now - watch.last_refresh < RETRY_SECONDS:
+    gap = CHANGE_SECONDS if cache.get("watch") != names else RETRY_SECONDS
+    if not (force or stale) or now - watch.last_refresh < gap:
         return cache
     watch.last_refresh = now
     old = {a["cmid"]: a for a in cache.get("activities", [])}
