@@ -30,6 +30,11 @@ All notable changes to this project are documented here. The format follows
 - Quizzes had no date and no reminders: this Moodle lists a quiz by its closing event, which was
   ignored. A quiz now has its opening and closing times, and one you have attempted stops reminding.
 
+### Security
+- `certifi` is pinned to a release newer than 2026.10.18 (pip-audit: PYSEC-2026-4320): the older
+  bundle trusted a root certificate whose intermediate certificates were revoked after their private
+  keys leaked, which would let someone on the network path impersonate a site to `requests`.
+
 ## [1.0.0] - 2026-10-28
 
 First public release.
