@@ -161,6 +161,25 @@ def bug(area: str, headline: str, exc: BaseException, detail: str = "") -> bool:
     return report(f"{area}:{signature(exc)}", headline, detail=detail, exc=exc, wait=False)
 
 
+def _announce(what: str, text: str, wait: bool) -> bool:
+    """Send a follow-up message; False when there is nowhere to send it."""
+    token, chat = _credentials()
+    if not (token and chat):
+        return False
+
+    def job():
+        try:
+            send(token, chat, text)
+        except Exception:
+            log.exception("failsafe: could not send the follow-up for %s", what)
+
+    if wait:
+        job()
+    else:
+        threading.Thread(target=job, name="failsafe", daemon=True).start()
+    return True
+
+
 def resolve(kind: str, text: str, wait: bool = True) -> bool:
     """The follow-up to report(): if `kind` was reported and still counts as open,
     say it is over (once)."""
@@ -174,23 +193,27 @@ def resolve(kind: str, text: str, wait: bool = True) -> bool:
             entry["suppressed"] = 0
             state[kind] = entry
             _save(state)
-        token, chat = _credentials()
-        if not (token and chat):
-            return False
-
-        def job():
-            try:
-                send(token, chat, text)
-            except Exception:
-                log.exception("failsafe: could not send the follow-up for %s", kind)
-
-        if wait:
-            job()
-        else:
-            threading.Thread(target=job, name="failsafe", daemon=True).start()
-        return True
+        return _announce(kind, text, wait)
     except Exception:
         log.exception("failsafe: could not resolve %s", kind)
+        return False
+
+
+def resolve_matching(prefix: str, text: str, wait: bool = True) -> bool:
+    """resolve() for every open kind starting with `prefix`, with ONE follow-up — for a problem
+    whose kind carries what it was (a crash's signature): whichever it was, it is over."""
+    try:
+        with _lock:
+            state = _load()
+            kinds = [k for k, entry in state.items() if k.startswith(prefix) and (entry or {}).get("active")]
+            if not kinds:
+                return False
+            for kind in kinds:
+                state[kind].update(active=False, suppressed=0)
+            _save(state)
+        return _announce(prefix, text, wait)
+    except Exception:
+        log.exception("failsafe: could not resolve %s*", prefix)
         return False
 
 

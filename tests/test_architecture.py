@@ -3287,6 +3287,54 @@ def _fresh_failsafe():
     OUTBOX.clear()
 
 
+def test_a_crashed_check_is_told_to_be_over():
+    """A check that crashed on a bug tells you; the first run that goes through says it works
+    again — once, and not before — however many different crashes were open."""
+    _fresh_failsafe()
+    mrun = importlib.import_module("uninotifier.monitor.run")
+    state_mod = importlib.import_module("uninotifier.monitor.state")
+    outcome = {"raise": None}
+
+    def fake_run(announce=False):
+        if outcome["raise"]:
+            raise outcome["raise"]
+    swaps = [(mrun.notifier, "setup_logging", lambda *a, **k: None), (mrun.failsafe, "install_excepthooks", lambda *a: None),
+             (mrun.envcheck, "require", lambda *a: None), (state_mod, "acquire_lock", lambda: True),
+             (state_mod, "release_lock", lambda: None), (state_mod, "write_last_run", lambda *a: None),
+             (mrun.healthcheck, "start_bg", lambda: None), (mrun.healthcheck, "report_bg", lambda *a: None),
+             (mrun.healthcheck, "wait", lambda: None), (mrun.gitsync, "sync_state", lambda: None),
+             (mrun, "run", fake_run), (mrun.daily, "ensure_separator", lambda *a: None),
+             (mrun.notifier, "before_send", mrun.notifier.before_send)]       # main() sets it: put it back
+    kept = [(obj, name, getattr(obj, name)) for obj, name, _ in swaps]
+    for obj, name, new in swaps:
+        setattr(obj, name, new)
+    try:
+        before = len(OUTBOX)
+        mrun.main()
+        assert len(OUTBOX) == before, "a good run with nothing open says nothing"
+        outcome["raise"] = ValueError("a bug")
+        try:
+            mrun.main()
+            raise AssertionError("a crash ends the run with exit 1")
+        except SystemExit as e:
+            assert e.code == 1
+        assert "crashed on a bug" in OUTBOX[-1] and len(OUTBOX) == before + 1
+        try:
+            mrun.main()                                   # the same bug again: held back, still not over
+        except SystemExit:
+            pass
+        assert len(OUTBOX) == before + 1
+        outcome["raise"] = None
+        mrun.main()
+        assert len(OUTBOX) == before + 2 and OUTBOX[-1].startswith("✅ *The scheduled check works again*"), OUTBOX[-1]
+        assert _legacy_markdown_ok(OUTBOX[-1])
+        mrun.main()
+        assert len(OUTBOX) == before + 2, "told once"
+    finally:
+        for obj, name, old in kept:
+            setattr(obj, name, old)
+
+
 def test_failsafe_reports_once_and_resolves():
     """A problem reaches you once, not once per occurrence; a different problem, or
     the same one after the cool-down, reaches you again; "fine again" follows once;
@@ -3310,6 +3358,15 @@ def test_failsafe_reports_once_and_resolves():
 
     assert failsafe.resolve("k", "✅ fine") and OUTBOX[-1] == "✅ fine"
     assert not failsafe.resolve("k", "✅ fine") and not failsafe.resolve("never-reported", "x"), "once, and only if open"
+
+    # a kind that carries what went wrong (a crash's signature): ONE follow-up for whichever were open
+    assert failsafe.report("crash:A@x.py:1", "A check crashed") and failsafe.report("crash:B@y.py:2", "A check crashed")
+    assert failsafe.report("other", "Unrelated")
+    sent_so_far = len(OUTBOX)
+    assert failsafe.resolve_matching("crash:", "✅ crash over") and OUTBOX[-1] == "✅ crash over"
+    assert len(OUTBOX) == sent_so_far + 1, "one message, not one per signature"
+    assert not failsafe.resolve_matching("crash:", "✅ crash over") and len(OUTBOX) == sent_so_far + 1, "once"
+    assert failsafe.resolve("other", "✅ other") and OUTBOX[-1] == "✅ other", "an unrelated kind stays open"
 
     # background delivery, and a failing door out
     assert failsafe.report("bg", "In the background", wait=False)
@@ -8526,7 +8583,7 @@ if __name__ == "__main__":
                test_auto_done_only_for_saved_files_and_links, test_announce_first_run_and_duplicate_files,
                test_day_separator_and_daily_recap, test_help_hub_dashboard_and_campus,
                test_update_routing_from_telegram, test_access_lock, test_modules_import_quietly_and_names_resolve,
-               test_failsafe_reports_once_and_resolves, test_bot_contains_and_reports_failures,
+               test_failsafe_reports_once_and_resolves, test_a_crashed_check_is_told_to_be_over, test_bot_contains_and_reports_failures,
                test_bot_heartbeat_and_monitor_watch, test_bot_self_heal, test_a_broken_file_is_told_before_it_stops_the_bot, test_schedule_validation_and_last_good,
                test_state_backup_and_recovery, test_telegram_transport, test_buttons_are_answered_first,
                test_files_telegram_already_holds_are_not_uploaded_again, test_monitor_pruning_and_background_pings, test_answers_go_out_beside_the_edit, test_course_list_is_a_timetable, test_rooms_are_always_short, test_one_menu_anchored_at_the_bottom, test_poll_outage_tracking_and_quiet_logs,

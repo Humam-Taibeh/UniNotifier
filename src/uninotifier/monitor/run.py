@@ -277,6 +277,9 @@ def main() -> None:
         # a bug in the code (not the portal): every run would fail the same way, unseen
         failsafe.report(f"monitor:fatal:{failsafe.signature(e)}", "A check crashed on a bug", exc=e)
         sys.exit(1)
+    else:                             # a run that finishes: if a crash was told, say it is over
+        failsafe.resolve_matching("monitor:fatal:", "✅ *The scheduled check works again* — it ran through "
+                                                    "without the bug that stopped it.")
     finally:
         failsafe.wait_idle()
         state.write_last_run(None if exit_code == 0 else f"exit code {exit_code}")

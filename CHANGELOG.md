@@ -22,6 +22,8 @@ All notable changes to this project are documented here. The format follows
 - An "unofficial, use at your own risk" notice in both READMEs.
 
 ### Fixed
+- When a check crashed on a bug you were told, but never that it works again: the first run that
+  goes through now says so, once.
 - A broken project file (a stray space in `bot.py` once kept the bot from starting after a Windows
   restart) is now told the moment it happens — file, line and how to restore it — instead of when the
   bot fails to start hours later; the "bot isn't responding" alert names that cause too.

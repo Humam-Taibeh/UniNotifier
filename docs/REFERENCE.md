@@ -595,6 +595,10 @@ tells you *"A project file is broken"* with the file, the line and `git restore 
 per mistake, and *"fine again"* when it is fixed. The *"isn't responding"* alert names that
 cause when there is one, instead of the general advice.
 
+A check that **crashed on a bug** tells you once (`failsafe.report`, kind `monitor:fatal:<where>`), and the first run
+that goes through afterwards says *"The scheduled check works again"* (`failsafe.resolve_matching`) — one message,
+however many different crashes were open.
+
 **Surviving Windows restarts** (`scripts/windows_recovery.ps1`, run elevated; `-Undo` reverses
 it). Windows Update's night restarts used to silence everything until you signed in, because
 the tasks only run while you are signed in. The script's lasting part is (1): Windows no
