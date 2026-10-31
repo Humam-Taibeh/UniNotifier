@@ -1,0 +1,6 @@
+# Fingerprints (commit:file:rule:line) of findings that are not secrets, so a scan of the whole history
+# stays clean. The one finding: a made-up JWT in a test (header {alg: RS256}, payload {sub: test}, signature
+# "signature_test"). It is marked `gitleaks:allow` in the current file; these two commits (the first
+# release, and the same commit before the history was rewritten) predate that marker.
+4f5ffc9a6a812e5a8681149baa2a9e9d7b1c7063:tests/test_architecture.py:jwt:6723
+2365ec0cfb0c5b50635c6c43ca8a55b499c64ac1:tests/test_architecture.py:jwt:6723
