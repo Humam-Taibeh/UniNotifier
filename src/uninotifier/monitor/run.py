@@ -48,6 +48,7 @@ def run(announce: bool = False) -> None:
                      "The morning summary and the lecture fallback (when the bot is down) may be missing.")
     state.save_data(saved)
     alerts.check_bot(saved)
+    alerts.check_code(saved)
 
     handler = mfa.TelegramMFA(config.BOT_TOKEN, config.CHAT_ID) if alerts.mfa_allowed(saved) else None
     try:

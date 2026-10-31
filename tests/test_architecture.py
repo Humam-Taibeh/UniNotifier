@@ -3543,6 +3543,76 @@ def test_bot_self_heal():
         heartbeat.FILE.unlink(missing_ok=True)
 
 
+def test_a_broken_file_is_told_before_it_stops_the_bot():
+    """An edit that breaks a file does not stop the running bot — it stops the next start (after
+    Windows restarts), silently. The scheduled check compiles the project's files and tells you
+    at once which line, once per mistake, and again when it is fixed; the "not responding"
+    alert names the cause instead of advising to sign out and back in."""
+    from uninotifier import selfheal
+    from uninotifier.monitor import alerts, state as mstate
+
+    assert selfheal.code_problem() is None, "this project's own files compile"
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        (root / "src" / "uninotifier" / "bot").mkdir(parents=True)
+        (root / "monitor.py").write_text("import sys\n", encoding="utf-8")
+        (root / "src" / "uninotifier" / "bot" / "app.py").write_text("def main():\n    return 1\n", encoding="utf-8")
+        assert selfheal.code_problem(root) is None
+        (root / "bot.py").write_text('    """\ndoc\n"""\nimport sys\n', encoding="utf-8")      # the accident: an indented first line
+        assert selfheal.code_problem(root) == "bot.py line 1: IndentationError: unexpected indent", selfheal.code_problem(root)
+        (root / "bot.py").write_text('"""\ndoc\n"""\nimport sys\n', encoding="utf-8")
+        (root / "src" / "uninotifier" / "bot" / "app.py").write_text("def main(:\n    pass\n", encoding="utf-8")
+        found = selfheal.code_problem(root)
+        assert found.startswith("src/uninotifier/bot/app.py line 1: SyntaxError"), found
+        (root / "src" / "uninotifier" / "bot" / "app.py").write_bytes(b"\xff\xfe not text")
+        assert selfheal.code_problem(root).startswith("src/uninotifier/bot/app.py: "), "unreadable is a problem too"
+        assert not list(root.rglob("*.pyc")) and not list(root.rglob("__pycache__")), "nothing is written"
+
+    sent, problems = [], {"now": None}
+    keep = (alerts.send_telegram, mstate.DATA_FILE, mstate.LOCK_FILE, selfheal.code_problem)
+    alerts.send_telegram = lambda text, url=None: sent.append(text) or True
+    selfheal.code_problem = lambda root=None: problems["now"]
+    tmp = Path(tempfile.mkdtemp(prefix="uninotifier-code-"))
+    mstate.DATA_FILE, mstate.LOCK_FILE = tmp / "saved_items.json", tmp / "monitor.lock"
+    saved = mstate.load_saved_data()
+    try:
+        alerts.check_code(saved)
+        assert sent == [] and "code_problem" not in saved["watch"], "nothing wrong: silence"
+        problems["now"] = "bot.py line 1: IndentationError: unexpected indent"
+        alerts.check_code(saved)
+        assert len(sent) == 1 and sent[0].startswith("⚠️ *A project file is broken*") and _legacy_markdown_ok(sent[0]), sent
+        assert "`bot.py line 1: IndentationError: unexpected indent`" in sent[0] and "git restore bot.py" in sent[0], sent[0]
+        assert "will *not start again*" in sent[0]
+        alerts.check_code(saved)
+        assert len(sent) == 1, "once per mistake, not every 15 minutes"
+        problems["now"] = "src/uninotifier/moodle.py line 9: SyntaxError: invalid syntax"
+        alerts.check_code(saved)
+        assert len(sent) == 2 and "git restore src/uninotifier/moodle.py" in sent[1], "a different mistake is told again"
+        problems["now"] = None
+        alerts.check_code(saved)
+        assert len(sent) == 3 and sent[2].startswith("✅ *The project files are fine again*") and not saved["watch"], sent
+        alerts.check_code(saved)
+        assert len(sent) == 3, "and that is told once"
+
+        # the "not responding" alert names the cause
+        sent.clear()
+        t0, stuck = 10000.0, {"poll": 6400.0, "ticker": 6400.0, "pid": 4242}
+        heartbeat.FILE.write_text(json.dumps(stuck), encoding="utf-8")
+        saved["watch"].update(bot_heals=selfheal.MAX_ATTEMPTS, bot_heal_at=t0 - 5000)
+        problems["now"] = "bot.py line 1: IndentationError: unexpected indent"
+        alerts.check_bot(saved, t0, uptime=99999)
+        assert len(sent) == 1 and "🔎 *Cause:* `bot.py line 1: IndentationError: unexpected indent`" in sent[0], sent
+        assert "sign out and back in" not in sent[0] and _legacy_markdown_ok(sent[0]), sent[0]
+        sent.clear()
+        saved["watch"].pop("bot_alert_at", None)
+        problems["now"] = None
+        alerts.check_bot(saved, t0 + 100, uptime=99999)
+        assert len(sent) == 1 and "sign out and back in" in sent[0], "no cause found: the general advice"
+    finally:
+        alerts.send_telegram, mstate.DATA_FILE, mstate.LOCK_FILE, selfheal.code_problem = keep
+        heartbeat.FILE.unlink(missing_ok=True)
+
+
 def test_schedule_validation_and_last_good():
     """schedule.json is checked as strictly as it is used: every mistake is named,
     and a broken file never switches the lecture reminders off — the last good copy
@@ -8457,7 +8527,7 @@ if __name__ == "__main__":
                test_day_separator_and_daily_recap, test_help_hub_dashboard_and_campus,
                test_update_routing_from_telegram, test_access_lock, test_modules_import_quietly_and_names_resolve,
                test_failsafe_reports_once_and_resolves, test_bot_contains_and_reports_failures,
-               test_bot_heartbeat_and_monitor_watch, test_bot_self_heal, test_schedule_validation_and_last_good,
+               test_bot_heartbeat_and_monitor_watch, test_bot_self_heal, test_a_broken_file_is_told_before_it_stops_the_bot, test_schedule_validation_and_last_good,
                test_state_backup_and_recovery, test_telegram_transport, test_buttons_are_answered_first,
                test_files_telegram_already_holds_are_not_uploaded_again, test_monitor_pruning_and_background_pings, test_answers_go_out_beside_the_edit, test_course_list_is_a_timetable, test_rooms_are_always_short, test_one_menu_anchored_at_the_bottom, test_poll_outage_tracking_and_quiet_logs,
                test_network_resilience, test_maintenance_and_finals_pause,

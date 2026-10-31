@@ -22,6 +22,9 @@ All notable changes to this project are documented here. The format follows
 - An "unofficial, use at your own risk" notice in both READMEs.
 
 ### Fixed
+- A broken project file (a stray space in `bot.py` once kept the bot from starting after a Windows
+  restart) is now told the moment it happens — file, line and how to restore it — instead of when the
+  bot fails to start hours later; the "bot isn't responding" alert names that cause too.
 - A check no longer stops when Windows refuses for a moment to save its state (the file was open
   elsewhere, e.g. in an antivirus scan): the save waits a little and tries again.
 - Quizzes had no date and no reminders: this Moodle lists a quiz by its closing event, which was

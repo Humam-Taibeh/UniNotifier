@@ -586,6 +586,15 @@ would do by hand: it ends the stuck process (only if its command line is this pr
 You hear *"I restarted it and it is working again"* when it worked, and *"isn't responding"*
 only when it did not. A check the bot started itself (`/check`) never restarts the bot.
 
+**A broken file is told at once** (`selfheal.code_problem`). An edit that breaks a project
+file — a stray space before the first line of `bot.py`, say — does not stop the bot that is
+running; it stops the *next start* (after Windows restarts), when every attempt dies on the
+same line, silently (`pythonw` has no window). So every scheduled check compiles the project's
+files in memory (about 0.2 s, nothing written or run) and, the moment one does not compile,
+tells you *"A project file is broken"* with the file, the line and `git restore <file>` — once
+per mistake, and *"fine again"* when it is fixed. The *"isn't responding"* alert names that
+cause when there is one, instead of the general advice.
+
 **Surviving Windows restarts** (`scripts/windows_recovery.ps1`, run elevated; `-Undo` reverses
 it). Windows Update's night restarts used to silence everything until you signed in, because
 the tasks only run while you are signed in. The script's lasting part is (1): Windows no

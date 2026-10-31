@@ -125,6 +125,7 @@ def check_bot(saved: dict, now: float | None = None, uptime: float | None = None
             if told is None or now - told >= config.ERROR_ALERT_COOLDOWN:
                 last = max((float(beat.get(p) or 0) for p in heartbeat.PARTS), default=0)
                 tried = watch.get("bot_heals", 0)
+                cause = selfheal.code_problem()
                 if send_telegram(
                         "⚠️ *The bot isn't responding*\n\n"
                         f"Its last sign of life was {notifier.audit_timestamp(last)} "
@@ -132,7 +133,9 @@ def check_bot(saved: dict, now: float | None = None, uptime: float | None = None
                         "Commands, buttons and lecture alerts are down; scheduled checks and the lecture "
                         "fallback still run.\n\n"
                         + (f"I restarted it {tried} time(s) and it did not recover. " if tried else "")
-                        + "Restart the `UniNotifier_BotListener` task, or sign out and back in."):
+                        + (f"🔎 *Cause:* {_code_span(cause)} — fix it (or `git restore` that file), then restart the "
+                           "`UniNotifier_BotListener` task." if cause else
+                           "Restart the `UniNotifier_BotListener` task, or sign out and back in.")):
                     watch["bot_alert_at"] = now
         elif watch.get("bot_down_since"):
             if watch.get("bot_alert_at"):
@@ -146,6 +149,39 @@ def check_bot(saved: dict, now: float | None = None, uptime: float | None = None
         log.exception("Bot heartbeat check failed")
         failsafe.bug("monitor:botwatch", "The check could not look after the bot", e,
                      "A stuck bot is not restarted automatically until it is fixed.")
+
+
+def _code_span(text: str) -> str:
+    return "`" + text.replace("`", "'") + "`"
+
+
+def check_code(saved: dict) -> None:
+    """A broken project file is told the moment it appears, while the bot that is running
+    still works: it stops the next start (after Windows restarts), which is when it would
+    otherwise be found — silently, hours later. Told once per mistake (again if it
+    changes), and once when it is fixed. Never raises."""
+    try:
+        problem = selfheal.code_problem()
+        watch = saved.setdefault("watch", {})
+        known = watch.get("code_problem")
+        if problem and problem != known:
+            file = problem.split(" line ")[0].split(":")[0]
+            if send_telegram(
+                    "⚠️ *A project file is broken*\n\n"
+                    f"{_code_span(problem)}\n\n"
+                    "What is running now still works, but the bot will *not start again* after Windows "
+                    "restarts or the bot is restarted, until this is fixed. Fix that line, or put the file "
+                    f"back as it was: {_code_span('git restore ' + file)}."):
+                watch["code_problem"] = problem
+                state.save_data(saved)
+        elif not problem and known:
+            if send_telegram("✅ *The project files are fine again* — the bot will start normally."):
+                watch.pop("code_problem", None)
+                state.save_data(saved)
+    except Exception as e:
+        log.exception("Project file check failed")
+        failsafe.bug("monitor:codecheck", "The check could not look at the project files", e,
+                     "A broken file would only be noticed when the bot fails to start.")
 
 
 def track_undelivered(saved: dict, failed: dict[str, str], now: float | None = None) -> None:
