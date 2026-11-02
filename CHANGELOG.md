@@ -21,6 +21,11 @@ All notable changes to this project are documented here. The format follows
 - A pull request template with the checks the repository relies on.
 - An "unofficial, use at your own risk" notice in both READMEs.
 
+### Removed
+- The optional morning overview (`morning_summary_hour` in `schedule.json`): it was off by default,
+  listed online lectures only and duplicated the reminder an hour before each one. A `schedule.json`
+  that still has the line is told so on Telegram — delete the line.
+
 ### Fixed
 - When a check crashed on a bug you were told, but never that it works again: the first run that
   goes through now says so, once.

@@ -315,8 +315,7 @@ claim file guarantees each goes out once):
 
 `schedule.json` holds the weekly timetable (days, times, rooms, mode). Only
 `Online` slots get alerts (`remind_modes`), 60 minutes ahead
-(`lecture_reminder_minutes`); a morning overview can be switched on with
-`morning_summary_hour` (off by default), and automatic check-in with `auto_check_in`
+(`lecture_reminder_minutes`); automatic check-in is switched on with `auto_check_in`
 (see above). These work even when the portal check fails.
 
 ### Online lecture links

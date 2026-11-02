@@ -272,7 +272,7 @@ def test_grades():
 def test_schedule():
     sch = schedule.load_schedule()
     # Sunday 2026-10-11
-    # in-person days: no morning summary, no lecture reminders
+    # in-person days: no lecture reminders
     assert schedule.due_messages(sch, datetime(2026, 10, 11, 7, 30)) == []
     assert schedule.due_messages(sch, datetime(2026, 10, 11, 8, 40)) == []
     assert schedule.due_messages(sch, datetime(2026, 10, 11, 9, 45)) == []
@@ -3691,7 +3691,7 @@ def test_schedule_validation_and_last_good():
         "ends before it starts": lambda d: d["days"]["wed"][0].update(start="21:00"),
         "bad mode": lambda d: d["days"]["wed"][0].update(mode="Hybrid"),
         "bad minutes": lambda d: d.update(lecture_reminder_minutes=0),
-        "bad hour": lambda d: d.update(morning_summary_hour=25),
+        "removed setting": lambda d: d.update(morning_summary_hour=7),
         "bad remind_modes": lambda d: d.update(remind_modes=["Zoom"]),
         "teachers": lambda d: d.update(teachers={"Big Data": 5}),
         "finals dates": lambda d: d.update(finals={"from": "2027-01-04"}),
@@ -4596,17 +4596,16 @@ def test_course_list_is_a_timetable():
     assert timetable.describe(two_a_day) == ["🕘 Sun · 9:00–10:00 AM", N * 3 + "└ 🏫 In-Person", "🕘 Sun · 12:00–1:00 PM", N * 3 + "└ 🏫 In-Person"], "two sessions on one day: an entry each"
     assert timetable.order_key([]) > timetable.order_key([("sat", lec("A", "08:00", "09:00"))]) > timetable.order_key(slots)
 
-    # the same hierarchy in the lecture alerts and the morning summary
+    # the same hierarchy in the lecture alerts
     one = lec("Arabic Communication Skills", "19:00", "20:30", mode="Online", label="Online Lecture", place="Hall 3")
     assert timetable.lecture_lines(one) == ["🕘 7:00–8:30 PM", N * 3 + "└ 💻 Online"], "online: no room, even if one is listed"
     live = lec("Big Data", "09:00", "10:00", place="Building 5, Room 2147")
     assert timetable.lecture_lines(live) == ["🕘 9:00–10:00 AM", N * 3 + "└ 🏫 In-Person", N * 5 + "└ 📍 Room 2147"]
-    sched = {"lecture_reminder_minutes": 60, "morning_summary_hour": 7, "remind_modes": ["Online"], "days": {"wed": [{**one, "section": "31"}]}}
+    sched = {"lecture_reminder_minutes": 60, "remind_modes": ["Online"], "days": {"wed": [{**one, "section": "31"}]}}
     wed = datetime(2026, 10, 21, 18, 30)                      # a Wednesday, half an hour before the hour
     by_kind = {kind: text for _, kind, text, _ in schedule.due_messages(sched, wed)}
     assert by_kind["pre"].endswith("\n🕘 7:00–8:30 PM\n" + N * 3 + "└ 💻 Online"), by_kind["pre"]
-    summary = {kind: text for _, kind, text, _ in schedule.due_messages(sched, datetime(2026, 10, 21, 8, 0))}["summary"]
-    assert ("🕘 7:00–8:30 PM · *Arabic Communication Skills* · Section 31\n" + N * 3 + "└ 💻 Online") in summary
+    assert schedule.due_messages(sched, datetime(2026, 10, 21, 8, 0)) == [], "nothing is sent in the morning: only the lecture's own reminders"
     start = {kind: text for _, kind, text, _ in schedule.due_messages(sched, datetime(2026, 10, 21, 19, 2))}["start"]
     assert start.startswith("🎥 *Lecture starting now:*") and "\n🕘 7:00–8:30 PM\n" in start
 

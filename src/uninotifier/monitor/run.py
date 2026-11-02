@@ -45,7 +45,7 @@ def run(announce: bool = False) -> None:
     except Exception as e:
         log.exception("Schedule reminders failed")
         failsafe.bug("monitor:schedule", "The check could not send the lecture reminders", e,
-                     "The morning summary and the lecture fallback (when the bot is down) may be missing.")
+                     "The lecture fallback (when the bot is down) may be missing.")
     state.save_data(saved)
     alerts.check_bot(saved)
     alerts.check_code(saved)

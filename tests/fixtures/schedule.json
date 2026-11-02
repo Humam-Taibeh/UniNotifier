@@ -3,7 +3,6 @@
   "semester": "First Semester 2026/2027",
   "degree_hours": 132,
   "lecture_reminder_minutes": 60,
-  "morning_summary_hour": null,
   "remind_modes": ["Online"],
   "portal_aliases": {"Databases": "Database Systems"},
   "course_codes": {"0101221": "Linear Algebra (1)", "0101272": "Numerical Analysis (1)", "0135220": "Database Systems", "0135321": "Big Data", "0420115": "Arabic Communication Skills", "0420123": "English Communication Skills"},

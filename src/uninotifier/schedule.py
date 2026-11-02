@@ -2,7 +2,6 @@
 Class-schedule reminders, driven by schedule.json:
   - a text-only reminder N minutes before each online lecture
   - an actionable alert when it starts
-  - a morning summary on class days (sent once, before the first lecture)
 
 Pure logic: `due_messages` returns what is due for a given moment; lectures.py
 sends it (adding the join link to the start-of-lecture alert) and makes sure
@@ -25,8 +24,6 @@ log = logging.getLogger("uninotifier")
 
 SCHEDULE_FILE = paths.SCHEDULE_FILE
 DAY_KEYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")  # datetime.weekday() order
-DAY_NAMES = {"sun": "Sunday", "mon": "Monday", "tue": "Tuesday", "wed": "Wednesday",
-             "thu": "Thursday", "fri": "Friday", "sat": "Saturday"}
 MODE_EMOJI = {"In-Person": "🏫", "Blended": "🔀", "Online": "💻", "Activity": "🧩"}
 
 # ZUJ writes a section's meetings as "[ 09:30_11:00 ] ن (و) ر (ك)": the time, then each day's
@@ -55,7 +52,7 @@ def parse_codes(text: str) -> list[dict]:
 
 LAST_GOOD_FILE = paths.DATA / "schedule.last_good.json"     # the newest copy that passed validate()
 
-KNOWN_KEYS = {"semester", "lecture_reminder_minutes", "morning_summary_hour", "remind_modes", "link_modes",
+KNOWN_KEYS = {"semester", "lecture_reminder_minutes", "remind_modes", "link_modes",
               "portal_aliases", "course_codes", "teachers", "days", "finals", "degree_hours",
               "auto_check_in"}
 _TIME = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
@@ -109,9 +106,6 @@ def validate(data) -> list[str]:
     minutes = data.get("lecture_reminder_minutes", 60)
     if isinstance(minutes, bool) or not isinstance(minutes, int) or not 1 <= minutes <= 720:
         errors.append('"lecture_reminder_minutes" must be a whole number from 1 to 720')
-    hour = data.get("morning_summary_hour")
-    if hour is not None and (isinstance(hour, bool) or not isinstance(hour, int) or not 0 <= hour <= 23):
-        errors.append('"morning_summary_hour" must be null or a whole number from 0 to 23')
     for key in ("remind_modes", "link_modes"):
         if key in data and not (isinstance(data[key], list) and all(m in MODE_EMOJI for m in data[key])):
             errors.append(f'"{key}" must be a list of: {", ".join(MODE_EMOJI)}')
@@ -218,14 +212,6 @@ def _at(day: datetime, hhmm: str) -> datetime:
     return day.replace(hour=h, minute=m, second=0, microsecond=0)
 
 
-def _line(lec: dict) -> str:
-    """One lecture in the morning summary: the hour with the course and section, then the kind and the room
-    as branches (the layout lives in timetable.py)."""
-    from uninotifier import timetable
-    hour, *rest = timetable.lecture_lines(lec)
-    return "\n".join([f'{hour} · *{escape_md(lec["course"])}* · Section {lec["section"]}', *rest])
-
-
 def _when(lec: dict) -> str:
     """When, and what kind of session, and where — the same layout as the course list."""
     from uninotifier import timetable
@@ -243,7 +229,6 @@ def due_messages(schedule: dict, now: datetime) -> list[tuple[str, str, str, str
       pre      a text-only heads-up `lecture_reminder_minutes` before the lecture
       start    the actionable alert from the lecture's start until it ends — the
                caller adds the Join / Course Page buttons and the link screenshot
-      summary  a morning overview of the day's lectures (only if enabled)
 
     Only modes in `remind_modes` (online sessions) are announced. Each key
     appears once per day and lecture, so a message already sent is never
@@ -256,11 +241,6 @@ def due_messages(schedule: dict, now: datetime) -> list[tuple[str, str, str, str
 
     today = now.strftime("%Y-%m-%d")
     out = []
-
-    hour = schedule.get("morning_summary_hour")
-    if hour is not None and _at(now, f"{hour:02d}:00") <= now < _at(now, lectures[0]["start"]):
-        text = f"🌅 *Today's Schedule — {DAY_NAMES[day_key]}*\n\n" + "\n".join(_line(l) for l in lectures)
-        out.append((f"{today}-summary", "summary", text, None))
 
     lead = timedelta(minutes=schedule.get("lecture_reminder_minutes", 60))
     for lec in lectures:

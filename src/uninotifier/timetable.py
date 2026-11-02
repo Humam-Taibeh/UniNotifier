@@ -110,7 +110,7 @@ def _entry(days: list[str], lecs: list[dict]) -> list[str]:
 
 
 def lecture_lines(lec: dict) -> list[str]:
-    """The same template for ONE lecture of today (an alert, the morning summary): the hour, then the kind of
+    """The same template for ONE lecture of today (an alert): the hour, then the kind of
     session, then its room hanging from it."""
     place = _place(lec)
     return [f"🕘 {time_range(lec)}", f"{pad(3)}{LAST} {_kind(lec)}"] + ([f"{pad(5)}{LAST} {place}"] if place else [])

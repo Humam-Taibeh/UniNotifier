@@ -19,7 +19,6 @@
   "semester": "First Semester 2026/2027",
   "degree_hours": null,
   "lecture_reminder_minutes": 60,
-  "morning_summary_hour": null,
   "remind_modes": ["Online"],
   "auto_check_in": false,
   "portal_aliases": {"Databases": "Database Systems"},

@@ -8,7 +8,7 @@ UniNotifier — the unattended, scheduled entry point. It orchestrates:
   archive.py   downloads files into the per-course folder tree
   grades.py    looks for the student's number inside downloaded documents
   notifier.py  Telegram delivery (Markdown, inline button, auto-retry)
-  schedule.py  lecture reminders and morning summary from schedule.json
+  schedule.py  lecture reminders from schedule.json
   gitsync.py   commits/pushes the state to its own private repository (optional)
   zuj_auth.py  Microsoft SSO login
 
