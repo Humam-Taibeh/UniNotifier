@@ -61,7 +61,7 @@ subscription, and nothing about you ever leaves your PC except the messages it s
 **Your assistant:** menus, upcoming tasks, the GPA planner ("what do I need?") and your semester results.
 
 <p align="center">
-  <img src="docs/images/preview-more.png" width="100%" alt="A Teams lecture with its Join button, attendance check-in, Microsoft sign-in relayed to Telegram, a personal reminder and the daily recap">
+  <img src="docs/images/preview-more.png" width="100%" alt="A Teams lecture with its Join button, attendance check-in, Microsoft sign-in relayed to Telegram and a personal reminder">
 </p>
 
 **Lectures, sign-in and reminders:** a Join button for Teams lectures, attendance, Microsoft 2FA answered from your phone, your own reminders.
