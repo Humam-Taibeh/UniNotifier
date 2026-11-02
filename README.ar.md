@@ -314,10 +314,31 @@ GitHub **خاص** ومستقل (أنشئ مستودعاً خاصاً فارغا�
 Cambridge بعد ثلاثة أيام تقريباً؛ أضف `CAMBRIDGE_EMAIL` و `CAMBRIDGE_PASSWORD` ليسجّل البوت الدخول بنفسه
 من جديد، وإلا فسيطلب منك على تيليجرام تكرار الأمر `--login`.
 
-**الصمود أمام إعادة التشغيل بسبب تحديثات Windows** — تعمل المهام ما دمت مسجّل الدخول إلى Windows.
-السكربت `scripts\windows_recovery.ps1` (يُشغَّل بصلاحيات المسؤول، والخيار `-Undo` يتراجع عنه) يمنع
-Windows من إعادة تشغيل الجهاز تلقائياً أثناء تسجيل دخولك. التفاصيل في [docs/REFERENCE.md](docs/REFERENCE.md)
-(بالإنجليزية).
+**الصمود أمام إعادة تشغيل Windows (اختياري — القرار لك، ولا يعمل شيء هنا من تلقاء نفسه)**
+
+البوت والفحص مهمتان عاديتان في *مجدول المهام* (Task Scheduler) في Windows، اسماهما `UniNotifier` و
+`UniNotifier_BotListener`، تراهما في المجدول، ينشئهما `setup_tasks.ps1` دون صلاحيات المسؤول، ويحذفهما
+`remove_tasks.ps1`. تعملان ما دمت مسجّل الدخول. وأمامك ثلاث طرق:
+
+1. **المهام المجدولة** (الموصى بها) — `setup_tasks.ps1` كما في خطوات التثبيت.
+2. **التشغيل يدوياً دون تثبيت أي شيء في Windows** — الأمر `.venv\Scripts\python monitor.py` يجري فحصاً واحداً،
+   و `.venv\Scripts\python bot.py` يشغّل البوت (ويتوقف عند إغلاقه).
+3. **إضافة حماية من إعادة التشغيل إلى المهام** — السكربت `scripts\windows_recovery.ps1`، وصفه أدناه.
+
+`windows_recovery.ps1` ملف PowerShell نصي عادي يمكنك قراءته كاملاً. لا يستدعيه أي جزء آخر من المشروع، ولا
+ينزّل شيئاً، ولا يستخدم الشبكة، ولا يخزّن كلمة سر. يعرض بالضبط أي إعدادات في Windows سيغيّرها (مع `-Preview`
+لا يغيّر شيئاً ولا يحتاج صلاحيات المسؤول)، ويطلب منك كتابة `YES`، ويحتاج موافقتك في نافذة UAC، ويسجّل كل
+تغيير في `data\windows_recovery.log`، ويتراجع عنه كله الخيار `-Undo`. وهو بشكل افتراضي يفعل شيئاً واحداً:
+يمنع Windows Update من إعادة تشغيل الجهاز بنفسه أثناء تسجيل دخولك. أما تسجيل الدخول التلقائي بعد
+إعادة التشغيل فخيار منفصل وصريح هو `-AutoSignIn`، ولحساب **بلا** كلمة سر فقط (يتحقق السكربت ويرفض غير ذلك).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows_recovery.ps1 -Preview   # انظر أولاً: لا يغيّر شيئاً
+powershell -ExecutionPolicy Bypass -File scripts\windows_recovery.ps1            # لا يعيد Windows Update تشغيل الجهاز أثناء تسجيل دخولك
+powershell -ExecutionPolicy Bypass -File scripts\windows_recovery.ps1 -Undo      # أعد كل شيء كما كان
+```
+
+التفاصيل في [docs/REFERENCE.md](docs/REFERENCE.md) (بالإنجليزية).
 
 ---
 

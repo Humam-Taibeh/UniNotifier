@@ -581,16 +581,28 @@ A check that **crashed on a bug** tells you once (`failsafe.report`, kind `monit
 that goes through afterwards says *"The scheduled check works again"* (`failsafe.resolve_matching`) — one message,
 however many different crashes were open.
 
-**Surviving Windows restarts** (`scripts/windows_recovery.ps1`, run elevated; `-Undo` reverses
-it). Windows Update's night restarts used to silence everything until you signed in, because
-the tasks only run while you are signed in. The script's lasting part is (1): Windows no
-longer restarts the PC by itself while you are signed in (`NoAutoRebootWithLoggedOnUsers`;
-updates install at 03:00 and you choose the restart). It can also (2) sign the account in
-automatically after a restart and (3) lock the screen right after — but with Windows Hello-only
-sign-in (`DevicePasswordLessBuildVersion = 2`) Windows ignores the automatic sign-in; on such
-a PC keep only part (1) with `-Undo -KeepUpdatePolicy`. After a restart you must
-sign in once; the checks catch up by themselves, and healthchecks.io tells you if it takes long.
-Every earlier value is recorded in `data/windows_recovery.before.json`.
+**Surviving Windows restarts** (`scripts/windows_recovery.ps1`; optional, never called by anything else,
+run by hand from an administrator PowerShell). The bot and the check are ordinary scheduled tasks
+(`setup_tasks.ps1`) that only run while you are signed in, so a restart used to silence everything until
+you signed in. The script edits a few documented settings, shows each one with its current and new value
+before touching it (`-Preview`: only that, no administrator needed), asks you to type `YES` (`-Yes` skips
+the question) and logs every change in `data/windows_recovery.log`. Earlier values are kept in
+`data/windows_recovery.before.json` (a value already recorded is never overwritten), and `-Undo` restores
+them (`-Undo -KeepUpdatePolicy` keeps the update policy).
+
+- **Default** — Windows no longer restarts the PC by itself while you are signed in
+  (`NoAutoRebootWithLoggedOnUsers`; updates install at 03:00 and you choose the restart).
+- **`-AutoSignIn`** — sign the account in automatically after a restart (`AutoAdminLogon`, an empty
+  `DefaultPassword`), so the tasks come back by themselves. Only for an account with **no password**: the
+  script tests that with an interactive sign-in using an empty password (`PasswordRequired = False` only
+  says a blank password is *allowed*) and refuses otherwise; no password is ever stored. It also sets
+  `DevicePasswordLessBuildVersion` to 0: with "only allow Windows Hello sign-in" (value 2) Windows ignores
+  automatic sign-in.
+- **`-LockAfterSignIn`** (with `-AutoSignIn`) — a small task (`UniNotifier_LockAfterAutoLogon`) locks the
+  screen right after such an automatic sign-in, only when the PC booted less than 4 minutes ago.
+
+Without the script, a restart only means you sign in once; the checks catch up by themselves and
+healthchecks.io tells you if it takes long.
 
 Bugs no longer fail silently (`failsafe.py`). A handler that raises, a background clock that
 keeps failing, a check that crashes on a bug, or a launcher that cannot import its code sends

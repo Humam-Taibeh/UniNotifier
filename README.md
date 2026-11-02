@@ -310,9 +310,32 @@ sign in once with `.venv\Scripts\python -m uninotifier.cambridge --login`. Cambr
 after about three days; add `CAMBRIDGE_EMAIL` and `CAMBRIDGE_PASSWORD` and the bot signs in again by
 itself, otherwise it asks you on Telegram to repeat `--login`.
 
-**Surviving Windows Update restarts** — the tasks run while you are signed in.
-`scripts\windows_recovery.ps1` (run as administrator; `-Undo` reverses it) stops Windows from
-restarting the PC by itself while you are signed in. See [docs/REFERENCE.md](docs/REFERENCE.md).
+**Surviving Windows restarts (optional — you decide, nothing here runs by itself)**
+
+The bot and the check are two ordinary Windows *scheduled tasks* — `UniNotifier` and
+`UniNotifier_BotListener`, visible in Task Scheduler, created by `setup_tasks.ps1` without
+administrator rights and removed by `remove_tasks.ps1`. They run while you are signed in. You can:
+
+1. **Use the scheduled tasks** (recommended) — `setup_tasks.ps1`, as in the install steps.
+2. **Run it by hand, with nothing installed in Windows** — `.venv\Scripts\python monitor.py` makes
+   one check, `.venv\Scripts\python bot.py` starts the bot (it stops when you close it).
+3. **Add restart protection to the tasks** — `scripts\windows_recovery.ps1`, below.
+
+`windows_recovery.ps1` is a plain-text PowerShell file you can read in full. Nothing else in the project
+calls it, it downloads nothing, uses no network and stores no password. It shows exactly which Windows
+settings it will change (with `-Preview` it changes nothing and needs no administrator), asks you to
+type `YES`, needs your UAC consent, logs every change in `data\windows_recovery.log` and is fully
+reversed by `-Undo`. By default it does one thing: Windows Update stops restarting the PC by itself
+while you are signed in. Signing in automatically after a restart is a separate, explicit
+`-AutoSignIn`, only for an account that has **no** password (the script checks, and refuses otherwise).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows_recovery.ps1 -Preview   # look first: nothing is changed
+powershell -ExecutionPolicy Bypass -File scripts\windows_recovery.ps1            # Windows Update never restarts the PC while you are signed in
+powershell -ExecutionPolicy Bypass -File scripts\windows_recovery.ps1 -Undo      # put everything back
+```
+
+Details in [docs/REFERENCE.md](docs/REFERENCE.md).
 
 ---
 

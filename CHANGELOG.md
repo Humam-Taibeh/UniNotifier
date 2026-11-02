@@ -21,6 +21,16 @@ All notable changes to this project are documented here. The format follows
 - A pull request template with the checks the repository relies on.
 - An "unofficial, use at your own risk" notice in both READMEs.
 
+### Changed
+- `scripts/windows_recovery.ps1` is safer to hand to other people: by default it only stops Windows Update
+  from restarting the PC while you are signed in; automatic sign-in (`-AutoSignIn`) and the lock task
+  (`-LockAfterSignIn`) are opt-in; `-Preview` shows every setting it would change without changing or
+  needing administrator rights; it asks you to type YES (`-Yes` skips it); it tests that the account really
+  has a blank password (`PasswordRequired = False` does not mean that); it now sets and, with `-Undo`,
+  restores the "only Windows Hello" setting that made Windows ignore automatic sign-in. The READMEs explain
+  the three ways to run the project (scheduled tasks, by hand, tasks plus this script) and why none of it
+  is dangerous.
+
 ### Removed
 - The date line above the first message of each day and the 11:59 PM "Daily Recap" (and the
   next-morning catch-up): they filled the chat on quiet days. Only real news, lecture alerts and
