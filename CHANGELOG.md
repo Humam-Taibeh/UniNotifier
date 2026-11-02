@@ -22,6 +22,9 @@ All notable changes to this project are documented here. The format follows
 - An "unofficial, use at your own risk" notice in both READMEs.
 
 ### Removed
+- The date line above the first message of each day and the 11:59 PM "Daily Recap" (and the
+  next-morning catch-up): they filled the chat on quiet days. Only real news, lecture alerts and
+  reminders are sent now.
 - The optional morning overview (`morning_summary_hour` in `schedule.json`): it was off by default,
   listed online lectures only and duplicated the reminder an hour before each one. A `schedule.json`
   that still has the line is told so on Telegram — delete the line.

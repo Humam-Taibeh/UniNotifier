@@ -117,10 +117,6 @@ PAGES: dict[str, Page] = {
         "page and a button — and ✅ follows once you did.",
         "• A lecture whose check-in never opened ends with a quiet ℹ️ note.",
         "",
-        "*📅 The day in the chat*",
-        "• A date line appears silently above the first message of each day.",
-        "• At 11:59 PM a day with nothing new ends with a ✨ Daily Recap.",
-        "",
         "*Everything that can send you a message*",
         "A new course or item · edited text · a re-uploaded file · a forum post · a Teams lecture · an "
         "attendance check-in · your mark found inside a results file · a deadline 24 h or 1 h away · "
@@ -227,7 +223,6 @@ PAGES: dict[str, Page] = {
         "*🕶️ Stealth*",
         "• A headless browser: no windows, no console, your PC is never interrupted.",
         "• A virtual security key answers passkey prompts, so Windows Hello never pops up.",
-        "• Date lines and recaps arrive silently; only real news makes the phone buzz.",
     ]),
 }
 

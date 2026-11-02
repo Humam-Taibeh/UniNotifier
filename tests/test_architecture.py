@@ -2865,136 +2865,32 @@ def test_portal():
     assert not bot._portal_lock.locked()
 
 
-def test_day_separator_and_daily_recap():
-    """The first automatic message of a day gets a date line above it; a checked day
-    with nothing new ends with one recap — at 11:59 PM, or from the first check after
-    midnight when the PC slept through it, unless that check finds something."""
-    import threading
-    from datetime import timedelta
-
-    bot = _package("uninotifier.bot")
+def test_claims_are_exclusive_and_old_ones_are_forgotten():
+    """A claim is True once per key (the bot and the monitor never both send), can be given
+    back when nothing was delivered, and markers older than a week are pruned."""
     from uninotifier import daily
-    monitor = _package("uninotifier.monitor")
-
-    assert daily.day_name(date(2026, 10, 13)) == "Tuesday, 13 Oct 2026"
-    assert daily.separator_text(date(2026, 10, 13)) == "━━━━━━━━ 📅 Tuesday, 13 Oct 2026 ━━━━━━━━"
-    assert daily.recap_text(date(2026, 10, 13), date(2026, 10, 13)) == (
-        "✨ *Daily Recap:* No new files, assignments, or announcements posted today across your courses.")
-    late = daily.recap_text(date(2026, 10, 12), date(2026, 10, 13))
-    assert late.startswith("✨ *Daily Recap (Monday, 12 Oct):*") and "posted yesterday" in late, late
-
     with tempfile.TemporaryDirectory() as tmp:
-        orig = (daily.CLAIM_DIR, notifier.send_message, telegram.post, notifier.before_send,
-                daily.ensure_separator, daily.catch_up, daily.send_recap)
-        keep = {k: getattr(monitor, k) for k in ("DATA_FILE", "USERNAME", "PASSWORD", "BOT_TOKEN", "CHAT_ID",
-                                                 "run_scan", "notify_new_item", "send_schedule_messages",
-                                                 "mfa_allowed", "notify_new_course")}
-        daily.CLAIM_DIR = Path(tmp) / "claims"
+        keep = daily.CLAIM_DIR
+        daily.CLAIM_DIR = Path(tmp) / "daily_sent"
         try:
-            # through the real notifier: the separator goes first, once a day, silently
-            posted = []
-
-            class Ok:
-                ok, status_code = True, 200
-            telegram.post = lambda url, json=None, data=None, files=None, timeout=None: posted.append(data) or Ok()
-            notifier.before_send = lambda: daily.ensure_separator("t", "c")
-            assert notifier.send_message("t", "c", "first") and notifier.send_message("t", "c", "second")
-            assert [d["text"] for d in posted] == [daily.separator_text(date.today()), "first", "second"], posted
-            assert posted[0].get("disable_notification") and "disable_notification" not in posted[1]
-            notifier.before_send = None
-
-            sent, ok = [], {"v": False}
-            notifier.send_message = lambda token, chat, text, url=None, rows=None, silent=False: \
-                sent.append((text, silent)) or ok["v"]
-            tue = datetime(2030, 10, 15, 8, 0)                  # never "today": the check above claimed today
-            daily.ensure_separator("t", "c", tue)                # undelivered: the next message tries again
-            ok["v"] = True
-            daily.ensure_separator("t", "c", tue)
-            daily.ensure_separator("t", "c", tue.replace(hour=22))
-            daily.ensure_separator("t", "c", tue + timedelta(days=1))
-            assert sent == [(daily.separator_text(date(2030, 10, 15)), True)] * 2 + [
-                (daily.separator_text(date(2030, 10, 16)), True)], sent
-
-            # the day record: checked / found something new
-            sent.clear()
-            days = {}
-            daily.note_check(days, False, datetime(2026, 10, 12, 9, 0))
-            daily.note_check(days, False, datetime(2026, 10, 13, 9, 0))
-            daily.note_check(days, True, datetime(2026, 10, 13, 15, 0))
-            daily.note_check(days, False, datetime(2026, 10, 13, 16, 0))   # a later quiet check undoes nothing
-            assert days == {"checked": ["2026-10-12", "2026-10-13"], "active": ["2026-10-13"]}, days
-
-            # 11:59 PM: once, only for a quiet day
-            assert not daily.send_recap("t", "c", days, datetime(2026, 10, 12, 23, 58))
-            assert daily.send_recap("t", "c", days, datetime(2026, 10, 12, 23, 59))
-            assert not daily.send_recap("t", "c", days, datetime(2026, 10, 12, 23, 59, 40)), "bot + monitor: once"
-            assert not daily.catch_up("t", "c", days, False, datetime(2026, 10, 13, 7, 0)), "already sent"
-            assert not daily.send_recap("t", "c", days, datetime(2026, 10, 13, 23, 59)), "a busy day"
-            assert sent == [(daily.recap_text(date(2026, 10, 12), date(2026, 10, 12)), False)], sent
-
-            # asleep at 11:59 PM: the first check of the morning sends yesterday's
-            daily.note_check(days, False, datetime(2026, 10, 14, 10, 0))
-            assert daily.catch_up("t", "c", days, False, datetime(2026, 10, 15, 7, 5))
-            assert not daily.catch_up("t", "c", days, False, datetime(2026, 10, 15, 7, 20))
-            assert sent[-1] == (daily.recap_text(date(2026, 10, 14), date(2026, 10, 15)), False), sent
-            # ... unless that check found new items (posted the evening before?)
-            daily.note_check(days, False, datetime(2026, 10, 15, 9, 0))
-            assert not daily.catch_up("t", "c", days, True, datetime(2026, 10, 16, 7, 0))
-            assert not daily.catch_up("t", "c", days, False, datetime(2026, 10, 16, 7, 15))
-            # a day with no successful check: nothing can be said about it
-            assert not daily.catch_up("t", "c", days, False, datetime(2026, 10, 18, 7, 0))
-            assert len(sent) == 2, sent
-            # an undelivered recap is retried
-            daily.note_check(days, False, datetime(2026, 10, 18, 9, 0))
-            ok["v"] = False
-            assert not daily.send_recap("t", "c", days, datetime(2026, 10, 18, 23, 59))
-            ok["v"] = True
-            assert daily.send_recap("t", "c", days, datetime(2026, 10, 18, 23, 59, 20))
-            # only the last week is kept
-            for n in range(1, 11):
-                daily.note_check(days, True, datetime(2026, 11, n, 9, 0))
-            assert len(days["checked"]) == daily.KEEP_DAYS and days["active"][0] == "2026-11-04", days
-
-            # the bot: separators for its clock threads only, never for replies to commands
-            threads = []
-            daily.ensure_separator = lambda token, chat, now=None: threads.append(threading.current_thread().name)
-            bot.before_send()
-            t = threading.Thread(target=bot.before_send, name="lectures")
-            t.start()
-            t.join()
-            assert threads == ["lectures"], threads
-
-            # monitor.run: what counts as "something new" for the day
-            course = "20261-Big Data-AllSec-3-"
-            content = {"1-1": {"name": "Lecture 1", "type": "resource", "course": course, "cmid": "1",
-                               "url": "https://x/mod/resource/view.php?id=1"}}
-            monitor.DATA_FILE = Path(tmp) / "saved_items.json"
-            monitor.USERNAME = monitor.PASSWORD = monitor.BOT_TOKEN = monitor.CHAT_ID = "x"
-            monitor.send_schedule_messages = lambda saved: None
-            monitor.mfa_allowed = lambda saved: False
-            monitor.notify_new_course = lambda course: True
-            monitor.notify_new_item = lambda it, deadline, art, submitted=None: True
-            monitor.run_scan = lambda saved, notify_new, mfa_handler=None: {
-                "courses": {"1": {"name": course, "url": "https://x/c"}}, "content": dict(content),
-                "deadlines": {}, "artifacts": {}, "updates": {}, "edits": {}, "posts": {},
-                "forum_posts": {}, "submissions": {}, "link_changes": [], "seconds": 1.0, "browser_used": False}
-            found = []
-            daily.catch_up = lambda token, chat, days, found_new, now=None: found.append(found_new) or False
-            daily.send_recap = lambda token, chat, days, now=None: False
-            monitor.run()                                        # the silent baseline is not news
-            content["1-2"] = {**content["1-1"], "name": "Announcements", "type": "forum", "cmid": "2"}
-            monitor.run()                                        # nor is an empty forum
-            content["1-3"] = {**content["1-1"], "name": "Lecture 2", "cmid": "3"}
-            monitor.run()
-            assert found == [False, False, True], found
-            today = str(date.today())
-            state = json.loads(monitor.DATA_FILE.read_text(encoding="utf-8"))
-            assert state["days"] == {"checked": [today], "active": [today]}, state["days"]
+            assert daily.claim("k") and not daily.claim("k") and daily.claimed("k")
+            daily.release("k")
+            assert not daily.claimed("k") and daily.claim("k"), "given back: the next one may try again"
+            old, fresh = daily._marker("old"), daily._marker("fresh")
+            old.write_text("")
+            fresh.write_text("")
+            week_and_a_bit = time.time() - (daily.KEEP_DAYS * 86400 + 60)
+            os.utime(old, (week_and_a_bit, week_and_a_bit))
+            daily.prune()
+            assert not old.exists() and fresh.exists() and daily.claimed("k")
+            daily.prune()                                   # nothing to do: still fine
         finally:
-            (daily.CLAIM_DIR, notifier.send_message, telegram.post, notifier.before_send,
-             daily.ensure_separator, daily.catch_up, daily.send_recap) = orig
-            for k, v in keep.items():
-                setattr(monitor, k, v)
+            daily.CLAIM_DIR = keep
+        daily.CLAIM_DIR = Path(tmp) / "never_made"
+        try:
+            daily.prune()                                   # no folder yet: no error
+        finally:
+            daily.CLAIM_DIR = keep
 
 
 def _legacy_markdown_ok(text: str) -> bool:
@@ -3303,8 +3199,7 @@ def test_a_crashed_check_is_told_to_be_over():
              (state_mod, "release_lock", lambda: None), (state_mod, "write_last_run", lambda *a: None),
              (mrun.healthcheck, "start_bg", lambda: None), (mrun.healthcheck, "report_bg", lambda *a: None),
              (mrun.healthcheck, "wait", lambda: None), (mrun.gitsync, "sync_state", lambda: None),
-             (mrun, "run", fake_run), (mrun.daily, "ensure_separator", lambda *a: None),
-             (mrun.notifier, "before_send", mrun.notifier.before_send)]       # main() sets it: put it back
+             (mrun, "run", fake_run)]
     kept = [(obj, name, getattr(obj, name)) for obj, name, _ in swaps]
     for obj, name, new in swaps:
         setattr(obj, name, new)
@@ -5051,12 +4946,7 @@ def test_maintenance_and_finals_pause():
                     "courses": dict(course), "content": dict(item), "deadlines": {}, "artifacts": {}, "updates": {},
                     "edits": {}, "posts": {}, "forum_posts": {}, "submissions": {}, "link_changes": [],
                     "seconds": 1.0, "browser_used": False}
-                keep_recap = (monitor.daily.catch_up, monitor.daily.send_recap)
-                monitor.daily.catch_up = monitor.daily.send_recap = lambda *a, **k: False
-                try:
-                    assert exit_code() == 0 and any("Back to normal" in t for t in texts), texts
-                finally:
-                    monitor.daily.catch_up, monitor.daily.send_recap = keep_recap
+                assert exit_code() == 0 and any("Back to normal" in t for t in texts), texts
             finally:
                 for k, v in keep.items():
                     setattr(monitor, k, v)
@@ -5766,8 +5656,6 @@ def test_pin_rule_and_forum_announcements():
             "courses": {"8806": {"name": course, "url": "https://x/c"}}, "content": dict(content), "deadlines": {},
             "artifacts": {}, "updates": {}, "edits": {}, "posts": {}, "forum_posts": {}, "submissions": {},
             "link_changes": [], "seconds": 1.0, "browser_used": False}
-        keep_daily = (monitor.daily.catch_up, monitor.daily.send_recap)
-        monitor.daily.catch_up = monitor.daily.send_recap = lambda *a, **k: False
         try:
             monitor.save_data({**monitor.load_saved_data(), "courses": {"8806": {"name": course, "url": "https://x/c"}},
                                "content": {"8806-1": item("page", 1)}})
@@ -5777,7 +5665,6 @@ def test_pin_rule_and_forum_announcements():
         finally:
             for k, v in keep.items():
                 setattr(monitor, k, v)
-            monitor.daily.catch_up, monitor.daily.send_recap = keep_daily
 
 
 def test_retake_replacement_in_plan():
@@ -6179,8 +6066,6 @@ def test_layout_watchdog():
         keep = {k: getattr(monitor, k) for k in ("DATA_FILE", "USERNAME", "PASSWORD", "BOT_TOKEN", "CHAT_ID",
                                                  "run_scan", "notify_new_item", "send_schedule_messages",
                                                  "mfa_allowed", "notify_new_course", "send_telegram")}
-        keep_daily = (monitor.daily.catch_up, monitor.daily.send_recap)
-        monitor.daily.catch_up = monitor.daily.send_recap = lambda *a, **k: False
         monitor.DATA_FILE = Path(tmp) / "saved_items.json"
         monitor.USERNAME = monitor.PASSWORD = monitor.BOT_TOKEN = monitor.CHAT_ID = "x"
         monitor.send_schedule_messages = lambda saved: None
@@ -6259,7 +6144,6 @@ def test_layout_watchdog():
         finally:
             for k, v in keep.items():
                 setattr(monitor, k, v)
-            monitor.daily.catch_up, monitor.daily.send_recap = keep_daily
             monitor.time.time = keep_time
 
 
@@ -8580,7 +8464,7 @@ if __name__ == "__main__":
                test_archive_layout, test_resource_page_file_link, test_migration_helpers,
                test_downloader_dedup_and_routing, test_tidy_archive, test_alerts_are_recorded_as_they_are_sent, test_archive_boundary,
                test_auto_done_only_for_saved_files_and_links, test_announce_first_run_and_duplicate_files,
-               test_day_separator_and_daily_recap, test_help_hub_dashboard_and_campus,
+               test_claims_are_exclusive_and_old_ones_are_forgotten, test_help_hub_dashboard_and_campus,
                test_update_routing_from_telegram, test_access_lock, test_modules_import_quietly_and_names_resolve,
                test_failsafe_reports_once_and_resolves, test_a_crashed_check_is_told_to_be_over, test_bot_contains_and_reports_failures,
                test_bot_heartbeat_and_monitor_watch, test_bot_self_heal, test_a_broken_file_is_told_before_it_stops_the_bot, test_schedule_validation_and_last_good,

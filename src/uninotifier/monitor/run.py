@@ -211,19 +211,8 @@ def run(announce: bool = False) -> None:
     if not is_first_run:
         alerts.track_undelivered(saved, failed)
 
-    # The day's record for the 11:59 PM recap (daily.py): anything the portal
-    # published since the last check counts, delivered or not.
-    found_new = not is_first_run and bool(
-        new_courses or any(not media.silent_container(it) for it in new_content.values())
-        or any(result["posts"].values()) or updates or result["edits"])
-    daily.note_check(saved["days"], found_new)
     state.save_data(saved)
-    try:
-        daily.catch_up(config.BOT_TOKEN, config.CHAT_ID, saved["days"], found_new)
-        daily.send_recap(config.BOT_TOKEN, config.CHAT_ID, saved["days"])
-    except Exception as e:
-        log.exception("Daily recap failed")
-        failsafe.bug("monitor:recap", "The 11:59 PM recap failed", e)
+    daily.prune()                      # claim markers older than a week
 
     try:
         timed.send_deadline_reminders(deadlines, on_sent=lambda: state.save_data(saved))
@@ -265,7 +254,6 @@ def main() -> None:
         log.info("Another run is in progress — skipping this one")
         sys.exit(config.EXIT_BUSY)
     healthcheck.start_bg()
-    notifier.before_send = lambda: daily.ensure_separator(config.BOT_TOKEN, config.CHAT_ID)   # every message here is automatic
     try:
         run(announce="--announce" in sys.argv[1:])
     except SystemExit as e:

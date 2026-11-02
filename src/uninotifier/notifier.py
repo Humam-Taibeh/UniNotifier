@@ -39,12 +39,6 @@ MESSAGE_LIMIT = 4000      # Telegram's hard limit is 4096
 ALBUM_LIMIT = 10
 PORTAL_BUTTON_TEXT = "🌐 Open in ZUJ Portal ↗️"
 
-# Runs before every message sent through _request. The entry points of the
-# automatic senders set it (monitor.py, the bot's clock threads) to put the
-# day separator above the first message of a day — see daily.py.
-before_send = None
-
-
 # ------------------------------------------------------------------ redaction
 #
 # What must never reach a log line, a traceback or an alert: the secrets that have a shape
@@ -240,11 +234,6 @@ def _request(token: str, method: str, data: dict, file_field: str | None = None,
              outcome: dict | None = None) -> bool:
     """`outcome`, when given, is filled in: {"body": Telegram's JSON reply} on success, or
     {"status": 4xx, "description": ...} when Telegram refused the request for good."""
-    if before_send:
-        try:
-            before_send()
-        except Exception:
-            log.exception("before_send hook failed")
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             files = None

@@ -36,7 +36,7 @@ What you get, once per session:
 
 A saved session that has expired starts a check, which signs in again. The bot runs this
 on its own thread; a monitor run is the fallback while the bot is down; claim files
-(daily.py) make each message go out once and keep two processes from submitting at the
+(daily.py's claims) make each message go out once and keep two processes from submitting at the
 same moment. The check-in page of every attempt is kept, its session key removed, in
 data/checkin_pages/ for a later look. Never raises from tick().
 """

@@ -1,6 +1,6 @@
 """
 The bot itself: routing every command, button and typed answer to its flow,
-the 20-second clock (lectures, reminders, the 11:59 PM recap), the Finals
+the 20-second clock (lectures, reminders, the noon digest), the Finals
 Watch thread, and the long-polling loop (main).
 """
 
@@ -15,7 +15,6 @@ from uninotifier import access
 from uninotifier import checkin
 from uninotifier import classtable
 from uninotifier import paths
-from uninotifier import daily
 from uninotifier import envcheck
 from uninotifier import failsafe
 from uninotifier import fileio
@@ -329,29 +328,16 @@ def dispatch(update: dict) -> None:
 LECTURE_TICK = 20   # seconds between looks at the clock
 
 
-# Threads whose messages are notifications, not replies: the first one of a
-# day gets the date separator above it (daily.py).
-AUTOMATIC_THREADS = ("lectures", "finals")
-
-
-def before_send() -> None:
-    if threading.current_thread().name in AUTOMATIC_THREADS:
-        daily.ensure_separator(chat.BOT_TOKEN, chat.CHAT_ID)
-
-
 def lecture_loop() -> None:
     """Lecture messages on the minute: an hour before (text) and at the start
     (Join Meeting, Course Page, link screenshot). The scheduled monitor sends
     the same messages as a fallback when this bot is down; lectures.py makes
     sure each goes out once. Personal reminders the same way (reminders.py).
-    At noon, the open-tasks digest (tasks.py). At 11:59 PM, the quiet-day
-    recap — left to the monitor while a check is running (it may still find
-    something)."""
+    At noon, the open-tasks digest (tasks.py)."""
     while True:
         for name, job in (("lectures", lambda: lectures.send_due(chat.BOT_TOKEN, chat.CHAT_ID)),
                           ("reminders", lambda: reminders.send_due(chat.BOT_TOKEN, chat.CHAT_ID)),
-                          ("tasks", lambda: tasks.send_digest(chat.BOT_TOKEN, chat.CHAT_ID, chat.load_state())),
-                          ("recap", send_recap_if_due)):
+                          ("tasks", lambda: tasks.send_digest(chat.BOT_TOKEN, chat.CHAT_ID, chat.load_state()))):
             try:
                 job()
             except Exception as e:
@@ -360,11 +346,6 @@ def lecture_loop() -> None:
                                 detail="Alerts of this kind may be late or missing until it is fixed.", exc=e, wait=False)
         heartbeat.beat("ticker")
         time.sleep(LECTURE_TICK)
-
-
-def send_recap_if_due() -> None:
-    if daily.recap_time() and not checks.MONITOR_LOCK.exists() and not checks._check_lock.locked():
-        daily.send_recap(chat.BOT_TOKEN, chat.CHAT_ID, chat.load_state().get("days", {}))
 
 
 PULSE_TICK = 60          # seconds between the pulse thread's looks
@@ -411,7 +392,6 @@ def main() -> None:
     schedule.load_schedule()          # a broken schedule.json is reported now, not at the first lecture
     threading.Thread(target=register_commands, name="register", daemon=True).start()
     chat.start_answer_workers()
-    notifier.before_send = before_send
     heartbeat.beat("poll")
     threading.Thread(target=lecture_loop, name="lectures", daemon=True).start()
     threading.Thread(target=finals_flow.finals_loop, name="finals", daemon=True).start()

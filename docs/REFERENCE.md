@@ -78,8 +78,7 @@ messages are sent **only** when:
    the screenshot — and when the browser was already inside Moodle (past the sign-in page) the
    alert says so, that the password is fine and that the next check retries, instead of
    printing the raw timeout. If Moodle's own session lapses while Microsoft's is still valid,
-   the sign-in simply lands back on the dashboard and counts as signed in. The registration portal (`/grades`, Finals Watch) does the same;
-5. a day ends with nothing new (the 11:59 PM recap, below).
+   the sign-in simply lands back on the dashboard and counts as signed in. The registration portal (`/grades`, Finals Watch) does the same.
 
 **Network hiccups.** The university server drops connections now and then (WinError
 10054, TLS handshake timeouts). Each request is retried twice with backoff (2 s, 4 s,
@@ -496,22 +495,6 @@ going to sleep, a second run taking over a stale lock) therefore never makes the
 cycle announce the same things again. Saving state also refreshes the run lock, so a
 long run that keeps delivering is never mistaken for a dead one.
 
-### Day separators & daily recap
-
-The first automatic message of each calendar day comes with a date line above it —
-`━━━━━━━━ 📅 Tuesday, 13 Oct 2026 ━━━━━━━━` — sent silently, so the phone buzzes
-only for the message itself. Replies to commands never get one.
-
-At **11:59 PM**, if the day was checked and nothing new turned up on any course (no
-item, file, forum post, file update or edit), one line closes it:
-`✨ Daily Recap: No new files, assignments, or announcements posted today across your
-courses.` Busy days get no recap. If the PC was off or asleep at 11:59 PM, the first
-check after midnight sends the previous day's recap instead — unless that check finds
-new items itself (they may have been posted the evening before). A day without a single
-successful check gets no recap. The bot and the monitor share claim files in
-`daily_sent/`, so neither message is ever sent twice; the day record lives in
-`saved_items.json` under `days` (`daily.py`).
-
 ### Heartbeat (healthchecks.io)
 
 `monitor.py` pings your [healthchecks.io](https://healthchecks.io) check, so you
@@ -689,7 +672,7 @@ UniNotifier/
 │   │                         guest_flow · finals_flow · checks · app
 │   ├── moodle.py, httpctx.py, richtext.py, media.py, activities.py, probe.py   reading Moodle, wording messages
 │   ├── archive.py, grades.py                                           the archive and marks in files
-│   ├── lectures.py, lecturelinks.py, schedule.py, reminders.py, daily.py   time-based messages
+│   ├── lectures.py, lecturelinks.py, schedule.py, reminders.py, daily.py   time-based messages (daily.py: the once-only claims)
 │   ├── tasks.py              every open task: the Upcoming Tasks list and the noon digest
 │   ├── checkin.py            automatic attendance check-in for the online lectures
 │   ├── classtable.py         your weekly timetable, read from the portal (which days are online)

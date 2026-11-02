@@ -22,7 +22,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from uninotifier import archive
-from uninotifier import daily
 from uninotifier import finals
 from uninotifier import gradebook
 from uninotifier import grades
@@ -297,13 +296,6 @@ def main() -> None:
     send("personal reminder", msg(text, url=None, rows=rows))
     send("📌 under an announcement", msg("📢 *New Announcement* — every announcement and course page "
                                         "carries this button.", url=None, rows=[reminders.pin_row("sample")]))
-
-    # ------------------------------------------------------------ the day
-    chapter("9 · Day Separator & Daily Recap")
-    today = datetime.now().date()
-    send("day separator", notifier.send_message(TOKEN, CHAT, daily.separator_text(today), silent=True))
-    send("quiet day (11:59 PM)", msg(daily.recap_text(today, today), url=None))
-    send("quiet day (caught up next morning)", msg(daily.recap_text(today - timedelta(days=1), today), url=None))
 
     ok = sum(ok for _, ok in results)
     send("outro", notifier.send_message(
