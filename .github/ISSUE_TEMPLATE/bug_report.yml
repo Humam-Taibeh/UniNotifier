@@ -58,7 +58,7 @@ body:
     attributes:
       label: UniNotifier version
       description: The release you installed, or the output of `git log -1 --format=%h`.
-      placeholder: v1.0.0
+      placeholder: v1.1.0
 
   - type: checkboxes
     id: privacy

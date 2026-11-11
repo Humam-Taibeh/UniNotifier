@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-11
+
 ### Changed
 - The license is now PolyForm Noncommercial 1.0.0: free for any noncommercial use, with the copyright
   notice kept; selling it needs the author's permission. Version 1.0.0 stays under MIT.
@@ -125,7 +127,9 @@ All notable changes to this project are documented here. The format follows
   bundle trusted a root certificate whose intermediate certificates were revoked after their private
   keys leaked, which would let someone on the network path impersonate a site to `requests`.
 
-## [1.0.0] - 2026-10-28
+## 1.0.0 - 2026-10-28
+
+Published under the MIT license; its release was withdrawn when the license changed in 1.1.0.
 
 First public release.
 
@@ -142,5 +146,5 @@ First public release.
   checks a setup.
 - English and Arabic READMEs, with previews drawn from invented sample data.
 
-[Unreleased]: https://github.com/Humam-Taibeh/UniNotifier/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/Humam-Taibeh/UniNotifier/releases/tag/v1.0.0
+[Unreleased]: https://github.com/Humam-Taibeh/UniNotifier/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Humam-Taibeh/UniNotifier/releases/tag/v1.1.0
