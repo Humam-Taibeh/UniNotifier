@@ -37,8 +37,14 @@ def _norm(text: str) -> str:
 
 
 def _walk(el, out: list[str], ordered: list[int]) -> None:
-    tag = el.tag.lower() if isinstance(el.tag, str) else ""
     tail = escape_md(el.tail) if el.tail else ""
+    if not isinstance(el.tag, str):
+        # a comment or a processing instruction (text pasted from Word is full of them): not an
+        # element — it has no attributes to read and its own content is not text. Only what
+        # follows it is.
+        out.append(tail)
+        return
+    tag = el.tag.lower()
 
     if tag in SKIP or el.get("class", "").find("accesshide") >= 0:
         out.append(tail)

@@ -40,6 +40,19 @@ def test_richtext_and_course_page():
     assert richtext.to_text("<p>a_b *c*</p>") == "a\\_b \\*c\\*"
 
 
+def test_html_comments_are_not_text():
+    """Text pasted from Word carries HTML comments ("<!--[if gte mso 9]>…<![endif]-->"). A comment is
+    not an element: reading its class used to raise, which failed the whole course's read. It is
+    skipped — only the text that follows it is kept."""
+    from uninotifier import richtext
+    pasted = ("<p>Hello</p><!--[if gte mso 9]><xml><o:Settings>JUNK</o:Settings></xml><![endif]-->"
+              "<p>World <!-- a note -->again</p><?php echo 1 ?><p>End</p>")
+    text = richtext.to_text(pasted)
+    assert text == "Hello\nWorld again\nEnd", text
+    assert richtext.plain_text(pasted) == "HelloWorld againEnd"
+    assert richtext.digest(pasted) == richtext.digest(pasted.replace("JUNK", "OTHER")), "a comment is not content"
+
+
 def test_display_names_and_completion_policy():
     item = {"name": ".", "type": "page", "section": "مقدمة المادة", "cmid": "1"}
     assert moodle._display_name(item, "") == "مقدمة المادة"
