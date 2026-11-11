@@ -397,8 +397,10 @@ This term's courses are counted as passed: the plan is for the term after them. 
 comes out as a fail, the portal's plan shows the course as failed, and the next transcript read
 puts it back here as a retake — with whatever it was the prerequisite of closed again.
 
-The screen says the hours left, how many are open to you and how many are not yet, then asks how
-many hours you want:
+The screen says the hours left, how many of them are open to you and how many are not yet (hours
+and courses — the two add up to what is left), when the plan was read (🔄 Update My Plan reads it
+again), then offers two ways to the term's courses: **✨ a suggestion** for the hours you choose,
+and **✋ Choose Courses Myself**.
 
 | Term | Choices |
 |------|---------|
@@ -410,7 +412,7 @@ The term is the one after your transcript's newest; 🔁 plans the summer term (
 instead. It is your **graduation term** when everything left fits in the term's highest load and
 none of it is held back.
 
-The proposal fills the hours in this order, never with a course that is not open to you:
+The suggestion fills the hours in this order, never with a course that is not open to you:
 
 1. a remedial course you still owe (on top of the plan's hours);
 2. a failed course (retake);
@@ -418,14 +420,21 @@ The proposal fills the hours in this order, never with a course that is not open
    lower year;
 4. electives, only up to the hours their category still needs.
 
-A course whose prerequisite you are taking now is offered as `if you pass … this term`. **⛔ Not
-Yet — Why** lists every other course with its reason:
+How hard a course is cannot be known for every major and plan, so the suggestion does not pretend
+to balance it: **✋ Choose Courses Myself** (also ✋ Change These Courses under a suggestion, which
+it starts from) lists every open course as a button — a tap adds it or takes it out — and says the
+total as you go, with what the rules say: fewer than 12 hours, more than 18 (⭐) or than the term
+takes at all, an elective beyond what its group still needs (`adds nothing to your plan`).
 
-- `after <course>` — a prerequisite not passed yet;
-- `final year only (90+ hrs passed), with the department head's approval` — field training, the
-  graduation project and its methodology course (a plan with one project or two reads the same):
-  90 plan hours passed and no more than a year's hours (45) left;
-- `graduation term only` — military science.
+A course whose prerequisite you are taking now is offered as `if you pass … this term`. **✅ What I
+Can Take** lists the open courses under what they are (retake first, compulsory, each group of
+electives with the hours to choose). **⛔ Not Yet — Why** lists every other course under its reason:
+
+- 🔗 *Another course comes first* — each course with the one to pass first named under it;
+- 🎓 *After 90 hrs passed* — field training, the graduation project and its methodology course (a
+  plan with one project or two reads the same), each with the department head's approval; the
+  screen says how many hours you will have passed;
+- 🏁 *Graduation term only* — military science.
 
 A prerequisite the plan does not list is said (`⚠️ needs 0900999 — not on your plan, check it`),
 never guessed. The rules are constants at the top of `registration.py`.
@@ -433,8 +442,13 @@ never guessed. The rules are constants at the top of `registration.py`.
 **With the registration period** (the portal's registration page only exists then, so this part is
 built against the real page when it opens — the screen says so until then):
 
+- it opens the portal's own page (التسجيل → التسجيل الإلكتروني); when the portal does not let you
+  register — an unpaid balance to settle with the finance department, a closed period — it says so
+  with a picture of what the portal shows, and registers nothing;
 - the days you want to attend (Sun/Tue, Mon/Wed, or every day) and the courses you want: must-have
   courses, and alternates to use when a must-have has no section that fits;
+- a course with no section on your days is said, with the ways out: change your days to the ones it
+  is taught on, attend all four days, or leave it for an alternate;
 - the sections that make that timetable with no clash, closed sections marked;
 - after you approve the timetable, registering those sections for you, and watching a closed
   section every few minutes to take a seat the moment one frees — with a message each time, and a
