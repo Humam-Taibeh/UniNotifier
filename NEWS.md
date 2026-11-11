@@ -11,4 +11,6 @@ does not have yet when it tells its owner that a new version is ready (newest fi
 - Your marks are found in PDF files too, and a course's coursework total (42/60) shows the best mark it
   can still reach.
 - Messages are shorter: a picture of what the instructor wrote, and what changed when it is edited.
+- An assignment with an old due date that Moodle still accepts now stays in your task list until you
+  hand it in.
 - The project's license is now noncommercial: free to use and share, not to sell.

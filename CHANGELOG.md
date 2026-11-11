@@ -81,6 +81,10 @@ All notable changes to this project are documented here. The format follows
   that still has the line is told so on Telegram — delete the line.
 
 ### Fixed
+- An assignment whose due date had already passed when it appeared (a date left over from last year's
+  copy of the course) is listed in Upcoming Tasks and the noon digest for as long as Moodle still accepts
+  a submission, and one handed in after its date is no longer shown as pending.
+- The reminders list keeps an Arabic note, the course and the time on lines of their own.
 - A picture of a quiz or assignment page no longer comes out blank white: on those pages the
   wrapper around the content is the floating one, and it was hidden with the floating widgets.
 - A course the university renames in Moodle mid-term keeps its timetable, instructor and folder:
