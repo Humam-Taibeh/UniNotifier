@@ -13,7 +13,7 @@ portal publishes them (often Arabic); each is wrapped in a Unicode isolate and e
 with a left-to-right mark, so an Arabic name cannot reorder the mark and hours around it.
 """
 
-from uninotifier import gpa, gradebook
+from uninotifier import degreeplan, gpa, gradebook
 from uninotifier.notifier import escape_md
 
 LRM, FSI, PDI = "\u200e", "\u2068", "\u2069"
@@ -50,9 +50,14 @@ def standing(semesters: list[dict]) -> dict:
 
 
 def summary_lines(semesters: list[dict], figures: dict, status: str | None = None,
-                  major: str | None = None, remaining: float | None = None) -> list[str]:
+                  major: str | None = None, remaining: float | None = None,
+                  plan: dict | None = None, retakes: int = 0) -> list[str]:
     """The executive summary. `figures` is the transcript Result's (cgpa, record_cgpa, passed_hours,
-    record_hours); `status` the English academic status; `major` / `remaining` only for a guest."""
+    record_hours); `status` the English academic status; `major` only for a guest. With `plan` (the
+    student's study plan as the portal lists it, degreeplan.py) the hours are the plan's own: the
+    whole degree, passed, this term (`retakes` of its courses are retakes), failed and not retaken,
+    and what is left now and after this term. Without it: the hours counted from the record, and
+    `remaining` when the degree's total is known from schedule.json."""
     lines = []
     if major:
         lines.append(f"📘 *Major:* {isolated(escape_md(major))}")
@@ -62,6 +67,13 @@ def summary_lines(semesters: list[dict], figures: dict, status: str | None = Non
                  if "cgpa" in figures and "record_cgpa" in figures and figures["cgpa"] != figures["record_cgpa"] else "")
         lines.append(f"🎓 *Cumulative GPA:* {cgpa:.2f}%{shown}")
     state = standing(semesters) if semesters else None
+    if plan:
+        if status:
+            lines.append(f"📌 *Academic Status:* {escape_md(status)}")
+        lines += ["", *degreeplan.progress_lines(plan, retakes, state["retaken"] if state else 0)]
+        if "record_hours" in figures:
+            lines.append(f"📚 *Total Attempted Hours:* {gpa.fmt(figures['record_hours'])} hrs")
+        return lines
     passed = figures.get("passed_hours", state["passed"] if state else None)
     if passed is not None:
         lines.append(f"⏱️ *Passed Hours:* {gpa.fmt(passed)} hrs")

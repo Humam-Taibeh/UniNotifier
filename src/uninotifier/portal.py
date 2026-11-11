@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 
 from dotenv import dotenv_values
 
+from uninotifier import degreeplan
 from uninotifier import failsafe
 from uninotifier import fileio
 from uninotifier import gradebook
@@ -67,6 +68,7 @@ MAX_TABLE_ROWS = 80          # rows sent as text; the screenshot has the rest
 SESSION_FILE = paths.DATA / "portal_session.json"
 REUSE_SECONDS = 15 * 60      # a session idle longer than this is not tried (it survives 20 min idle, not 40)
 HOME_PATH = "/faces/ui/pages/student/index.xhtml"
+PLAN_PATH = "/faces/ui/pages/student/plan/index.xhtml"                       # "جميع خطة الطالب"
 
 # Each section's page address (read from the portal's own menu), and — as a
 # fallback should an address ever change — the menu text to look for.
@@ -667,6 +669,25 @@ def _interpret(page, result: Result, text: str) -> None:
                      "Its answers show the plain table and the screenshot until the reader is fixed.")
 
 
+def read_plan(page) -> dict | None:
+    """The student's study plan (degreeplan.py), read with the session that just read the transcript.
+    None when the page does not open or does not read as a plan — the transcript is answered without
+    it. Never raises."""
+    try:
+        page.goto(SITE + PLAN_PATH, wait_until="networkidle", timeout=45000)
+        _settle(page)
+        plan = degreeplan.parse(page.content())
+        if plan is None:
+            log.warning("Portal: the study plan page did not read as a plan (%s)", page.url.split("?")[0])
+        return plan
+    except Exception as e:
+        log.exception("Portal: could not read the study plan")
+        failsafe.bug("portal:plan", "The portal's study plan page could not be read", e,
+                     "The transcript shows the hours counted from the record, without the plan's figures "
+                     "and without Remaining Courses, until it is fixed.")
+        return None
+
+
 def saved_session(now: float | None = None) -> dict | None:
     """The owner's last session (a browser storage state), if it was used within REUSE_SECONDS."""
     try:
@@ -756,6 +777,9 @@ def fetch_many(sections: list[str], ask_code, creds: tuple[str, str] | None = No
                 if not found:
                     result.menu = _read(page, _MENU_JS, [])[:40]
                 dump(page, section, result.png)
+                if section == "transcript" and result.data.get("semesters"):
+                    result.data["plan"] = read_plan(page)       # after the screenshot: it leaves the page
+                    dump(page, "plan", None)
                 results[section] = result
             if own:
                 keep_session(context)

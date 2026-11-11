@@ -13,6 +13,7 @@ import time
 from dataclasses import fields
 from pathlib import Path
 
+from uninotifier import degreeplan
 from uninotifier import failsafe
 from uninotifier import fileids
 from uninotifier import fileio
@@ -112,11 +113,14 @@ def compose(result: portal.Result, when: str) -> tuple[str, list[str], list]:
             status = portal.english_status(result.data["status"]) if result.data.get("status") else None
             degree, passed = schedule.load_schedule().get("degree_hours"), result.figures.get("passed_hours")
             remaining = degree - passed if degree and passed is not None else None
-            shown = transcript.summary_lines(semesters, result.figures, status, remaining=remaining)
+            plan = result.data.get("plan")
+            shown = transcript.summary_lines(semesters, result.figures, status, remaining=remaining, plan=plan,
+                                             retakes=len(result.data.get("retakes") or {}))
             if shown:
                 lines += [""] + shown
-            if semesters:
-                body = transcript.blocks(semesters)
+            if semesters:                         # the courses themselves are a button away, not a wall of text
+                body = []
+                rows = [record_buttons("rec", bool(plan)), portal_row]
         elif result.section == "balance" and body:
             total, rest = body[0], body[1:]
             if len("\n".join(lines + ["", total, *rest])) <= notifier.CAPTION_LIMIT:
@@ -126,6 +130,37 @@ def compose(result: portal.Result, when: str) -> tuple[str, list[str], list]:
                 lines += ["", total]
                 body = rest
     return "\n".join(lines), body, rows
+
+
+def record_buttons(prefix: str, with_plan: bool) -> list[dict]:
+    """The two lists behind a transcript: what was taken, and — when the study plan was read — what is left."""
+    row = [{"text": "✅ Courses Taken", "callback_data": f"{prefix}:taken"}]
+    if with_plan:
+        row.append({"text": "📚 Remaining Courses", "callback_data": f"{prefix}:left"})
+    return row
+
+
+def record_text(kind: str, semesters: list[dict], plan: dict | None, overlay: dict | None = None) -> str:
+    """ "taken": every term's courses with their marks; "left": the plan's courses still to take. """
+    if kind == "left":
+        return "\n".join(degreeplan.remaining_lines(plan)) if plan else ""
+    body = transcript.blocks(semesters, overlay)
+    return "\n".join(["✅ *Courses Taken*", "", *body]).strip() if body else ""
+
+
+def handle_record_callback(cb: dict, action: str) -> None:
+    """✅ Courses Taken / 📚 Remaining Courses under your transcript: answered from the transcript as it
+    was last read (the message the button is on), the menu back under it."""
+    kind = action.split(":")[1]
+    cached = load_cached("transcript")
+    data = cached[0].data if cached else {}
+    text = record_text(kind, data.get("semesters") or [], data.get("plan"))
+    if not text:
+        chat.answer(cb["id"], "Open 📜 Transcript again first — this one is no longer saved.")
+        return
+    chat.answer(cb["id"])
+    notifier.send_long_message(chat.BOT_TOKEN, chat.CHAT_ID, text)
+    chat.send_view(*return_view("transcript"))
 
 
 def apply_syncs(result: portal.Result) -> None:

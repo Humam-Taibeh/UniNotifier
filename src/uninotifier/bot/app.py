@@ -248,6 +248,9 @@ def route_callback(cb: dict, action: str, message_id: int | None) -> None:
     if action.startswith("guest:"):
         guest_flow.handle_guest_callback(cb, action)
         return
+    if action.startswith("rec:"):
+        portal_flow.handle_record_callback(cb, action)
+        return
     if action.startswith("finals:"):
         chat.answer(cb["id"])
         finals_flow.handle_finals(action.split(":")[1].replace("status", ""), message_id)

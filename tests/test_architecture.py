@@ -1961,6 +1961,107 @@ def test_finals_check_ends_on_the_grades_screen():
             bot._portal_lock.release()
 
 
+PLAN_HEADER = ("الحالة", "رمز المقرر", "اسم المقرر", "عدد الساعات المعتمدة", "المتطلبات السابقة")
+PLAN_CATEGORIES = (                     # (name, required, passed, left, [(status, code, name, hours)]) — an invented plan
+    ("متطلبات جامعية (اجبارية)", 9, 3, 6, [("مجتازة", "0900101", "مهارات الدراسة", 3),
+                                           ("قيد الدراسة", "0900102", "الكتابة الأكاديمية", 3),
+                                           ("", "0900103", "العمل التطوعي", 3)]),
+    ("متطلبات تخصص (اختيارية)", 6, 3, 3, [("مجتازة", "0900201", "تصميم الواجهات", 3),
+                                          ("قيد الدراسة", "0900202", "أمن الشبكات", 3),
+                                          ("", "0900203", "الحوسبة السحابية", 3),
+                                          ("", "0900204", "تطوير الألعاب", 3)]),
+    ("متطلبات تخصص (اجبارية)", 7, 0, 7, [("راسب", "0900301", "هياكل البيانات", 3),
+                                         ("", "0900302", "نظم التشغيل", 3),
+                                         ("", "0900303", "حلقة بحث", 1)]),
+    ("مواد استدراكية (اجبارية)", 6, 6, 0, [("معفاة", "0900001", "لغة استدراكية", 3),
+                                           ("معفاة", "0900002", "حاسوب استدراكي", 3)]),
+)
+
+
+def _plan_html(categories=PLAN_CATEGORIES) -> str:
+    """The portal's study-plan page in miniature: the categories repeated under each of its three tabs,
+    PrimeFaces' phone-layout copy of every column title inside each cell, the totals in the table's footer."""
+    def table(courses, totals):
+        head = "".join(f'<th><span class="ui-column-title">{t}</span></th>' for t in PLAN_HEADER)
+        rows = "".join("<tr>" + "".join(f'<td><span class="ui-column-title">{t}</span><label>{v}</label></td>'
+                                        for t, v in zip(PLAN_HEADER, (*course, ""))) + "</tr>" for course in courses)
+        foot = "".join(f"<label>{t}</label><label>{v}</label>"
+                       for t, v in zip(("عدد الساعات المعتمدة", "اجتاز منها ", "الساعات المتبقة"), totals))
+        return (f'<div class="ui-datatable"><table><thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table>'
+                f'<div class="ui-datatable-footer"><div>{foot}</div></div></div>')
+
+    def group(tab):
+        links = "".join(f'<li><a href="#p:{tab}:c{n}">{name}</a></li>' for n, (name, *_) in enumerate(categories))
+        panels = "".join(f'<div id="p:{tab}:c{n}" class="ui-tabs-panel">{table(courses, (need, done, left))}</div>'
+                         for n, (_, need, done, left, courses) in enumerate(categories))
+        return f'<div class="ui-tabs"><ul class="ui-tabs-nav">{links}</ul><div class="ui-tabs-panels">{panels}</div></div>'
+    tabs = (("analysePlan", "تحليل الخطة"), ("passedCourses", "المواد المجتازة من الخطة"),
+            ("remainCourses", "المواد المتبقية من الخطة"))
+    return ('<html><body><div class="ui-tabs"><ul class="ui-tabs-nav">'
+            + "".join(f'<li><a href="#p:{tab}">{title}</a></li>' for tab, title in tabs) + '</ul><div class="ui-tabs-panels">'
+            + "".join(f'<div id="p:{tab}" class="ui-tabs-panel">{group(tab)}</div>' for tab, _ in tabs)
+            + "</div></div></body></html>")
+
+
+def _sample_plan() -> dict:
+    from uninotifier import degreeplan
+    return degreeplan.parse(_plan_html())
+
+
+def test_study_plan_from_the_portal():
+    """The degree's hours come from the student's own plan on the portal — any major, any plan year —
+    never from a fixed number: what is required, passed, registered this term, failed and left."""
+    from uninotifier import degreeplan, transcript
+
+    plan = degreeplan.parse(_plan_html())
+    assert [c["name"] for c in plan["categories"]] == [name for name, *_ in PLAN_CATEGORIES], "each category once"
+    first = plan["categories"][0]
+    assert (first["required"], first["passed"], first["remaining"]) == (9, 3, 6)
+    assert first["courses"][0] == {"code": "0900101", "name": "مهارات الدراسة", "hours": 3.0, "status": "passed"}
+    assert [c["status"] for cat in plan["categories"] for c in cat["courses"]] == [
+        "passed", "in_progress", "open", "passed", "in_progress", "open", "open", "failed", "open", "open", "exempt", "exempt"]
+    assert degreeplan.parse("<html><body><p>الصفحة الرئيسية</p></body></html>") is None
+
+    # remedial courses are not degree hours; an elective registered beyond what its category needs adds nothing
+    assert degreeplan.progress(plan) == {"degree": 22, "passed": 6, "remaining": 16, "term": 6, "term_courses": 2,
+                                         "after": 10, "failed": 3, "failed_courses": 1}
+    extra = [list(c) for c in PLAN_CATEGORIES]
+    extra[1][4] = [("قيد الدراسة", *course[1:]) if course[0] == "" else course for course in extra[1][4]]
+    crowded = degreeplan.progress(degreeplan.parse(_plan_html(extra)))
+    assert crowded["term"] == 12 and crowded["after"] == 10, "three electives registered, the category needs one more"
+
+    assert degreeplan.progress_lines(plan, retakes=1, repeated=3) == [
+        "📊 *Degree Plan:* 22 hrs", "✅ *Passed:* 6 hrs", "⏳ *This Term:* 6 hrs · 2 courses (1 retake)",
+        "❌ *Failed, Not Retaken Yet:* 3 hrs · 1 course", "🔁 *Repeated Courses:* 3 (2 done · 1 this term)",
+        "🏁 *Remaining:* 16 hrs · 10 after this term"]
+    done = degreeplan.parse(_plan_html([("متطلبات الكلية (اجبارية)", 3, 3, 0, [("مجتازة", "0900401", "مقدمة", 3)])]))
+    assert degreeplan.progress_lines(done) == ["📊 *Degree Plan:* 3 hrs", "✅ *Passed:* 3 hrs", "🏁 *Remaining:* 0 hrs"]
+
+    assert degreeplan.english("متطلبات تخصص (اختيارية)") == "Major · Elective"
+    assert degreeplan.english("م. عائلة تخصص (اجبارية)") == "Major Family · Compulsory"
+    assert degreeplan.english("متطلبات الكلية (اجبارية)") == "Faculty · Compulsory"
+    assert degreeplan.english("متطلبات حرة") == "Free" and degreeplan.english("مساقات متقدمة (اجبارية)") == "مساقات متقدمة (اجبارية)"
+
+    text = "\n".join(degreeplan.remaining_lines(plan))
+    lines = text.splitlines()
+    assert lines[:2] == ["📚 *Remaining Courses*", "🏁 *16 hrs* left of 22 · *10 hrs* after this term"]
+    assert "*University · Compulsory* — 6 of 9 hrs left" in lines and "*Major · Elective* — 3 of 6 hrs left · choose from:" in lines
+    block = lines[lines.index("*Major · Compulsory* — 7 of 7 hrs left") + 1:][:3]
+    assert block[0].endswith("· 3h — failed, retake") and "❌" in block[0] and "هياكل البيانات" in block[0]
+    assert "▫️" in block[1] and block[2].endswith("· 1h")
+    assert "مهارات الدراسة" not in text and "استدراكي" not in text and "Remedial" not in text, "nothing passed, nothing remedial"
+    assert text.index("الكتابة الأكاديمية") < text.index("العمل التطوعي"), "this term's courses first"
+    assert _legacy_markdown_ok(text) and len(text) < notifier.MESSAGE_LIMIT
+
+    # the transcript's summary with the plan: the plan's own hours, not a number from schedule.json
+    sems = _sample_transcript()
+    figures = {"record_cgpa": 71.26, "cgpa": 71.3, "passed_hours": 8.0, "record_hours": 14.0}
+    summary = transcript.summary_lines(sems, figures, "Regular / Good Standing", remaining=124.0, plan=plan, retakes=1)
+    assert summary[:2] == ["🎓 *Cumulative GPA:* 71.26% (Portal display: 71.3%)", "📌 *Academic Status:* Regular / Good Standing"]
+    assert summary[2] == "" and summary[3] == "📊 *Degree Plan:* 22 hrs" and summary[-1] == "📚 *Total Attempted Hours:* 14 hrs"
+    assert "🏁 *Remaining:* 16 hrs · 10 after this term" in summary and not any("124" in line for line in summary)
+
+
 def _sample_transcript():
     """A parsed transcript: a term in progress, two finished terms (one with a failed attempt a later
     retake replaced), Arabic and Latin names, a name with Markdown characters."""
@@ -2072,13 +2173,15 @@ def test_portal_answer_is_one_message():
                                           "record_hours": 14.0, "base_cgpa": 70.0, "base_hours": 14.0},
                                           [], [], {"semesters": sems, "status": "منتظم", "retakes": {}})
         bot.send_portal_result(transcript_result)
-        assert len(sent_files) == 1 and [k for k, _ in sent_msgs] == ["long"], (sent_files, sent_msgs)
-        caption = sent_files[0][1]
+        assert len(sent_files) == 1 and sent_msgs == [], "a transcript is one message: its courses are a button away"
+        caption, rows = sent_files[0][1], sent_files[0][2]
         assert caption.startswith("📜 *ZUJ Portal — Transcript*") and "⏱️ *Passed Hours:* 8 hrs" in caption
         assert "      └ ⏳ 9h in progress · ❌ 3h to repeat · 🔁 2 retaken" in caption and "Total Attempted Hours" in caption \
             and len(caption) < 1024
-        assert sent_msgs[0][1].startswith("⏳ *First semester 2026/2027* · In Progress"), "no \"details\" heading"
-        assert "details" not in sent_msgs[0][1] and "Retrieved" not in sent_msgs[0][1]
+        assert rows[0] == [{"text": "✅ Courses Taken", "callback_data": "rec:taken"}], "no plan was read: no Remaining Courses"
+        taken = bot.record_text("taken", sems, None)
+        assert taken.startswith("✅ *Courses Taken*\n\n⏳ *First semester 2026/2027* · In Progress")
+        assert "details" not in taken and "Retrieved" not in taken and bot.record_text("left", sems, None) == ""
 
         # a balance: everything in the one message
         reset()
@@ -6008,7 +6111,7 @@ def test_guest_lookup_in_telegram():
             ["", "الفصل الأول 2026/2027", "منتظم", "نظم المعلومات", "18", "د.أ1250"]]],
             {"balance": 1250.0}, [], ["💰 *Total balance:* 1,250 JD — owed to the university (debit)"]),
     }
-    calls, files, fetched, threads = [], [], [], []
+    calls, files, fetched, threads, markups = [], [], [], [], []
 
     def fake_api(method, **data):
         calls.append((method, data))
@@ -6026,7 +6129,7 @@ def test_guest_lookup_in_telegram():
     bot.api = fake_api
     bot.send_view = lambda text, rows: calls.append(("view", {"text": text})) or {"message_id": 1}
     bot.notifier.upload = lambda token, method, data, field, name, payload: files.append((name, data["caption"])) \
-        or {"message_id": 500 + len(files)}
+        or markups.append(json.loads(data["reply_markup"])["inline_keyboard"]) or {"message_id": 500 + len(files)}
 
     def fake_fetch(sections, ask_code, creds=None, keep_debug=True):
         fetched.append((sections, creds, keep_debug))
@@ -6053,9 +6156,9 @@ def test_guest_lookup_in_telegram():
         assert "⏱️ *Passed Hours:* 3 hrs" in caption and "🎓 *Cumulative GPA:*" in caption
         assert "📌 *Academic Status:* Regular / Good Standing" in caption
         assert "🏁 *Remaining Hours:* 129 hrs" in caption, "the degree plan (132 h in schedule.json) minus the 3 passed"
-        # ... then the semesters
-        blocks = [t for t in texts if "In Progress" in t]
-        assert len(blocks) == 1 and "🔁 *40*" in blocks[0] and "✅ *72*" in blocks[0], texts
+        # ... and the courses are a button away: no wall of text follows the transcript
+        assert not any("In Progress" in t for t in texts), texts
+        assert markups == [[[{"text": "\u2705 Courses Taken", "callback_data": "guest:taken"}]]], markups
         assert not any("1,250" in t or "1250" in t or "debit" in t for t in texts + [c for _, c in files]), \
             "nothing of the financial page is shown"
         assert not any("Schedule" in t for t in texts), "no class or exam schedule"
@@ -6064,6 +6167,17 @@ def test_guest_lookup_in_telegram():
         final = [d for m, d in calls if m == "sendMessage"][-1]
         assert [r[0]["callback_data"] for r in final["reply_markup"]["inline_keyboard"]] == ["guest:target", "guest:wipe", "guest:out"]
         panel = bot._guest["panel"]
+
+        # ✅ Courses Taken: the semesters, as one message of the session (🚪 removes it too)
+        calls.clear()
+        bot.handle_callback({"id": "taken", "data": "guest:taken", "message": {"message_id": 501}})
+        taken = [d["text"] for m, d in calls if m == "sendMessage"]
+        assert len(taken) == 1 and taken[0].startswith("✅ *Courses Taken*") and "In Progress" in taken[0], taken
+        assert "🔁 *40*" in taken[0] and "✅ *72*" in taken[0] and bot._guest["messages"][-1] > 100, "kept with the session"
+        calls.clear()
+        bot.handle_callback({"id": "left", "data": "guest:left", "message": {"message_id": 501}})
+        assert [d["text"] for m, d in calls if m == "sendMessage"] == ["🚪 This guest session has ended."], \
+            "no plan was read: nothing to list (the button is not even offered)"
 
         # 🎯 Target GPA: the panel itself becomes the picker, then the answer; typed values; a command keeps the session
         def press(data, mid=None):
@@ -8193,10 +8307,10 @@ def test_portal_answers_from_the_saved_copy():
         assert [c[0] for c in calls] == ["editMessageCaption"] and bot.REFRESH_FAILED in calls[0][1]["caption"]
         assert "900 JD" in calls[0][1]["caption"]
 
-        # a transcript: the semesters follow the caption, and are edited in place when they change
+        # a transcript: one message (summary + the two buttons), replaced in place when the record changes
         sems = _sample_transcript()
         record = lambda cgpa: portal_result("transcript", {"cgpa": cgpa, "passed_hours": 8.0, "record_cgpa": cgpa, "record_hours": 14.0},  # noqa: E731
-                                            [], {"semesters": sems, "status": "منتظم", "retakes": {}})
+                                            [], {"semesters": sems, "status": "منتظم", "retakes": {}, "plan": _sample_plan()})
         reset()
         answers[:] = [record(71.3)]
         run("transcript")
@@ -8204,10 +8318,25 @@ def test_portal_answers_from_the_saved_copy():
         age("transcript", bot.FRESH_SECONDS + 1)
         answers[:] = [record(71.2)]
         run("transcript")
-        assert [s[0] for s in sent] == ["doc", "msg"], sent
-        assert [c[0] for c in calls] == ["editMessageMedia", "editMessageText"], [c[0] for c in calls]
-        assert calls[0][1]["message_id"] == sent[0][3] and calls[1][1]["message_id"] == sent[1][2]
+        assert [s[0] for s in sent] == ["doc"], sent
+        assert "📊 *Degree Plan:* 22 hrs" in sent[0][2] and "🏁 *Remaining:* 16 hrs · 10 after this term" in sent[0][2]
+        assert [c[0] for c in calls] == ["editMessageMedia"], [c[0] for c in calls]
+        assert calls[0][1]["message_id"] == sent[0][3]
         assert "71.2" in json.loads(calls[0][1]["media"])["caption"], "the new record is in the caption"
+        buttons = json.loads(calls[0][1]["reply_markup"])["inline_keyboard"][0]
+        assert [b["callback_data"] for b in buttons] == ["rec:taken", "rec:left"]
+
+        # the two buttons answer from that saved transcript — no portal read — and the hub returns under the answer
+        for data, start in (("rec:taken", "✅ *Courses Taken*"), ("rec:left", "📚 *Remaining Courses*")):
+            reset()
+            bot.handle_callback({"id": data, "data": data, "message": {"message_id": 7}})
+            assert [s[0] for s in sent] == ["long"] and sent[0][1].startswith(start) and reads == [], sent
+            assert screens[-1].startswith("📜 *Academic Record & Balance*")
+        for path in bot.CACHE_DIR.glob("transcript.*"):
+            path.unlink()
+        reset()
+        bot.handle_callback({"id": "gone", "data": "rec:left", "message": {"message_id": 8}})
+        assert sent == [] and "Open 📜 Transcript again" in calls[-1][1]["text"], "an old button says what to do"
 
         # grades (the Finals Watch check) are never answered from a saved copy
         assert bot.load_cached("grades") is None
@@ -8612,7 +8741,7 @@ if __name__ == "__main__":
                test_the_poll_slows_down_when_telegram_asks, test_an_odd_getupdates_answer_never_stops_the_loop,
                test_the_statistics_do_not_grow_forever, test_the_moodle_probe, test_cambridge_one_assignments,
                test_cambridge_signs_in_by_itself, test_log_files_stay_small,
-               test_portal_session_is_reused_for_15_minutes, test_portal_answers_from_the_saved_copy,
+               test_portal_session_is_reused_for_15_minutes, test_portal_answers_from_the_saved_copy, test_study_plan_from_the_portal,
                test_replaced_files_move_to_old_versions, test_settings_are_checked_before_anything_runs,
                test_archive_root_defaults_to_documents_university, test_state_backup_lives_in_its_own_repository,
                test_sign_in_needs_no_form_when_microsoft_still_remembers_you,

@@ -162,11 +162,14 @@ PAGES: dict[str, Page] = {
     # ---------------------------------------------------------- 4: records
     "records": Page("📜", "Academic Records & Financials", [
         "*📜 Transcript*",
-        "• A summary on top: cumulative GPA (with the portal's own figure when it differs), passed "
-        "hours (and how many are in progress or still to repeat), attempted hours and your academic "
-        "status.",
-        "• Below it, every semester — the one in progress first (⏳), then the others. ✅ passed, "
-        "❌ failed, 🔁 an attempt a later retake replaced; each with its mark and hours.",
+        "• One message: cumulative GPA (with the portal's own figure when it differs), your academic "
+        "status, and your degree progress — read from your own study plan on the portal, so it fits "
+        "your major and your plan year: the plan's hours, what you passed, this term's hours (and how "
+        "many are retakes), what you failed and have not retaken, and what is left now and after this term.",
+        "• ✅ Courses Taken — every semester, the one in progress first (⏳). ✅ passed, ❌ failed, "
+        "🔁 an attempt a later retake replaced; each with its mark and hours.",
+        "• 📚 Remaining Courses — what your plan still asks for, requirement by requirement: ⏳ this "
+        "term, ❌ failed, ▫️ not taken yet; an elective group lists what you can choose from.",
         "• Reading it also refreshes the GPA base and the retakes behind Grade Needed.",
         "",
         "*💰 Balance*",
@@ -177,8 +180,8 @@ PAGES: dict[str, Page] = {
         "• For a friend who lets you look at their record, once. You send their student ID and "
         "password — the password message is deleted at once and kept in memory only for the sign-in. "
         "The portal's verification code goes to THEIR phone, so they read it to you.",
-        "• You get the same summary and semester layout as your own transcript, with their major, "
-        "and 🎯 Target GPA shows what average they need to reach a goal.",
+        "• You get the same summary and the same two buttons as your own transcript — from THEIR "
+        "study plan — with their major, and 🎯 Target GPA shows what average they need to reach a goal.",
         "• Nothing is stored and none of your own data is touched. 🚪 Sign Out ends the session and "
         "can remove every message of it from the chat.",
         "",

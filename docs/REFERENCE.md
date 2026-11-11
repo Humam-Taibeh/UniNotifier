@@ -351,12 +351,11 @@ To let someone else see what the bot does with *their* record — once, from Tel
    in memory only for the sign-in.
 3. If the portal sends them a verification code, read it from their phone and reply with it.
 4. Their record arrives in the layout of your own transcript: the screenshot with an executive
-   summary — 📘 major, 🎓 cumulative GPA, ⏱️ passed hours (and what is in progress / to repeat),
-   📚 attempted hours, 🏁 hours left (only when `"degree_hours"` — the credit hours of the whole
-   degree plan — is set in `schedule.json`; it is never guessed. The same line appears on your own
-   transcript), 📌 status — then one text message
-   with the semesters (the term in progress first, this term's published marks filled in). The major
-   is read from the financial page of their portal, which is used for nothing else and shown nowhere.
+   summary — 📘 major, 🎓 cumulative GPA, 📌 status and the degree progress from **their own study
+   plan** on the portal (see the 📜 Transcript below) — and the same two buttons: ✅ Courses Taken
+   (the semesters, the term in progress first, this term's published marks filled in) and
+   📚 Remaining Courses. The major is read from the financial page of their portal, which is used
+   for nothing else and shown nowhere.
 5. **🎯 Target GPA** (under the record): pick 60–90% or type your own, and see the average they need
    over this term, this + the next, and this + the next two terms — the university's rules (marks
    under 35 count as 35, a retake replaces the old attempt), the same numbers the planner gives for
@@ -856,12 +855,37 @@ Watch, 📜 Academic Records & Financials, ⚙️ Architecture, Healthchecks & S
 each ONE self-contained message in plain English (no sub-pages, no ◀️ ▶️ carousel).
 Commands are left to Telegram's own / menu. Pages are edited in place; every one has 🔙 Back to Hub.
 
-The 📜 Transcript is an executive summary — 🎓 Cumulative GPA (with the portal's own rounded
-figure), ⏱️ Passed Hours (with ⏳ in progress · ❌ to repeat · 🔁 retaken), 📚 Total Attempted Hours and
-📌 Academic Status (the portal's "الحالة", e.g. منتظم → Regular / Good Standing) — followed by the semester
-blocks: the term in progress first (⏳), then each semester with its average and cumulative, every course
-marked ✅ passed · ❌ failed · 🔁 replaced by a later retake, with mark and hours (`transcript.py`; an Arabic
-course name is Unicode-isolated so it cannot reorder the mark beside it). Behind it, each
+The 📜 Transcript is ONE message — the page's screenshot with an executive summary: 🎓 Cumulative GPA
+(with the portal's own rounded figure), 📌 Academic Status (the portal's "الحالة", e.g. منتظم → Regular /
+Good Standing) and the degree progress:
+
+```
+📊 Degree Plan: 132 hrs
+✅ Passed: 72 hrs
+⏳ This Term: 15 hrs · 5 courses (1 retake)
+❌ Failed, Not Retaken Yet: 3 hrs · 1 course
+🔁 Repeated Courses: 3 (2 done · 1 this term)
+🏁 Remaining: 60 hrs · 45 after this term
+📚 Total Attempted Hours: 81 hrs
+```
+
+Those hours are not a setting: right after the transcript, the same portal session reads the
+student's own study plan (`/pages/student/plan/`, "جميع خطة الطالب" — `degreeplan.py`), which lists
+every requirement group of *that* student's major and plan year with its courses, each one's status
+(مجتازة / قيد الدراسة / راسب / معفاة) and the group's own totals. The degree is the sum of the groups'
+required hours; remedial courses (استدراكية) are left out, as the university does; an elective
+registered beyond what its group still needs does not lower "after this term". If the plan page
+cannot be read, the summary falls back to the hours counted from the record — ⏱️ Passed Hours (with
+⏳ in progress · ❌ to repeat · 🔁 retaken), 📚 Total Attempted Hours, and 🏁 Remaining Hours only when
+`"degree_hours"` is set in `schedule.json`.
+
+Two buttons sit under it, answered from the transcript as last read (no new portal request):
+**✅ Courses Taken** — the semester blocks: the term in progress first (⏳), then each semester with
+its average and cumulative, every course marked ✅ passed · ❌ failed · 🔁 replaced by a later retake,
+with mark and hours (`transcript.py`; an Arabic course name is Unicode-isolated so it cannot reorder
+the mark beside it) — and **📚 Remaining Courses** — what the plan still asks for, group by group:
+⏳ this term, ❌ failed, ▫️ not taken yet; a group that offers more than it requires says "choose
+from"; finished groups are named in one line. Behind it, each
 reading silently re-syncs the Grade Needed base (the record before this term: every
 attempted hour, failures at 35) and this term's **retakes**: a course already attempted
 (same code or name) is flagged with its old recorded grade, so its new mark replaces the

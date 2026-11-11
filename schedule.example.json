@@ -7,7 +7,7 @@
     "mode is one of: In-Person, Online, Activity. Lecture reminders go out for the modes in remind_modes.",
     "course_codes: the course number on the portal -> the English course name (used for files and grades).",
     "portal_aliases: a different name Moodle uses -> the English name above.",
-    "degree_hours (optional): the credit hours of your whole degree plan, e.g. 132 (shows remaining hours); null = not shown.",
+    "degree_hours (optional): only a fallback - the bot reads the hours of your own study plan from the portal. e.g. 132; null = not set.",
     "finals (optional, during finals season): {\"from\": \"2027-01-04\", \"to\": \"2027-01-31\", \"interval_minutes\": 30}.",
     "auto_check_in (optional): true = the bot checks you in to every online lecture (ك, live on Teams) as soon as",
     "  the instructor opens attendance - never an In-Person or Activity day. It reads which days are online from the",

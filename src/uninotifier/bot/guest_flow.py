@@ -6,6 +6,7 @@ the average they need for a goal; 🚪 Sign Out clears the session. Nothing is s
 or synced.
 """
 
+import json
 import logging
 import re
 import threading
@@ -55,9 +56,11 @@ def guest_send(text: str, rows: list | None = None) -> dict | None:
     return sent
 
 
-def guest_file(png: bytes, name: str, caption: str) -> None:
-    sent = notifier.upload(chat.BOT_TOKEN, "sendDocument", {"chat_id": chat.CHAT_ID, "caption": caption,
-                                                      "parse_mode": "Markdown"}, "document", name, png)
+def guest_file(png: bytes, name: str, caption: str, rows: list | None = None) -> None:
+    fields = {"chat_id": chat.CHAT_ID, "caption": caption, "parse_mode": "Markdown"}
+    if rows:
+        fields["reply_markup"] = json.dumps({"inline_keyboard": rows})
+    sent = notifier.upload(chat.BOT_TOKEN, "sendDocument", fields, "document", name, png)
     if isinstance(sent, dict) and "message_id" in sent:
         _guest.setdefault("messages", []).append(sent["message_id"])
 
@@ -284,17 +287,17 @@ def send_guest_results(user: str, results: dict) -> None:
     degree = schedule.load_schedule().get("degree_hours")
     remaining = degree - passed if degree and passed is not None else None
     status = portal.english_status(record.data["status"]) if record.data.get("status") else None
-    summary = transcript.summary_lines(semesters, record.figures, status, major, remaining)
+    plan = record.data.get("plan")
+    summary = transcript.summary_lines(semesters, record.figures, status, major, remaining, plan=plan,
+                                       retakes=len(record.data.get("retakes") or {}))
     caption = "\n".join([f"{head} — 📜 Transcript", f"🕒 *Retrieved:* {notifier.audit_timestamp()}", "", *summary])
+    rows = [portal_flow.record_buttons("guest", bool(plan))]       # the courses are a button away
     if record.png:
-        guest_file(record.png, f"Guest {user} - Transcript.png", caption)
+        guest_file(record.png, f"Guest {user} - Transcript.png", caption, rows)
     else:
-        guest_send(caption)
-    overlay = finals.marks_overlay(results.get("grades"), semesters)
-    body = "\n".join(transcript.blocks(semesters, overlay)).strip()
-    for chunk in notifier.split_text(body):
-        guest_send(chunk)
-    _guest["record"] = {"semesters": semesters, "figures": record.figures}      # in memory only, gone at sign-out
+        guest_send(caption, rows)
+    _guest["record"] = {"semesters": semesters, "figures": record.figures, "plan": plan,     # in memory only,
+                        "overlay": finals.marks_overlay(results.get("grades"), semesters)}     # gone at sign-out
 
 
 def handle_guest_callback(cb: dict, action: str) -> None:
@@ -307,6 +310,12 @@ def handle_guest_callback(cb: dict, action: str) -> None:
         return                                              # finishes by itself, then offers 🚪
     if kind in ("target", "t", "tcustom", "back"):
         _target_callback(cb, action)
+        return
+    if kind in ("taken", "left"):                           # the lists under the guest's transcript
+        record = _guest.get("record") or {}
+        text = portal_flow.record_text(kind, record.get("semesters") or [], record.get("plan"), record.get("overlay"))
+        for chunk in notifier.split_text(text or "🚪 This guest session has ended."):
+            guest_send(chunk)
         return
     if kind in ("wipe", "cancel"):
         for message_id in _guest.get("messages", []):

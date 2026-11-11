@@ -20,12 +20,20 @@ All notable changes to this project are documented here. The format follows
   (🎉 Grade Posted, with a picture of the page); a corrected mark is told again.
 - Your marks are found in PDF files too, in a new version an instructor uploads over a file, in a
   file attached to a forum post, in a line of text and in lists typed with Arabic digits.
+- The transcript counts your degree from your own study plan on the portal — any major, any plan
+  year — instead of a number typed into `schedule.json`: the plan's hours, passed, this term (and
+  how many are retakes), failed and not retaken yet, and what is left now and after this term. A
+  guest look-up gets the same from the guest's plan.
+- 📚 Remaining Courses under the transcript (and a guest's): what the plan still asks for, group by
+  group; an elective group lists what can be chosen.
 - Upcoming Tasks lists every open task: Cambridge One assignments and tasks without a due date too.
 - `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1, adapted) with a private way to report.
 - A pull request template with the checks the repository relies on.
 - An "unofficial, use at your own risk" notice in both READMEs.
 
 ### Changed
+- A transcript is one message — the screenshot with the summary — with ✅ Courses Taken and
+  📚 Remaining Courses as buttons, instead of a second long message with every semester.
 - `scripts/windows_recovery.ps1` is safer to hand to other people: by default it only stops Windows Update
   from restarting the PC while you are signed in; automatic sign-in (`-AutoSignIn`) and the lock task
   (`-LockAfterSignIn`) are opt-in; `-Preview` shows every setting it would change without changing or
