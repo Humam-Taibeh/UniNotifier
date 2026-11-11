@@ -28,13 +28,24 @@ _EXPAND_JS = """() => {
     document.querySelectorAll('.section-collapsed')
         .forEach(e => e.classList.remove('section-collapsed'));
     document.querySelectorAll('img[loading="lazy"]').forEach(i => { i.loading = 'eager'; });
-    // floating widgets (accessibility, back-to-top, sticky bars) would sit on top of the content
+    // floating widgets (accessibility, back-to-top, sticky bars) would sit on top of the content.
+    // Never the content itself: on some pages the wrapper around it is the fixed or sticky one,
+    // and hiding that left a blank white picture. A sticky part inside the content (a table's
+    // header row) is put back in its place rather than removed.
+    const main = document.querySelector('#region-main');
     document.querySelectorAll('body *').forEach(e => {
         const pos = getComputedStyle(e).position;
-        if (pos === 'fixed' || pos === 'sticky') e.style.visibility = 'hidden';
+        if (pos !== 'fixed' && pos !== 'sticky') return;
+        if (main && (e === main || e.contains(main))) return;
+        if (main && main.contains(e)) { if (pos === 'sticky') e.style.position = 'static'; return; }
+        e.style.visibility = 'hidden';
     });
 }"""
 
+
+# The part to picture must be visible whatever was hidden around it: every hidden ancestor is shown again.
+_SHOW_JS = """(el) => { for (let e = el; e && e !== document.documentElement; e = e.parentElement)
+    if (getComputedStyle(e).visibility === 'hidden') e.style.visibility = 'visible'; }"""
 
 _BOX_JS = """(el) => { const r = el.getBoundingClientRect();
     return {x: r.left + window.scrollX, y: r.top + window.scrollY, w: r.width, h: r.height}; }"""
@@ -54,6 +65,8 @@ def capture_screens(page, url: str, selector: str) -> tuple[list[bytes], bool]:
         target = page.locator(selector).first
         if target.count() == 0:
             target = page.locator("#region-main").first
+        if target.count():
+            target.evaluate(_SHOW_JS)
         box = target.evaluate(_BOX_JS) if target.count() else None
         if not box or box["w"] < 10 or box["h"] < 10:
             box = page.evaluate("() => ({x: 0, y: 0, w: document.documentElement.scrollWidth,"
