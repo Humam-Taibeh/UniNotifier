@@ -2244,6 +2244,12 @@ def test_archive():
     assert archive.course_folder_name("20261-Big Data-AllSec-3-") == "Big Data"
     assert archive.course_folder_name("20261-Linear Algebra (1)-AllSec-3-F") == "Linear Algebra (1)"
     assert archive.course_folder_name("20261-الاتصال والتواصل باللغة العربية-ش31-3-ك") == "الاتصال والتواصل باللغة العربية"
+    # the university renames a course mid-term, with another section tag: still the course's own name
+    assert archive.course_folder_name("20261-Technical Writing-Sec12-3-E") == "Technical Writing"
+    # a picture of the portal never hides the content it is taken of (it came out blank white)
+    import inspect
+    from uninotifier.monitor import items as monitor_items
+    assert "e.contains(main)" in monitor_items._EXPAND_JS and "_SHOW_JS" in inspect.getsource(monitor_items.capture_screens)
     assert archive.categorize("quiz", "x") == archive.EXAMS
     assert archive.categorize("resource", "Midterm 2025") == archive.EXAMS
     assert archive.categorize("resource", "Course Syllabus") == archive.LECTURES
@@ -3052,7 +3058,7 @@ def test_portal():
         body = caption.split("Retrieved")[1].split("\n", 1)[1]        # without the clock: "6:18:35 PM" holds a 35
         for internal in ("35", "attempted", "synced", "record"):
             assert internal not in body, (internal, caption)
-        assert rows == [[{"text": "🏛️ Open Registration Portal ↗️", "url": portal.LOGIN_URL}]], "no button to press"
+        assert rows == [[{"text": "🏛️ Open Registration Portal ↗️", "url": portal.LOGIN_URL}], bot.RECORD_ROW],             "the portal link, and the way back on the answer itself"
         # under the hood: the 66-hour-style base and the retake are synced silently
         assert (gpa.load()["cgpa"], gpa.load()["passed_hours"], gpa.load()["base_source"]) == (71.25, 36.0, "portal")
         la = gpa.load()["courses"]["Linear Algebra (1)"]
@@ -4667,6 +4673,10 @@ def test_course_list_is_a_timetable():
     schedule._arabic_to_english.cache_clear()
     bot.load_state = lambda: state
     try:
+        # the portal words a name differently from the timetable: the same words in another order are the same course
+        assert schedule.canonical_course("Course Early") == "Early Course"
+        assert schedule.canonical_course("The Times of Odd") == "Odd Times"
+        assert schedule.canonical_course("Course") == "Course", "some of the words is not the course"
         text = bot.view_course_list()[0]
         titles = [l for l in text.splitlines() if l.startswith("📅")]
         assert titles == ["📅 *Sun · Tue*", "📅 *Mon · Wed*", "📅 *Wed · Thu*", "📅 *No timetable entry*"], titles
@@ -8235,7 +8245,7 @@ def test_portal_answers_from_the_saved_copy():
             bot.portal.fetch_many, bot.sync_base, bot.sync_retakes, bot.lock_grades)
     bot.notifier.send_png_file = lambda tok, chat, png, name, caption="", url=None, rows=None: (
         sent.append(("png", name, caption)) or True)
-    bot.notifier.send_long_message = lambda tok, chat, text, url=None, rows=None: sent.append(("long", text)) or True
+    bot.notifier.send_long_message = lambda tok, chat, text, url=None, rows=None: sent.append(("long", text, rows)) or True
     bot.notifier.send_message, bot.notifier.send_document = send_message, send_document
     bot.notifier.upload = lambda tok, method, data, field, name, payload: (
         calls.append((method, data)) or {"message_id": 100, "document": {"file_id": "F2"}})
@@ -8277,7 +8287,7 @@ def test_portal_answers_from_the_saved_copy():
         run("balance")
         assert reads == [] and sent[0][0] == "doc" and sent[0][1] == "ZUJ Portal - Tuition Balance.png"
         assert "🕒 *As of:*" in sent[0][2] and bot.REFRESHING not in sent[0][2] and "1,250 JD" in sent[0][2]
-        assert screens and screens[-1].startswith("📜 *Academic Record & Balance*"), "the hub comes back under it"
+        assert screens == [], "the answer carries its own way back: no menu is repeated under it"
 
         # an old copy, nothing changed: answered at once, then only its stamp changes
         reset()
@@ -8329,12 +8339,22 @@ def test_portal_answers_from_the_saved_copy():
         buttons = json.loads(calls[0][1]["reply_markup"])["inline_keyboard"][0]
         assert [b["callback_data"] for b in buttons] == ["rec:taken", "rec:left"]
 
-        # the two buttons answer from that saved transcript — no portal read — and the hub returns under the answer
-        for data, start in (("rec:taken", "✅ *Courses Taken*"), ("rec:left", "📚 *Remaining Courses*")):
+        assert json.loads(calls[0][1]["reply_markup"])["inline_keyboard"][-1] == bot.RECORD_ROW, "the way back is on the answer"
+
+        # the two buttons answer from that saved transcript — no portal read. Each list ends with the other
+        # list and the way back; no menu is repeated under it
+        for data, start, other in (("rec:taken", "✅ *Courses Taken*", "rec:left"),
+                                   ("rec:left", "📚 *Remaining Courses*", "rec:taken")):
             reset()
             bot.handle_callback({"id": data, "data": data, "message": {"message_id": 7}})
             assert [s[0] for s in sent] == ["long"] and sent[0][1].startswith(start) and reads == [], sent
-            assert screens[-1].startswith("📜 *Academic Record & Balance*")
+            assert [b["callback_data"] for b in sent[0][2][0]] == [other] and sent[0][2][1] == bot.RECORD_ROW
+            assert screens == []
+
+        # a menu button under a file opens the menu below it; the file is never turned into a screen
+        reset()
+        bot.handle_callback({"id": "m", "data": "record", "message": {"message_id": 9, "document": {"file_id": "F"}}})
+        assert len(screens) == 1 and screens[0].startswith("📜 *Academic Record & Balance*")
         for path in bot.CACHE_DIR.glob("transcript.*"):
             path.unlink()
         reset()

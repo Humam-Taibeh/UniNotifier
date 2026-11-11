@@ -129,7 +129,23 @@ def compose(result: portal.Result, when: str) -> tuple[str, list[str], list]:
             else:
                 lines += ["", total]
                 body = rest
+    if own_way_back(result.section):
+        rows = rows + [chat.RECORD_ROW]
     return "\n".join(lines), body, rows
+
+
+def own_way_back(section: str) -> bool:
+    """Transcript and Balance carry their own buttons back: no menu is repeated under them."""
+    return section in SWR_SECTIONS
+
+
+def settle(section: str) -> None:
+    """After an answer: the menu it came from is taken out when the answer has its own way back,
+    put back under it otherwise."""
+    if own_way_back(section):
+        chat.leave_menu()
+    else:
+        chat.send_view(*return_view(section))
 
 
 def record_buttons(prefix: str, with_plan: bool) -> list[dict]:
@@ -150,7 +166,7 @@ def record_text(kind: str, semesters: list[dict], plan: dict | None, overlay: di
 
 def handle_record_callback(cb: dict, action: str) -> None:
     """✅ Courses Taken / 📚 Remaining Courses under your transcript: answered from the transcript as it
-    was last read (the message the button is on), the menu back under it."""
+    was last read (the message the button is on). The list ends with the other list and the way back."""
     kind = action.split(":")[1]
     cached = load_cached("transcript")
     data = cached[0].data if cached else {}
@@ -159,8 +175,9 @@ def handle_record_callback(cb: dict, action: str) -> None:
         chat.answer(cb["id"], "Open 📜 Transcript again first — this one is no longer saved.")
         return
     chat.answer(cb["id"])
-    notifier.send_long_message(chat.BOT_TOKEN, chat.CHAT_ID, text)
-    chat.send_view(*return_view("transcript"))
+    other = [b for b in record_buttons("rec", bool(data.get("plan"))) if b["callback_data"] != action]
+    notifier.send_long_message(chat.BOT_TOKEN, chat.CHAT_ID, text, rows=[r for r in (other, chat.RECORD_ROW) if r])
+    chat.leave_menu()
 
 
 def apply_syncs(result: portal.Result) -> None:
@@ -326,15 +343,15 @@ def refresh(section: str, old: portal.Result, at: float, sent: dict) -> None:
         chat.api("deleteMessage", chat_id=chat.CHAT_ID, message_id=message_id)
     for part in parts:
         notifier.send_message(chat.BOT_TOKEN, chat.CHAT_ID, part)
-    chat.send_view(*return_view(section))         # the menu back under the new text
+    settle(section)
 
 
 def answer_from_cache(section: str, result: portal.Result, at: float) -> None:
-    """At once: the saved answer and the menu under it; then, if it is old, the refresh behind it."""
+    """At once: the saved answer, with its own way back; then, if it is old, the refresh behind it."""
     stale = time.time() - at >= FRESH_SECONDS
     log.info("Portal request: %s (answered from the %s copy)", section, "saved" if stale else "fresh")
     sent = send_cached(result, stamp(at, REFRESHING if stale else ""))
-    chat.send_view(*return_view(section))
+    settle(section)
     if stale:
         refresh(section, result, at, sent)
 
@@ -397,7 +414,7 @@ def read_and_answer(section: str, message_id: int | None) -> None:
     log.info("Portal request: %s", section)
     if message_id:
         chat.edit_view(message_id, f"{emoji} *{title}* — signing in to the ZUJ registration portal…", [])
-    failure = None
+    failure, answered = None, False
     try:
         results = portal.fetch_many([section], ask_portal_code)
     except maintenance.PortalUnavailable as e:
@@ -411,9 +428,12 @@ def read_and_answer(section: str, message_id: int | None) -> None:
         for result in results.values():
             send_portal_result(result)
             save_cached(result)
+        answered = True
     if failure:
         rows = [[{"text": "🔄 Try Again", "callback_data": f"portal:{section}"}], chat.BACK_ROW]
         chat.edit_view(message_id, failure, rows) if message_id else chat.send_view(failure, rows)
+    elif answered:
+        settle(section)
     else:
         chat.send_view(*return_view(section))
 

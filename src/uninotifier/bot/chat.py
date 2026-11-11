@@ -102,6 +102,10 @@ def monitor_status() -> str:
 BACK_ROW = [{"text": "🔙 Main Menu", "callback_data": "menu"}]
 
 
+RECORD_ROW = [{"text": "🔙 Academic Record", "callback_data": "record"},
+              {"text": "🏠 Main Menu", "callback_data": "menu"}]
+
+
 COURSES_ROW = [{"text": "🔙 My Courses & Schedule", "callback_data": "courses"},
                {"text": "🏠 Main Menu", "callback_data": "menu"}]
 
@@ -327,6 +331,22 @@ def send_view(text: str, rows: list) -> dict | None:
         return api("sendMessage", chat_id=CHAT_ID, text=text, parse_mode="Markdown",
                    disable_web_page_preview=True, reply_markup={"inline_keyboard": []})
     return _post_menu(text, rows)
+
+
+def leave_menu() -> None:
+    """An answer that carries its own way back (a transcript with its buttons) is now the bottom
+    of the chat: the menu above it is taken out, not repeated under it."""
+    with _menu_lock:
+        _load_menu()
+        old = _menu["message_id"]
+        _menu.update(message_id=None, text=None, rows=None)
+        _save_menu()
+    retire(old)
+
+
+def is_file_message(message: dict | None) -> bool:
+    """A file or picture with buttons under it (a transcript): it cannot become a screen, and it stays in the chat."""
+    return bool(message) and bool(message.get("document") or message.get("photo"))
 
 
 def edit_view(message_id: int, text: str, rows: list) -> None:

@@ -279,7 +279,10 @@ def route_callback(cb: dict, action: str, message_id: int | None) -> None:
         views.start_schedule_files()
         return
     if action in views.VIEWS and message_id:
-        chat.edit_view(message_id, *views.VIEWS[action]())
+        if chat.is_file_message(cb.get("message")):          # the menu opens under the file, which is kept
+            chat.send_view(*views.VIEWS[action]())
+        else:
+            chat.edit_view(message_id, *views.VIEWS[action]())
 
 
 def handle_update(update: dict) -> None:

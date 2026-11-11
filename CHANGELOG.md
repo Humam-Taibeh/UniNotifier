@@ -52,6 +52,12 @@ All notable changes to this project are documented here. The format follows
   that still has the line is told so on Telegram — delete the line.
 
 ### Fixed
+- A picture of a quiz or assignment page no longer comes out blank white: on those pages the
+  wrapper around the content is the floating one, and it was hidden with the floating widgets.
+- A course the university renames in Moodle mid-term (another section tag, `-Sec12-`, or the same
+  words in another order) keeps its timetable, instructor and folder.
+- The transcript and the balance carry their own way back (🔙 Academic Record · 🏠 Main Menu); the
+  menu is no longer repeated under them, and each course list ends with the other list.
 - When a check crashed on a bug you were told, but never that it works again: the first run that
   goes through now says so, once.
 - A broken project file (a stray space in `bot.py` once kept the bot from starting after a Windows
