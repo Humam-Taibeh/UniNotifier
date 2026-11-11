@@ -248,6 +248,34 @@ def need_for(course: dict, target: float) -> dict | None:
             "missing": [n for n, _ in others if n not in marks]}
 
 
+def ceiling(course: dict) -> float:
+    """The highest mark the course can still end on: 100 minus what was already lost in the
+    parts that have a mark (coursework 30 of 50 leaves 80 at best). 100 without a syllabus."""
+    syllabus = course.get("syllabus")
+    if not syllabus:
+        return 100.0
+    marks = course.get("marks") or {}
+    return float(sum(min(marks.get(name, weight), weight) for name, weight in syllabus))
+
+
+def share_out(open_: list[tuple[str, dict]], needed: float) -> tuple[dict[str, float], bool]:
+    """The mark each open course must reach for them to average `needed` (by hours), when
+    some cannot go above their ceiling: those give all they can, the others make up for it.
+    Returns ({name: mark}, reachable?)."""
+    points = needed * sum(c["hours"] for _, c in open_)
+    capped: dict[str, float] = {}
+    while True:
+        free = [(n, c) for n, c in open_ if n not in capped]
+        if not free:
+            return capped, points <= sum(capped[n] * c["hours"] for n, c in open_) + 1e-9
+        level = (points - sum(capped[n] * c["hours"] for n, c in open_ if n in capped)) / sum(c["hours"] for _, c in free)
+        over = [(n, c) for n, c in free if ceiling(c) < level - 1e-9]
+        if not over:
+            return {**capped, **{n: level for n, _ in free}}, True
+        for n, c in over:
+            capped[n] = ceiling(c)
+
+
 def record_portal_grades(marks: dict[str, float]) -> list[str]:
     """Lock the official marks the portal published ({course name: mark});
     courses not in the calculator are ignored. Returns the names that changed."""
@@ -286,8 +314,11 @@ def plan(courses: dict, target: float, scope: str, cgpa: float | None = None,
     """What the courses still without a grade must average for the semester
     average (scope "semester") or the cumulative GPA (scope "cgpa") to reach
     `target`. Graded courses are locked; the rest share the target equally.
-    Returns {"needed", "status", "locked", "open", "semester", "cgpa"}:
-      needed    the average each open course needs (None: nothing left open)
+    A course that already lost marks cannot go above its ceiling(): it is asked for
+    all it can give and the others for more (share_out).
+    Returns {"needed", "status", "locked", "open", "semester", "cgpa", "each"}:
+      needed    the average the open courses need (None: nothing left open)
+      each      {name: the mark that course needs} — its ceiling where that is lower
       status    secured | reachable | out_of_reach | done | no_base
       semester / cgpa   what they come to when every open course scores `needed`
                         (clamped to 0–100), or the final figures when all are graded"""
@@ -295,7 +326,7 @@ def plan(courses: dict, target: float, scope: str, cgpa: float | None = None,
     open_ = [(n, c) for n, c in courses.items() if course_grade(c) is None]
     open_hours = sum(c["hours"] for _, c in open_)
     result = {"needed": None, "status": "done", "locked": locked, "open": open_,
-              "semester": None, "cgpa": None}
+              "semester": None, "cgpa": None, "each": {}}
     if scope == "cgpa" and (record_hours is None or (cgpa is None and record_hours)):
         result["status"] = "no_base"
         return result
@@ -311,9 +342,10 @@ def plan(courses: dict, target: float, scope: str, cgpa: float | None = None,
             old = sum((c.get("old_grade") or 0) * c["hours"] for c in courses.values() if c.get("retake"))
             needed = (target * total_hours - (cgpa or 0) * record_hours + old - locked_points) / open_hours
         result["needed"] = needed
-        result["status"] = "secured" if needed <= 0 else "out_of_reach" if needed > 100 else "reachable"
-        pace = min(max(needed, 0.0), 100.0)
-        filled = {n: dict(c, grade=pace, portal_grade=None) for n, c in open_}
+        each, reachable = share_out(open_, needed)
+        result["each"] = each
+        result["status"] = "secured" if needed <= 0 else "reachable" if reachable else "out_of_reach"
+        filled = {n: dict(c, grade=min(max(each[n], 0.0), ceiling(c)), portal_grade=None) for n, c in open_}
         projected = {**courses, **filled}
     else:
         projected = courses

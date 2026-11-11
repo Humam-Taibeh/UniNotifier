@@ -26,6 +26,10 @@ All notable changes to this project are documented here. The format follows
   guest look-up gets the same from the guest's plan.
 - 📚 Remaining Courses under the transcript (and a guest's): what the plan still asks for, group by
   group; an elective group lists what can be chosen.
+- Grade Needed knows what a course can still reach: with its syllabus and your marks in ⚙️ Course
+  Adjustments (coursework 30 of 50), it shows 🔝 Best possible: 80, asks that course for no more
+  than that and the other courses for the difference, and says a target is out of reach from the
+  real ceilings.
 - Upcoming Tasks lists every open task: Cambridge One assignments and tasks without a due date too.
 - `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1, adapted) with a private way to report.
 - A pull request template with the checks the repository relies on.

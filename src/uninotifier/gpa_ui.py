@@ -205,14 +205,20 @@ def view_plan(names: list[str], scope: str, target: float) -> tuple[str, list]:
         source = "portal" if c.get("portal_grade") is not None else "entered"
         lines.append(f"🔒 *{escape_md(name)}* · {fmt(c['hours'])}h · {fmt(grade)} ({source})")
     for name, c in result["open"]:
+        top, mine = gpa.ceiling(c), result["each"].get(name, needed)
+        capped = top < 100 and mine >= top - 1e-9 and result["status"] != "secured"
         if result["status"] == "secured":
             goal = f"anything — already secured (pass needs {fmt(gpa.PASS_MARK)})"
+        elif capped:
+            goal = f"*{fmt(top)}* — the most it can still reach"
         elif result["status"] == "out_of_reach":
             goal = "100 isn't enough"
         else:
-            goal = f"*{fmt(max(needed, 0))}*" + (f" (and {fmt(gpa.PASS_MARK)} to pass)" if needed < gpa.PASS_MARK else "")
+            goal = f"*{fmt(max(mine, 0))}*" + (f" (and {fmt(gpa.PASS_MARK)} to pass)" if mine < gpa.PASS_MARK else "")
         lines.append(f"📘 *{escape_md(name)}* · {fmt(c['hours'])}h → needs {goal}")
-        need = gpa.need_for(c, max(needed, gpa.PASS_MARK)) if result["status"] == "reachable" else None
+        if top < 100:
+            lines.append(f"    🔝 Best possible: {fmt(top)} ({fmt(100 - top)} already lost)")
+        need = gpa.need_for(c, max(mine, gpa.PASS_MARK)) if result["status"] == "reachable" else None
         if need:
             lines.append(f"    📝 {_requirement(need)}")
     lines.append(DIVIDER)
@@ -223,8 +229,11 @@ def view_plan(names: list[str], scope: str, target: float) -> tuple[str, list]:
     elif status == "secured":
         lines.append(f"🎉 *Already secured* — the locked grades alone reach {fmt(target)}%.")
     elif status == "out_of_reach":
-        lines.append(f"⛔ *Out of reach* — even 100 in every remaining course falls short "
-                     f"(it would need {fmt(needed)}).")
+        lines.append(f"⛔ *Out of reach* — even the best possible in every remaining course falls short "
+                     f"(it would need an average of {fmt(needed)}).")
+    elif len({round(v, 4) for v in result["each"].values()}) > 1:
+        lines.append(f"🎯 *Needed on average:* {fmt(needed)}% — a course that already lost marks gives what it "
+                     "can, the others make up for it (above)")
     else:
         lines.append(f"🎯 *Needed on each remaining course:* {fmt(needed)}%")
     if result["semester"] is not None:

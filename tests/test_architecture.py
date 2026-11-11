@@ -2008,6 +2008,35 @@ def _sample_plan() -> dict:
     return degreeplan.parse(_plan_html())
 
 
+def test_a_course_cannot_be_asked_for_more_than_it_can_still_reach():
+    """Coursework 30 of 50 leaves 80 at best: the target is shared out so that course gives
+    what it can and the others make up for it; out of reach is said from the real ceilings."""
+    def course(marks=None):
+        return dict(gpa.new_course(), syllabus=[["Coursework", 50.0], ["Final", 50.0]] if marks is not None else None,
+                    marks=marks or {})
+    courses = {"Lost Twenty": course({"Coursework": 30.0}), "No Syllabus": course(), "Lost Five": course({"Coursework": 45.0})}
+    assert [gpa.ceiling(c) for c in courses.values()] == [80.0, 100.0, 95.0]
+    even = gpa.plan(courses, 70, "semester")
+    assert even["status"] == "reachable" and set(even["each"].values()) == {70.0}, "below every ceiling: shared equally"
+    tilted = gpa.plan(courses, 85, "semester")
+    assert tilted["status"] == "reachable" and tilted["each"] == {"Lost Twenty": 80.0, "No Syllabus": 87.5, "Lost Five": 87.5}
+    assert abs(tilted["semester"] - 85) < 1e-9, "the shares still come to the target"
+    beyond = gpa.plan(courses, 92, "semester")
+    assert beyond["status"] == "out_of_reach" and abs(beyond["semester"] - 275 / 3) < 1e-9,         "80 + 100 + 95 is the most: 92 cannot be reached although it is under 100"
+    from uninotifier import gpa_ui
+    keep = (gpa.load, gpa.save)
+    state = dict(gpa.load(), courses=courses)
+    gpa.load, gpa.save = (lambda: state), (lambda s: None)
+    try:
+        text = gpa_ui.view_plan(list(courses), "s", 85)[0]
+        assert "*Lost Twenty* · 3h → needs *80* — the most it can still reach" in text, text
+        assert "🔝 Best possible: 80 (20 already lost)" in text and "*No Syllabus* · 3h → needs *87.5*" in text
+        assert "Needed on average:* 85%" in text
+        assert "Out of reach" in gpa_ui.view_plan(list(courses), "s", 92)[0]
+    finally:
+        gpa.load, gpa.save = keep
+
+
 def test_study_plan_from_the_portal():
     """The degree's hours come from the student's own plan on the portal — any major, any plan year —
     never from a fixed number: what is required, passed, registered this term, failed and left."""
@@ -8765,6 +8794,7 @@ if __name__ == "__main__":
                test_the_statistics_do_not_grow_forever, test_the_moodle_probe, test_cambridge_one_assignments,
                test_cambridge_signs_in_by_itself, test_log_files_stay_small,
                test_portal_session_is_reused_for_15_minutes, test_portal_answers_from_the_saved_copy, test_study_plan_from_the_portal,
+               test_a_course_cannot_be_asked_for_more_than_it_can_still_reach,
                test_replaced_files_move_to_old_versions, test_settings_are_checked_before_anything_runs,
                test_archive_root_defaults_to_documents_university, test_state_backup_lives_in_its_own_repository,
                test_sign_in_needs_no_form_when_microsoft_still_remembers_you,
