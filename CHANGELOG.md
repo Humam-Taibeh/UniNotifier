@@ -42,6 +42,12 @@ All notable changes to this project are documented here. The format follows
 - An "unofficial, use at your own risk" notice in both READMEs.
 
 ### Changed
+- Messages are shorter: what an instructor wrote is in the picture, not typed out again under it
+  (the wording is sent only when there is no picture or file). A forum post or announcement arrives
+  as a picture of the post. An edit says what changed — *Was* / *Now*, line by line — instead of
+  repeating the whole text.
+- A file that looks like a marks list in which your mark was not found (a scanned PDF, or your
+  number is not in it) says so, so you open it.
 - A transcript is one message — the screenshot with the summary — with ✅ Courses Taken and
   📚 Remaining Courses as buttons, instead of a second long message with every semester.
 - `scripts/windows_recovery.ps1` is safer to hand to other people: by default it only stops Windows Update

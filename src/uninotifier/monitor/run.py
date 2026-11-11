@@ -188,7 +188,8 @@ def run(announce: bool = False) -> None:
             saved["content"][iid] = state.public(content[iid])        # the new fingerprint: announced once
             state.save_data(saved)
         else:
-            content[iid] = {**content[iid], "hash": saved["content"][iid]["hash"]}
+            content[iid] = {**content[iid], "hash": saved["content"][iid]["hash"],
+                            **({"text": saved["content"][iid]["text"]} if "text" in saved["content"][iid] else {})}
 
     # A mark is told once; one that failed to deliver is told by the next run. On the
     # first run the marks already there are old news.

@@ -142,6 +142,25 @@ def extract_grade(path: Path, student_id: str) -> dict | None:
     return None
 
 
+_MARKS_NAME = re.compile(r"grade|mark|result|score|علام|نتائج|نتيجة|درجات|تجميع|كشف", re.I)
+
+
+def unread_note(path: Path | None, title: str, found: dict | None) -> str:
+    """Said under a file that looks like a marks list when your mark was not found in it: the
+    file is worth opening. Empty when the mark was found or the file is not about marks."""
+    if found or not _MARKS_NAME.search(f"{title} {path.name if path else ''}"):
+        return ""
+    scanned = False
+    if path and path.is_file() and path.suffix.lower() == ".pdf":
+        try:
+            scanned = not _read_rows(path)
+        except Exception:
+            scanned = True
+    why = ("it is a scanned file, which I cannot read" if scanned
+           else "your number is not in it, or it is written in a way I cannot read")
+    return f"🔎 *This looks like a marks list* — I could not find your mark: {why}. Open it to check."
+
+
 def scan_paths(path: Path, student_id: str) -> dict | None:
     """Scan a file, or every scannable file inside an extracted folder."""
     if path.is_file():

@@ -2037,6 +2037,37 @@ def test_a_course_cannot_be_asked_for_more_than_it_can_still_reach():
         gpa.load, gpa.save = keep
 
 
+def test_messages_stay_short():
+    """What an instructor wrote is in the picture, not typed out again; an edit says what changed;
+    a marks list in which your mark was not found says so."""
+    import tempfile
+    from uninotifier import grades
+    from uninotifier.monitor import notify
+    item = {"name": "Week 3", "type": "label", "course": "20261-Big Data-AllSec-3-", "url": "https://x/1",
+            "_body": "<p>Read chapter 3 before the lecture.</p>"}
+    assert notify.body_text(item) == "Read chapter 3 before the lecture."
+    assert notify.body_text(item, shown=True) == "", "a picture or the file shows it: not typed out again"
+
+    old = "Quiz on Sunday\nChapters 1 and 2\nBring a calculator"
+    new = "Quiz on Tuesday\nChapters 1 and 2\nBring a calculator\nRoom 12"
+    assert media.change_lines(old, new) == "*Was:*\n➖ Quiz on Sunday\n*Now:*\n➕ Quiz on Tuesday\n➕ Room 12"
+    assert media.change_lines(old, old).startswith("🖼️ The wording is the same")
+    assert media.change_lines(None, new) == "", "nothing was kept to compare with: the picture speaks"
+    many = media.change_lines("", "\n".join(f"line {n}" for n in range(20)))
+    assert many.count("➕") == media.CHANGE_LINES and "… and 12 more" in many
+    assert "Current version below" not in media.build_content_update_message(item)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        listed = Path(tmp) / "Midterm marks.txt"
+        listed.write_text("900111 17\n900222 12\n", encoding="utf-8")
+        assert grades.unread_note(listed, "Midterm marks", None).startswith("🔎 *This looks like a marks list*")
+        assert grades.unread_note(listed, "Midterm marks", {"summary": "17"}) == "", "the mark was found"
+        slides = Path(tmp) / "Chapter 2.txt"
+        slides.write_text("slides", encoding="utf-8")
+        assert grades.unread_note(slides, "Chapter 2", None) == "", "not about marks: nothing to say"
+        assert "your number is not in it" in grades.unread_note(listed, "كشف العلامات", None)
+
+
 def test_study_plan_from_the_portal():
     """The degree's hours come from the student's own plan on the portal — any major, any plan year —
     never from a fixed number: what is required, passed, registered this term, failed and left."""
@@ -8832,7 +8863,7 @@ if __name__ == "__main__":
                test_the_statistics_do_not_grow_forever, test_the_moodle_probe, test_cambridge_one_assignments,
                test_cambridge_signs_in_by_itself, test_log_files_stay_small,
                test_portal_session_is_reused_for_15_minutes, test_portal_answers_from_the_saved_copy, test_study_plan_from_the_portal,
-               test_a_course_cannot_be_asked_for_more_than_it_can_still_reach,
+               test_a_course_cannot_be_asked_for_more_than_it_can_still_reach, test_messages_stay_short,
                test_replaced_files_move_to_old_versions, test_settings_are_checked_before_anything_runs,
                test_archive_root_defaults_to_documents_university, test_state_backup_lives_in_its_own_repository,
                test_sign_in_needs_no_form_when_microsoft_still_remembers_you,

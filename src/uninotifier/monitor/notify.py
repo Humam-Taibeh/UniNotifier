@@ -1,7 +1,10 @@
 """
 Turning what was found into Telegram messages: new items, forum posts, edits,
-file updates, lecture links, new courses — each with its full text, its
-screenshot or file, and its buttons (Mark as Done, Add to Reminders, …).
+file updates, lecture links, new courses — each with its screenshot or file and
+its buttons (Mark as Done, Add to Reminders, …). Messages stay short: what an
+instructor wrote is in the picture, not typed out again under it — the wording
+is sent only when there is no picture or file to show it, and an edit says what
+changed (what was there, what is there now).
 """
 
 from pathlib import Path
@@ -50,8 +53,14 @@ def deliver(header: str, body: str = "", url: str | None = None, rows: list | No
     return notifier.send_long_message(config.BOT_TOKEN, config.CHAT_ID, full, url, rows)
 
 
-def body_text(item: dict) -> str:
-    return richtext.to_text(item.get("_body", ""))
+def body_text(item: dict, shown: bool = False) -> str:
+    """The item's own wording — only when nothing else shows it (`shown`: a picture or the file
+    itself goes with the message)."""
+    return "" if shown else richtext.to_text(item.get("_body", ""))
+
+
+def marks_note(path: Path | None, item: dict, found: dict | None) -> str:
+    return grades.unread_note(path, item.get("name", ""), found) if config.STUDENT_ID else ""
 
 
 def shot_filename(item: dict) -> str:
@@ -75,14 +84,18 @@ def notify_file_update(item: dict, artifact: dict) -> bool:
                                       old_name=old, new_name=path.name, where=archive.destination(path),
                                       retired_to=archive.retired_to(Path(retired)) if retired else None,
                                       grade=artifact.get("grade"))
-    return deliver(text, url=item["url"], rows=reminder_rows(item, "u"),
+    note = marks_note(path, item, artifact.get("grade"))
+    return deliver(f"{text}\n{note}" if note else text, url=item["url"], rows=reminder_rows(item, "u"),
                    document=path if items.uploadable(path) else None)
 
 
 def notify_content_update(item: dict, artifact: dict) -> bool:
     header = media.build_content_update_message(item)
     note = screenshot_note(artifact)
-    return deliver(f"{header}\n{note}" if note else header, body_text(item), item["url"],
+    changed = media.change_lines(artifact.get("old_text"), item.get("text"))
+    if not changed and not artifact.get("shots"):
+        changed = body_text(item)                      # nothing to compare with and no picture: the current wording
+    return deliver(f"{header}\n{note}" if note else header, changed, item["url"],
                    media.completion_rows(item) + reminder_rows(item, "e"),
                    artifact.get("shots", []), shot_filename(item))
 
@@ -106,9 +119,9 @@ def notify_new_item(item: dict, deadline: dict | None, artifact: dict,
                     submitted: bool | None = None) -> bool:
     kind = artifact.get("kind") or media.classify(item)
     url = item["url"]
-    body = body_text(item)
     rows = media.completion_rows(item) + reminder_rows(item)
     shots, shot_name = artifact.get("shots", []), shot_filename(item)
+    body = body_text(item, shown=bool(shots))
 
     if kind == "link" and artifact.get("target"):
         return deliver(media.build_link_message(item, artifact["target"], deadline), body, url, rows)
@@ -137,9 +150,10 @@ def notify_new_item(item: dict, deadline: dict | None, artifact: dict,
     notes = ["📎 Same file as an item already sent — not attached again." if duplicate else
              "💾 Saved locally (file is large or a folder)." if saved_path and not document else "",
              f"📂 *Saved to:* {where}" if where else "",
+             marks_note(saved_path, item, grade) if kind == "file" else "",
              screenshot_note(artifact)]
     header = media.build_item_message(item, deadline, "\n".join(n for n in notes if n), grade, status)
-    return deliver(header, body, url, rows, shots, shot_name, document)
+    return deliver(header, body_text(item, shown=bool(shots or document)), url, rows, shots, shot_name, document)
 
 
 def pin_rows(key: str, note: str, course: str, url: str) -> list[list[dict]]:
@@ -159,8 +173,9 @@ def notify_forum_post(forum: dict, post: dict) -> bool:
     """The post itself, then its attachments as files (best effort: the
     message already says how many there are)."""
     rows = pin_rows(f"p{post['id']}", post["subject"] or forum["name"], forum["course"], post["url"])
-    if not deliver(media.build_forum_post_message(forum, post), richtext.to_text(post["html"]),
-                   post["url"], rows):
+    shots = post.get("_shots") or []
+    if not deliver(media.build_forum_post_message(forum, post), "" if shots else richtext.to_text(post["html"]),
+                   post["url"], rows, shots, archive.safe_name(post["subject"] or forum["name"], "post")[:120] + ".png"):
         return False
     for filename, data in post.get("_files", []):
         tmp = paths.DATA / f"_attachment_{post['id']}_{archive.safe_name(filename, 'file')}"
@@ -171,6 +186,8 @@ def notify_forum_post(forum: dict, post: dict) -> bool:
             if marks:
                 caption = "\n".join([f'🎉 *Marks Detected:* *{escape_md(marks["summary"])}*', caption,
                                      *media.grade_details(marks)])
+            elif config.STUDENT_ID and grades.unread_note(tmp, f'{filename} {post["subject"]}', None):
+                caption = f'{caption}\n{grades.unread_note(tmp, f"{filename} {post["subject"]}", None)}'
             notifier.send_document(config.BOT_TOKEN, config.CHAT_ID, tmp, caption, post["url"])
         except OSError:
             log.exception("Could not forward attachment %s", filename)

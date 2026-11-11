@@ -395,11 +395,15 @@ def _display_name(item: dict, body: str) -> str:
     return item.get("section") or name or "Untitled"
 
 
+TEXT_KEPT = 6000        # characters of an item's wording kept between runs, to say what an edit changed
+
+
 def enrich_with_page(context, course_id: str, course_name: str, content: dict, sections: dict) -> None:
     """Attach bodies, readable names, fingerprints and manual-completion flags
     to the tree items, and add one item per section that has a summary.
     The body HTML is kept under "_body" (not persisted); its fingerprint is
-    persisted as "hash" so an edit can be detected on a later run."""
+    persisted as "hash" so an edit can be detected on a later run, and its
+    wording as "text" so that edit can be said: what it was, what it is now."""
     page_html = fetch_html(context, course_url(course_id))
     if not page_html:
         # Without the page, bodies and fingerprints would look "removed";
@@ -429,6 +433,7 @@ def enrich_with_page(context, course_id: str, course_name: str, content: dict, s
         item["name"] = _display_name(item, body)
         if richtext.is_meaningful(body):
             item["_body"] = body
+            item["text"] = richtext.to_text(body)[:TEXT_KEPT]
             item["hash"] = richtext.digest(body)
             item["hv"] = richtext.DIGEST_VERSION
     for sid, summary in page["summaries"].items():
@@ -444,6 +449,7 @@ def enrich_with_page(context, course_id: str, course_name: str, content: dict, s
             "course_id": course_id,
             "sectionid": sid,
             "_body": summary,
+            "text": richtext.to_text(summary)[:TEXT_KEPT],
             "hash": richtext.digest(summary),
             "hv": richtext.DIGEST_VERSION,
         }

@@ -16,6 +16,7 @@ Every message carries the item's own text (description, label, page body)
 in full, and a "Mark as Done" toggle when the activity has one.
 """
 
+import difflib
 import re
 import time
 from datetime import datetime
@@ -242,12 +243,43 @@ def build_item_message(item: dict, deadline: dict | None, note: str = "",
     return "\n".join(lines)
 
 
+CHANGE_LINES = 8          # lines shown of what was removed, and of what was added
+CHANGE_LINE_CHARS = 220
+
+
+def change_lines(old: str | None, new: str | None) -> str:
+    """What an edit changed, line by line: ➖ what was there, ➕ what is there now. Empty when the
+    earlier wording was never kept (the picture shows the current version)."""
+    if old is None or new is None:
+        return ""
+    before = [line.strip() for line in old.splitlines() if line.strip()]
+    after = [line.strip() for line in new.splitlines() if line.strip()]
+    removed, added = [], []
+    for tag, a1, a2, b1, b2 in difflib.SequenceMatcher(None, before, after, autojunk=False).get_opcodes():
+        if tag != "equal":
+            removed += before[a1:a2]
+            added += after[b1:b2]
+    if not removed and not added:
+        return "🖼️ The wording is the same — only the layout or a picture changed."
+
+    def shown(lines: list[str], mark: str) -> list[str]:
+        out = [f"{mark} {line[:CHANGE_LINE_CHARS]}{'…' if len(line) > CHANGE_LINE_CHARS else ''}"
+               for line in lines[:CHANGE_LINES]]
+        return out + ([f"    … and {len(lines) - CHANGE_LINES} more"] if len(lines) > CHANGE_LINES else [])
+
+    parts = []
+    if removed:
+        parts += ["*Was:*", *shown(removed, "➖")]
+    if added:
+        parts += ["*Now:*", *shown(added, "➕")]
+    return "\n".join(parts)
+
+
 def build_content_update_message(item: dict, detected_at: float | None = None) -> str:
-    """An instructor edited a label, a page or a description; the current
-    version follows as the body."""
+    """An instructor edited a label, a page or a description; what changed follows as the body
+    and the picture shows the current version."""
     emoji, label = _label(item)
     return "\n".join(["✏️ *Content Updated*", "", *_fields(item, label, emoji, None, None),
-                      "", "The instructor edited this content. Current version below.",
                       _audit(detected_at)])
 
 

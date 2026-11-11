@@ -383,7 +383,8 @@ def run_scan(saved: dict, notify_new: bool, mfa_handler=None) -> dict:
             item = content[item_id]
             log.info("  content edited: %s", item["name"])
             shots, truncated = items.capture_screens(browser.page, *moodle.screenshot_target(item))
-            edits[item_id] = {"shots": shots, "truncated": truncated}
+            edits[item_id] = {"shots": shots, "truncated": truncated,
+                              "old_text": saved["content"][item_id].get("text")}
 
         forum_posts = {}
         forums = [(iid, it) for iid, it in content.items() if it["type"] == "forum"]
@@ -400,6 +401,8 @@ def run_scan(saved: dict, notify_new: bool, mfa_handler=None) -> dict:
             log.info("  %d new post(s) in %s", len(fresh), content[item_id]["name"])
             for post in fresh:
                 notify.download_attachments(http, post)
+                # the post as it looks on the portal: the message carries the picture, not the wording again
+                post["_shots"], _ = items.capture_screens(browser.page, post["url"], f'#p{post["id"]}')
 
         updates = {}
         archived = [(iid, it) for iid, it in content.items()
