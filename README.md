@@ -262,6 +262,7 @@ Everything is buttons: send `/start` for the menu. A few commands are worth know
 | `/need` · `/gpa` | Grade Needed · GPA & Grade Hub |
 | `/transcript` · `/balance` | from the registration portal (needs `PORTAL_*` in `.env`) |
 | `/register` | 🗓️ Registration Plan — what to register next term |
+| `/update` | 🆕 is there a new version — what is new, and ⬇️ Update Now |
 | `/finals` | Finals Watch during exam season |
 | `/check` | run a check right now |
 | `/help` | a link to this guide |
@@ -344,6 +345,8 @@ Details in [docs/REFERENCE.md](docs/REFERENCE.md).
 ---
 
 ## Updating, pausing, uninstalling
+
+**The bot tells you when a new version is ready** — once a day it looks at the repository you cloned, and sends one message saying what is new, with ⬇️ **Update Now**: it installs the version and restarts itself. Nothing is installed without that press; `/update` looks at once. By hand, it is:
 
 ```powershell
 # update to the latest version

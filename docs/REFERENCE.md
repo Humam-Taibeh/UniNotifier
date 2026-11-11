@@ -457,6 +457,29 @@ built against the real page when it opens — the screen says so until then):
 Two rules it will keep: it registers only a section of a course you approved by name, and it never
 drops a course.
 
+### New versions and news (`/update`)
+
+A copy that was cloned with git is told when a new version is ready. Once a day (and on `/update`)
+the bot fetches the repository the copy was cloned from — its own `origin`; no address is written
+in the code — and, when the copy is behind, sends **one** message per new version:
+
+- what is new: the entries of [`NEWS.md`](../NEWS.md) the copy does not have yet — written by the
+  developer for the people who use the project, so a notice (a known problem, something to do)
+  reaches everyone the same way; when a version brings no entry, the subjects of its `feat` / `fix`
+  commits;
+- **⬇️ Update Now** and **⏰ Later**.
+
+Nothing is installed without that press. Update Now only fast-forwards a clean copy: a project file
+you changed yourself stops it, with the file's name (`git pull` by hand then). When
+`requirements.txt` changed, the requirements are installed again (and Playwright's Chromium is
+refreshed). The new files must compile; otherwise the copy goes back to the version it had, and
+says so. Then the bot ends itself and its scheduled task starts it again a few seconds later on the
+new code; the 15-minute check reads the new code by itself. `.env`, `schedule.json` and `data\` are
+not part of the repository and are never touched.
+
+A copy downloaded as a ZIP has no git history and is not checked: `/update` says how to update it.
+State: `data/updates.json` (when it last looked, which version it told you about).
+
 ### Saved portal answers and session reuse
 
 **Transcript** and **Balance** answer at once from the last read, stamped `🕒 As of`. When that
@@ -782,7 +805,7 @@ UniNotifier/
 ├── src/uninotifier/          the code
 │   ├── monitor/              the scheduled check: config · state · alerts · timed · items · notify · scan · run
 │   ├── bot/                  the Telegram bot: chat · views · gpa_flow · reminder_flow · portal_flow ·
-│   │                         guest_flow · finals_flow · registration_flow · checks · app
+│   │                         guest_flow · finals_flow · registration_flow · update_flow · checks · app
 │   ├── moodle.py, httpctx.py, richtext.py, media.py, activities.py, probe.py   reading Moodle, wording messages
 │   ├── archive.py, grades.py                                           the archive and marks in files
 │   ├── lectures.py, lecturelinks.py, schedule.py, reminders.py, daily.py   time-based messages (daily.py: the once-only claims)
@@ -790,6 +813,7 @@ UniNotifier/
 │   ├── checkin.py            automatic attendance check-in for the online lectures
 │   ├── classtable.py         your weekly timetable, read from the portal (which days are online)
 │   ├── gpa.py, gpa_ui.py, gradebook.py, transcript.py, portal.py, finals.py, guest.py   grades, GPA, the portal
+│   ├── updates.py            a new version of the project: the daily look, NEWS.md, Update Now
 │   ├── degreeplan.py, registration.py                                  the study plan, and what to register next term
 │   ├── cambridge.py                                                    Cambridge One assignments (optional)
 │   ├── watchdog.py, maintenance.py, healthcheck.py, gitsync.py          keeping itself honest; state backup
@@ -993,7 +1017,7 @@ old one in the weighted sum and its hours count once. A retake set by hand is le
 
 Commands: `/start`, `/help`, `/courses`, `/tasks`, `/remind`, `/schedule`, `/need`
 (Grade Needed), `/gpa` (GPA & Grade Hub), `/record`
-(Academic Record & Balance), `/grades`, `/transcript`, `/balance` (portal, on demand), `/register` (Registration Plan),
+(Academic Record & Balance), `/grades`, `/transcript`, `/balance` (portal, on demand), `/register` (Registration Plan), `/update` (a new version),
 `/finals`. Only `TELEGRAM_CHAT_ID` is answered. `/check` launches `monitor.py`, which holds `monitor.lock`, so a
 manual check and the scheduled task never overlap.
 

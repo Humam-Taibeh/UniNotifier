@@ -264,6 +264,7 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1
 | `/need` · `/gpa` | حاسبة العلامة المطلوبة (Grade Needed) · مركز المعدل والعلامات |
 | `/transcript` · `/balance` | كشف العلامات · الرصيد المالي، من بوابة الطالب (تحتاج قيم `PORTAL_*` في `.env`) |
 | `/register` | 🗓️ Registration Plan — ماذا تسجّل في الفصل القادم |
+| `/update` | 🆕 هل يوجد إصدار جديد — ما الجديد فيه، وزر ⬇️ Update Now |
 | `/finals` | مراقبة العلامات النهائية (Finals Watch) في فترة الامتحانات |
 | `/check` | تشغيل فحص فوري الآن |
 | `/help` | رابط لهذا الدليل |
@@ -347,6 +348,8 @@ powershell -ExecutionPolicy Bypass -File scripts\windows_recovery.ps1 -Undo     
 ---
 
 ## التحديث والإيقاف المؤقت والإزالة
+
+**البوت يخبرك حين يصدر إصدار جديد** — مرة في اليوم ينظر إلى المستودع الذي استنسخته، ويرسل رسالة واحدة تذكر ما الجديد، ومعها زر ⬇️ **Update Now**: يثبّت الإصدار ويعيد تشغيل نفسه. لا يُثبَّت شيء بدون هذه الضغطة، والأمر `/update` يفحص فوراً. أما يدوياً فهكذا:
 
 ```powershell
 # التحديث إلى أحدث إصدار

@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- The bot tells you when a new version is ready (once a day, and on `/update`), with what is new from
+  `NEWS.md`, and ⬇️ Update Now installs it and restarts the bot — only on your press, only a clean
+  clone, and a version that does not start is taken back.
 - 🗓️ Registration Plan (`/register`, under 📜 Academic Record & Balance, and in a guest look-up): what to
   register next term, from your study plan and its prerequisites as the portal lists them — choose the
   hours the term allows and get the courses, the most important first; every course that is not open

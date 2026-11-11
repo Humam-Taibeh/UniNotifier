@@ -1,0 +1,13 @@
+# News
+
+What is new, in plain words, for the people who use UniNotifier. The bot shows the entries a copy
+does not have yet when it tells its owner that a new version is ready (newest first; one entry is
+`## YYYY-MM-DD — Title`, then the text). The full list of changes is in [CHANGELOG.md](CHANGELOG.md).
+
+## 2026-11-11 — Updates from the chat, and the Registration Plan
+- The bot now tells you when a new version is ready, with what is new, and ⬇️ Update Now installs it.
+- 🗓️ Registration Plan (under 📜 Academic Record & Balance): what to register next term, from your own
+  study plan and its prerequisites — a suggestion for the hours you choose, or your own choice.
+- Your marks are found in PDF files too, and a course's coursework total (42/60) shows the best mark it
+  can still reach.
+- Messages are shorter: a picture of what the instructor wrote, and what changed when it is edited.

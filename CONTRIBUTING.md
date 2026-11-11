@@ -48,6 +48,12 @@ CI is green, the maintainer applies the same version change in an ordinary commi
 request, so the project's history and contributors stay human. Playwright updates arrive on their own
 because they change the browser that signs in — after applying one, watch the next real check.
 
+## Telling users about a release
+
+Every installed copy shows its owner the entries of `NEWS.md` it does not have yet when it finds a new
+version. Add an entry at the top for anything a user should know — `## YYYY-MM-DD — Title`, then a few
+plain lines — in the same push as the change. A notice with no code change is an entry on its own.
+
 ## Commit messages
 
 A short prefix and an imperative summary: `feat:`, `fix:`, `docs:`, `test:`, `ci:`, `deps:`, `refactor:`.
