@@ -7,6 +7,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- 🗓️ Registration Plan (`/register`, under 📜 Academic Record & Balance, and in a guest look-up): what to
+  register next term, from your study plan and its prerequisites as the portal lists them — choose the
+  hours the term allows and get the courses, the most important first; every course that is not open
+  yet is listed with its reason (a prerequisite, final year only, graduation term only).
 - Automatic attendance check-in for online lectures (`"auto_check_in": true` in `schedule.json`):
   only a day that is an online lecture (ZUJ's ك), never an in-person (و, م) or activity (ن) day —
   read from the portal's own timetable (the bot reads it by itself, once — and again on `/check` —

@@ -385,6 +385,64 @@ To let someone else see what the bot does with *their* record — once, from Tel
 
 The same report is available on this PC without Telegram: `.venv\Scripts\python -m uninotifier.guest`.
 
+### Registration Plan (`/register`)
+
+🗓️ **Registration Plan**, under 📜 Academic Record & Balance: what to register next term. It is
+worked out from the study plan the last 📜 Transcript read brought — every course's status and its
+prerequisites (المتطلبات السابقة), as the portal lists them — so it works for any major and plan
+year, and it contacts nothing: open 📜 Transcript to refresh what it knows. A guest look-up has the
+same button for a friend's plan.
+
+This term's courses are counted as passed: the plan is for the term after them. When a final mark
+comes out as a fail, the portal's plan shows the course as failed, and the next transcript read
+puts it back here as a retake — with whatever it was the prerequisite of closed again.
+
+The screen says the hours left, how many are open to you and how many are not yet, then asks how
+many hours you want:
+
+| Term | Choices |
+|------|---------|
+| Regular (first, second) | 12 · 15 · 18 · 21 ⭐ — 21 only in your graduation term or with an excellent CGPA (said on the proposal) |
+| Summer | 3 · 6 · 9 — 12 only when it is your last term at the university |
+| Graduation term | the choices below what is left, and *all that is left* |
+
+The term is the one after your transcript's newest; 🔁 plans the summer term (or the regular one)
+instead. It is your **graduation term** when everything left fits in the term's highest load and
+none of it is held back.
+
+The proposal fills the hours in this order, never with a course that is not open to you:
+
+1. a remedial course you still owe (on top of the plan's hours);
+2. a failed course (retake);
+3. compulsory courses — first the one the most other courses wait for (`opens 6 courses`), then the
+   lower year;
+4. electives, only up to the hours their category still needs.
+
+A course whose prerequisite you are taking now is offered as `if you pass … this term`. **⛔ Not
+Yet — Why** lists every other course with its reason:
+
+- `after <course>` — a prerequisite not passed yet;
+- `final year only (90+ hrs passed), with the department head's approval` — field training, the
+  graduation project and its methodology course (a plan with one project or two reads the same):
+  90 plan hours passed and no more than a year's hours (45) left;
+- `graduation term only` — military science.
+
+A prerequisite the plan does not list is said (`⚠️ needs 0900999 — not on your plan, check it`),
+never guessed. The rules are constants at the top of `registration.py`.
+
+**With the registration period** (the portal's registration page only exists then, so this part is
+built against the real page when it opens — the screen says so until then):
+
+- the days you want to attend (Sun/Tue, Mon/Wed, or every day) and the courses you want: must-have
+  courses, and alternates to use when a must-have has no section that fits;
+- the sections that make that timetable with no clash, closed sections marked;
+- after you approve the timetable, registering those sections for you, and watching a closed
+  section every few minutes to take a seat the moment one frees — with a message each time, and a
+  switch that shows whether the watch is running and stops it.
+
+Two rules it will keep: it registers only a section of a course you approved by name, and it never
+drops a course.
+
 ### Saved portal answers and session reuse
 
 **Transcript** and **Balance** answer at once from the last read, stamped `🕒 As of`. When that
@@ -710,7 +768,7 @@ UniNotifier/
 ├── src/uninotifier/          the code
 │   ├── monitor/              the scheduled check: config · state · alerts · timed · items · notify · scan · run
 │   ├── bot/                  the Telegram bot: chat · views · gpa_flow · reminder_flow · portal_flow ·
-│   │                         guest_flow · finals_flow · checks · app
+│   │                         guest_flow · finals_flow · registration_flow · checks · app
 │   ├── moodle.py, httpctx.py, richtext.py, media.py, activities.py, probe.py   reading Moodle, wording messages
 │   ├── archive.py, grades.py                                           the archive and marks in files
 │   ├── lectures.py, lecturelinks.py, schedule.py, reminders.py, daily.py   time-based messages (daily.py: the once-only claims)
@@ -718,6 +776,7 @@ UniNotifier/
 │   ├── checkin.py            automatic attendance check-in for the online lectures
 │   ├── classtable.py         your weekly timetable, read from the portal (which days are online)
 │   ├── gpa.py, gpa_ui.py, gradebook.py, transcript.py, portal.py, finals.py, guest.py   grades, GPA, the portal
+│   ├── degreeplan.py, registration.py                                  the study plan, and what to register next term
 │   ├── cambridge.py                                                    Cambridge One assignments (optional)
 │   ├── watchdog.py, maintenance.py, healthcheck.py, gitsync.py          keeping itself honest; state backup
 │   ├── failsafe.py, heartbeat.py, selfheal.py, fileio.py   fail-loud alerts, the bot's pulse, its self-restart, crash-safe writes
@@ -831,7 +890,7 @@ courses — above a four-row menu:
 | Row | Buttons |
 |-----|---------|
 | 1 | 📚 My Courses & Schedule (📋 Course List & Details · 📅 Weekly Timetable) · ⏳ Upcoming Tasks & Reminders |
-| 2 | 📊 GPA & Grade Hub (🎯 Grade Needed — ⚙️ Course Adjustments inside it · 🏁 Finals Watch — 🔄 Check Grades Now and the background switch) · 📜 Academic Record & Balance (📜 Transcript · 💰 Balance · 👤 Guest Look-up) |
+| 2 | 📊 GPA & Grade Hub (🎯 Grade Needed — ⚙️ Course Adjustments inside it · 🏁 Finals Watch — 🔄 Check Grades Now and the background switch) · 📜 Academic Record & Balance (📜 Transcript · 💰 Balance · 🗓️ Registration Plan · 👤 Guest Look-up) |
 
 There is no manual-check button: the 15-minute schedule and the status line cover it
 (`/check` still works when typed — the Microsoft-verification alert relies on it).
@@ -920,7 +979,7 @@ old one in the weighted sum and its hours count once. A retake set by hand is le
 
 Commands: `/start`, `/help`, `/courses`, `/tasks`, `/remind`, `/schedule`, `/need`
 (Grade Needed), `/gpa` (GPA & Grade Hub), `/record`
-(Academic Record & Balance), `/grades`, `/transcript`, `/balance` (portal, on demand),
+(Academic Record & Balance), `/grades`, `/transcript`, `/balance` (portal, on demand), `/register` (Registration Plan),
 `/finals`. Only `TELEGRAM_CHAT_ID` is answered. `/check` launches `monitor.py`, which holds `monitor.lock`, so a
 manual check and the scheduled task never overlap.
 
