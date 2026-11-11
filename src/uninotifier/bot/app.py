@@ -32,7 +32,7 @@ from uninotifier import schedule
 from uninotifier import tasks
 from uninotifier import telegram
 from uninotifier.bot import (chat, checks, finals_flow, gpa_flow, guest_flow, portal_flow, registration_flow,
-                             reminder_flow, views)
+                             reminder_flow, update_flow, views)
 
 log = logging.getLogger("uninotifier")
 
@@ -94,6 +94,7 @@ COMMANDS = [
     ("transcript", "📜 Transcript & Passed Hours"),
     ("balance", "💰 Tuition Balance"),
     ("register", "🗓️ Registration Plan"),
+    ("update", "🆕 Check for a New Version"),
     ("finals", "🏁 Finals Watch"),
 ]
 
@@ -146,6 +147,8 @@ def handle_command(text: str, message_id: int | None = None) -> None:
         views.start_schedule_files()
     elif command == "/register":
         registration_flow.start()
+    elif command == "/update":
+        chat.send_view(*update_flow.view_status())
     elif command == "/help":
         chat.send_view(*views.view_guide_link())
     elif command in views.COMMAND_VIEWS:
@@ -255,6 +258,9 @@ def route_callback(cb: dict, action: str, message_id: int | None) -> None:
         return
     if action.startswith("reg:"):
         registration_flow.handle_callback(cb, action, message_id)
+        return
+    if action.startswith("update:"):
+        update_flow.handle_callback(cb, action, message_id)
         return
     if action.startswith("finals:"):
         chat.answer(cb["id"])
@@ -408,6 +414,7 @@ def main() -> None:
     threading.Thread(target=finals_flow.finals_loop, name="finals", daemon=True).start()
     threading.Thread(target=pulse_loop, name="pulse", daemon=True).start()
     threading.Thread(target=probe.loop, name="probe", daemon=True).start()     # the 2-minute look at Moodle
+    threading.Thread(target=update_flow.loop, name="updates", daemon=True).start()   # a new version, once a day
     threading.Thread(target=checkin.loop, args=(chat.BOT_TOKEN, chat.CHAT_ID), name="checkin",
                      daemon=True).start()                                       # attendance check-in
     threading.Thread(target=classtable.loop, args=(chat.BOT_TOKEN, chat.CHAT_ID, portal_flow._portal_lock),

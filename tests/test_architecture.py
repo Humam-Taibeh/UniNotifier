@@ -2254,6 +2254,97 @@ def test_registration_plan():
     assert "fetch" not in source and "playwright" not in source, "advice only: the portal is not touched"
 
 
+def test_new_versions_and_news():
+    """A cloned copy is told once about each new version, in the developer's own words (NEWS.md);
+    Update Now only fast-forwards a clean copy, and a version that does not start is taken back."""
+    import subprocess
+    import tempfile
+    from uninotifier import updates
+
+    news = "# News\n\n## 2030-02-01 — Registration Plan\nChoose your hours.\n- and courses\n\n## 2030-01-10 — First\nHello.\n"
+    entries = updates.parse_news(news)
+    assert [e["id"] for e in entries] == ["2030-02-01 — Registration Plan", "2030-01-10 — First"]
+    assert entries[0]["text"] == "Choose your hours.\n- and courses"
+    fresh = updates.new_entries(news, "## 2030-01-10 — First\nHello.\n")
+    assert [e["title"] for e in fresh] == ["2030-02-01 — Registration Plan"], "only what this copy does not have"
+    assert updates.visible_subjects(["feat: a new screen", "docs: wording", "fix(bot): a button", "chore: bump"]) == [
+        "a new screen", "a button"]
+    told = updates.message({"news": fresh, "subjects": ["feat: x"], "behind": 2, "sha": "a" * 40})
+    assert "📣 *2030-02-01 — Registration Plan*" in told and "Choose your hours." in told and "What changed" not in told
+    plain = updates.message({"news": [], "subjects": ["feat: a new screen", "docs: wording"], "behind": 2, "sha": "a" * 40})
+    assert "• a new screen" in plain and "wording" not in plain
+    assert "under the hood" in updates.message({"news": [], "subjects": ["docs: wording"], "behind": 1, "sha": "a" * 40})
+    for text in (told, plain):
+        assert _legacy_markdown_ok(text) and len(text) < notifier.MESSAGE_LIMIT
+    assert updates.due(now=100000.0, state={}) and not updates.due(now=100000.0, state={"checked": 99000.0})
+
+    def git(where, *args):
+        done = subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                               "-c", "commit.gpgsign=false", "-c", "core.hooksPath=", *args],
+                              cwd=where, capture_output=True, text=True)
+        assert done.returncode == 0, (args, done.stderr)
+        return done.stdout.strip()
+
+    keep_state = updates.STATE_FILE
+    with tempfile.TemporaryDirectory() as tmp:
+        origin, copy = Path(tmp) / "origin", Path(tmp) / "copy"
+        origin.mkdir()
+        git(origin, "init", "--quiet", "--initial-branch=main")
+        (origin / "bot.py").write_text("print('one')\n", encoding="utf-8")
+        (origin / "requirements.txt").write_text("", encoding="utf-8")
+        (origin / "NEWS.md").write_text("## 2030-01-10 — First\nHello.\n", encoding="utf-8")
+        git(origin, "add", "-A"); git(origin, "commit", "--quiet", "-m", "feat: the first version")
+        git(Path(tmp), "clone", "--quiet", str(origin), "copy")
+        updates.STATE_FILE = Path(tmp) / "updates.json"
+        try:
+            assert updates.is_clone(copy) and not updates.is_clone(Path(tmp))
+            assert updates.look(Path(tmp)) is None, "not a clone: not checked"
+            assert updates.look(copy)["behind"] == 0
+            sent = []
+            assert updates.check(lambda text, rows: sent.append(text) or True, root=copy)["behind"] == 0 and not sent
+
+            (origin / "bot.py").write_text("print('two')\n", encoding="utf-8")
+            (origin / "NEWS.md").write_text("## 2030-02-01 — Second\nNew things.\n\n## 2030-01-10 — First\nHello.\n",
+                                            encoding="utf-8")
+            git(origin, "add", "-A"); git(origin, "commit", "--quiet", "-m", "feat: the second version")
+            found = updates.check(lambda text, rows: sent.append(text) or True, root=copy)
+            assert found["behind"] == 1 and [e["title"] for e in found["news"]] == ["2030-02-01 — Second"]
+            assert len(sent) == 1 and "New things." in sent[0]
+            updates.check(lambda text, rows: sent.append(text) or True, root=copy)
+            assert len(sent) == 1, "one message per new version"
+            assert (copy / "bot.py").read_text(encoding="utf-8") == "print('one')\n", "nothing is installed without the press"
+
+            # a file changed by hand stops the update, by name
+            (copy / "bot.py").write_text("print('mine')\n", encoding="utf-8")
+            try:
+                updates.apply(copy)
+                raise AssertionError("an edited copy must not be updated")
+            except updates.UpdateError as e:
+                assert "`bot.py`" in str(e) and "git pull" in str(e)
+            git(copy, "checkout", "--quiet", "--", "bot.py")
+            assert updates.apply(copy).startswith("Updated to `")
+            assert (copy / "bot.py").read_text(encoding="utf-8") == "print('two')\n"
+            assert updates.apply(copy) == "Already on the newest version."
+
+            # a version that would not start is taken back
+            before = git(copy, "rev-parse", "HEAD")
+            (origin / "bot.py").write_text("def broken(:\n", encoding="utf-8")
+            git(origin, "add", "-A"); git(origin, "commit", "--quiet", "-m", "fix: broken")
+            try:
+                updates.apply(copy)
+                raise AssertionError("a version that does not compile must be refused")
+            except updates.UpdateError as e:
+                assert "does not start (bot.py line 1" in str(e) and "back on the version it had" in str(e)
+            assert git(copy, "rev-parse", "HEAD") == before and (copy / "bot.py").read_text(encoding="utf-8") == "print('two')\n"
+        finally:
+            updates.STATE_FILE = keep_state
+
+    # this project's own NEWS.md reads as news, newest first
+    own = updates.parse_news((paths.ROOT / updates.NEWS_FILE).read_text(encoding="utf-8"))
+    assert own and all(re.match(r"\d{4}-\d{2}-\d{2} — \S", e["id"]) and e["text"] for e in own)
+    assert [e["id"][:10] for e in own] == sorted((e["id"][:10] for e in own), reverse=True)
+
+
 def test_study_plan_from_the_portal():
     """The degree's hours come from the student's own plan on the portal — any major, any plan year —
     never from a fixed number: what is required, passed, registered this term, failed and left."""
@@ -9013,7 +9104,7 @@ if __name__ == "__main__":
                test_the_poll_slows_down_when_telegram_asks, test_an_odd_getupdates_answer_never_stops_the_loop,
                test_the_statistics_do_not_grow_forever, test_the_moodle_probe, test_cambridge_one_assignments,
                test_cambridge_signs_in_by_itself, test_log_files_stay_small,
-               test_portal_session_is_reused_for_15_minutes, test_portal_answers_from_the_saved_copy, test_study_plan_from_the_portal, test_registration_plan,
+               test_portal_session_is_reused_for_15_minutes, test_portal_answers_from_the_saved_copy, test_study_plan_from_the_portal, test_registration_plan, test_new_versions_and_news,
                test_a_course_cannot_be_asked_for_more_than_it_can_still_reach, test_messages_stay_short, test_a_renamed_course_is_still_that_course,
                test_replaced_files_move_to_old_versions, test_settings_are_checked_before_anything_runs,
                test_archive_root_defaults_to_documents_university, test_state_backup_lives_in_its_own_repository,

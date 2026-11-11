@@ -17,6 +17,8 @@ reboot. Never raises.
 
 import logging
 import os
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -61,6 +63,31 @@ def is_our_bot(pid) -> bool:
                 f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine"], 30)
     line = res.stdout.lower()
     return "bot.py" in line and str(paths.ROOT).lower() in line
+
+
+RESTART_DELAY = 4        # seconds the helper waits for the bot to be gone before it starts the task
+
+
+def start_after_exit() -> bool:
+    """For a bot that is about to end itself (an update): have its scheduled task start it again a
+    few seconds from now. The task is 'Ready' once the bot has ended, so the start is a real one —
+    the new bot is the task's own process, as after a boot. A small hidden helper does the waiting
+    (it is not the task's process, and outlives it). Without the task — a bot started by hand — the
+    new bot is started directly. True when one of the two was set going. (A task does NOT start
+    again by itself after a failed exit when it was started on demand: measured.)"""
+    try:
+        if os.name == "nt" and _run(["schtasks", "/Query", "/TN", TASK_NAME], 20).returncode == 0:
+            subprocess.Popen(["powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command",
+                              f"Start-Sleep -Seconds {RESTART_DELAY}; schtasks /Run /TN {TASK_NAME}"],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             creationflags=gitsync.NO_WINDOW)
+        else:
+            subprocess.Popen([sys.executable, str(paths.ROOT / "bot.py")], cwd=paths.ROOT, stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=gitsync.NO_WINDOW)
+        return True
+    except Exception:
+        log.exception("Could not arrange the bot's restart")
+        return False
 
 
 def restart_bot(pid) -> bool:
