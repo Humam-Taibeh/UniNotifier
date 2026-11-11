@@ -68,6 +68,8 @@ All notable changes to this project are documented here. The format follows
 - A finished Cambridge One assignment stayed in the open tasks: an activity opened again after it
   was handed in, or one waiting for the teacher's mark, did not count as done. Handed in once is
   done, as on Cambridge's own Completed list; progress reads "8 of 10 activities done — 2 left".
+- The two-minute look at Moodle crashed when Moodle answered with one error object instead of its
+  list of answers; that now counts as a failed look, tried again at the next one.
 - The same items were announced as new again and again: when the portal dropped a connection the
   course was read through the browser, which has no section descriptions, so they were forgotten and
   "new" on the next check. What that read lacks is now kept, and an item that was announced once is

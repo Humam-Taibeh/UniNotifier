@@ -71,6 +71,8 @@ def signals(results: list[dict], course_list: list[str]) -> tuple[set[str], str 
     """(change keys, the calendar's fingerprint, refused?) from one batched answer: the
     get_updates_since results of `course_list` in order, then the calendar's."""
     found: set[str] = set()
+    if not isinstance(results, list) or not all(isinstance(r, dict) for r in results):
+        return found, None, True        # one error object instead of the list of answers (an ended session, a 5xx page)
     refused = len(results) < len(course_list) + 1 or any(r.get("error") for r in results)
     for course_id, result in zip(course_list, results):
         for instance in ((result.get("data") or {}).get("instances") or []):

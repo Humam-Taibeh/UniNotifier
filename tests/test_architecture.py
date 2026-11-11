@@ -7414,6 +7414,9 @@ def test_the_moodle_probe():
     assert found == {f"{courses[0]}:5:configuration:9"} and fp and not refused
     assert probe.signals(quiet[:3], courses)[2], "a short answer (Moodle stopped at an error) is refused"
     assert probe.signals(quiet + [{"error": True, "exception": {"errorcode": "invalidsesskey"}}], courses)[2]
+    # one error object instead of the list (seen 2026-11-05: it crashed the look): refused, not a crash
+    assert probe.signals({"error": "servicerequireslogin", "errorcode": "servicerequireslogin"}, courses) == (set(), None, True)
+    assert probe.signals(["<html>", "502"], courses) == (set(), None, True)
 
     class FakeHttp:
         def __init__(self, key="k"):

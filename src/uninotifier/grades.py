@@ -20,6 +20,7 @@ log = logging.getLogger("uninotifier")
 
 SCANNABLE_SUFFIXES = {".xlsx", ".xlsm", ".xls", ".docx", ".pdf", ".txt", ".csv"}
 MAX_PDF_PAGES = 80
+MAX_PDF_BYTES = 25 * 1024 * 1024
 _DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")     # a list typed with Arabic digits
 
 _TOTAL_HEADER = re.compile(
@@ -66,6 +67,8 @@ def _read_rows(path: Path) -> list[list[str]]:
             rows.append([])
         rows += [[_norm(p.text)] for p in doc.paragraphs if p.text.strip()]
     elif suffix == ".pdf":
+        if path.stat().st_size > MAX_PDF_BYTES:
+            return rows                 # a scanned book, not a marks list: not worth minutes of parsing
         import pypdf
         reader = pypdf.PdfReader(str(path))
         for page in reader.pages[:MAX_PDF_PAGES]:
