@@ -140,11 +140,17 @@ def is_meaningful(html: str) -> bool:
     return len(re.findall(r"\w", plain_text(html))) >= 2 or bool(image_paths(html))
 
 
+DIGEST_VERSION = 2      # bump when digest() changes what it counts: older fingerprints are re-baselined silently
+
+
 def digest(html: str) -> str:
     """Fingerprint of what a reader sees: the normalised text and the image
     files. Markup-only churn (attributes, whitespace, cache-busting query
     strings) doesn't change it."""
-    basis = plain_text(html) + "\n" + "\n".join(image_paths(html))
+    # The theme's own icons (a file's, an assignment's) carry the theme's cache revision in
+    # their path, which changes whenever the portal clears its cache: not content.
+    pictures = [p for p in image_paths(html) if not p.startswith("/theme/image.php/")]
+    basis = plain_text(html) + "\n" + "\n".join(pictures)
     return hashlib.sha1(basis.encode("utf-8")).hexdigest()
 
 

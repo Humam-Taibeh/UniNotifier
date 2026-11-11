@@ -110,7 +110,13 @@ def run(announce: bool = False) -> None:
                                        "sha256": art.get("sha256"), "modified": art.get("modified")}
 
     new_courses = {cid: c for cid, c in courses.items() if cid not in saved["courses"]}
-    new_content = {iid: it for iid, it in content.items() if iid not in saved["content"]}
+    # An item announced once is never announced as new again, whatever made it drop out of
+    # saved["content"] in between (a course read through the fallback, a partial page).
+    announced = saved["announced"]
+    new_content = {iid: it for iid, it in content.items()
+                   if iid not in saved["content"] and iid not in announced}
+    for iid in content.keys() - new_content.keys() - saved["content"].keys():
+        log.warning("Not announcing %s again: it was announced before", content[iid]["name"])
 
     # From here on, whatever is delivered is written down at once (save_data after each
     # message), not at the end of the run: a run that dies half-way — killed by /check's
@@ -224,6 +230,7 @@ def run(announce: bool = False) -> None:
     saved.update({
         "courses": {k: v for k, v in courses.items() if k not in undelivered_courses},
         "content": {k: state.public(v) for k, v in content.items() if k not in undelivered_content},
+        "announced": {**announced, **{k: 1 for k in content if k not in undelivered_content}},
         "deadlines": deadlines,
         "forums": forums,
     })

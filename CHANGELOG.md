@@ -49,6 +49,15 @@ All notable changes to this project are documented here. The format follows
   elsewhere, e.g. in an antivirus scan): the save waits a little and tries again.
 - Quizzes had no date and no reminders: this Moodle lists a quiz by its closing event, which was
   ignored. A quiz now has its opening and closing times, and one you have attempted stops reminding.
+- The same items were announced as new again and again: when the portal dropped a connection the
+  course was read through the browser, which has no section descriptions, so they were forgotten and
+  "new" on the next check. What that read lacks is now kept, and an item that was announced once is
+  never announced as new again.
+- "Content Updated" arrived over and over for a block that holds files or assignments: the theme's
+  own icons carry a cache number in their address, which counted as an edit whenever the portal
+  cleared its cache. Only pictures of the content itself count now.
+- The picture of an edited sub-section showed the whole course page; it shows that block only.
+- Names with `&` in them read `&amp;`.
 
 ### Security
 - `certifi` is pinned to a release newer than 2026.10.18 (pip-audit: PYSEC-2026-4320): the older

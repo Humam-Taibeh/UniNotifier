@@ -196,6 +196,7 @@ def edited_items(saved: dict, content: dict) -> list[str]:
     baselined silently."""
     return [iid for iid, item in content.items()
             if item.get("hash") and saved["content"].get(iid, {}).get("hash")
+            and item.get("hv") == saved["content"][iid].get("hv")   # an older digest() made that fingerprint: re-baseline, not an edit
             and item["hash"] != saved["content"][iid]["hash"]]
 
 
@@ -249,6 +250,12 @@ def run_scan(saved: dict, notify_new: bool, mfa_handler=None) -> dict:
                     failed_courses.append(course_id)
                     log.exception("Failed scanning course %s — skipping it this run", course["name"])
                     continue
+                # The browser read has no section descriptions (nor label bodies): what it
+                # doesn't return stays as last run knew it, or the next good read would
+                # announce all of it again as new.
+                for item_id, item in saved["content"].items():
+                    if item_id.split("-", 1)[0] == course_id:
+                        found.setdefault(item_id, item)
             content.update(found)
         # A course that reads far shorter than before is treated as unreadable this run
         # (watchdog.py): the page layout may have changed, and its known items must not vanish.

@@ -18,6 +18,7 @@ Forum topics and replies come from each forum's discussion list and
 mod_forum_get_discussion_posts.
 """
 
+import html
 import json
 import logging
 import re
@@ -301,7 +302,7 @@ def screenshot_target(item: dict) -> tuple[str, str]:
     course_page = course_url(item.get("course_id") or "")
     if item["type"] == "section":
         return course_page, f'li[data-id="{item["sectionid"]}"] [data-for="sectioninfo"]'
-    if item["type"] in ("label", "url") or (item["type"] == "page" and not item.get("_own_body")):
+    if item["type"] in ("label", "url", "subsection") or (item["type"] == "page" and not item.get("_own_body")):
         return course_page, f'#module-{item["cmid"]}'
     return item["url"], "#region-main"
 
@@ -315,7 +316,7 @@ def fetch_course_tree(context, sesskey: str, course_id: str, course_name: str) -
         raise RuntimeError(f"course state unavailable: {result.get('exception')}")
     state = json.loads(result["data"])
     sections = {
-        str(s["id"]): {"title": re.sub(r"\s+", " ", s.get("title", "")).strip(),
+        str(s["id"]): {"title": re.sub(r"\s+", " ", html.unescape(s.get("title", ""))).strip(),
                        "url": s.get("sectionurl") or course_url(course_id)}
         for s in state.get("section", []) if s.get("visible", True)
     }
@@ -327,7 +328,7 @@ def fetch_course_tree(context, sesskey: str, course_id: str, course_name: str) -
         cmid = str(cm["id"])
         url = cm.get("url") or f"{course_url(course_id)}#module-{cmid}"
         content[f"{course_id}-{cmid}"] = {
-            "name": re.sub(r"\s+", " ", cm.get("name", "")).strip(),
+            "name": re.sub(r"\s+", " ", html.unescape(cm.get("name", ""))).strip(),
             "type": cm.get("module", ""),
             "course": course_name,
             "url": url.split("&", 1)[0],
@@ -429,6 +430,7 @@ def enrich_with_page(context, course_id: str, course_name: str, content: dict, s
         if richtext.is_meaningful(body):
             item["_body"] = body
             item["hash"] = richtext.digest(body)
+            item["hv"] = richtext.DIGEST_VERSION
     for sid, summary in page["summaries"].items():
         sec = sections.get(sid)
         if not sec:
@@ -443,6 +445,7 @@ def enrich_with_page(context, course_id: str, course_name: str, content: dict, s
             "sectionid": sid,
             "_body": summary,
             "hash": richtext.digest(summary),
+            "hv": richtext.DIGEST_VERSION,
         }
 
 

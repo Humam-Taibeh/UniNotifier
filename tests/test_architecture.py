@@ -2361,6 +2361,42 @@ def test_announce_first_run_and_duplicate_files():
     assert docs[0][1] == pdf and docs[1][1] is None and "not attached again" in docs[1][0]
 
 
+def test_an_announced_item_is_never_announced_again():
+    """A run that reads a course incompletely (the browser fallback has no section
+    descriptions) makes items vanish for one run. When they come back they are not new."""
+    monitor = _package("uninotifier.monitor")
+    course = "20261-Linear Algebra (1)-AllSec-3-F"
+    full = {f"1-{n}": {"name": f"Item {n}", "type": "label", "course": course, "course_id": "1", "cmid": str(n),
+                       "url": f"https://x/mod/label/view.php?id={n}"} for n in (1, 2)}
+    reads = [full, {"1-1": full["1-1"]}, full]          # known, partial read, known again
+
+    def fake_scan(saved, notify_new, mfa_handler=None):
+        return {"courses": {"1": {"name": course, "url": "https://x/c"}}, "content": dict(reads.pop(0)),
+                "deadlines": {}, "artifacts": {}, "updates": {}, "edits": {}, "posts": {}, "forum_posts": {},
+                "submissions": {}, "link_changes": [], "seconds": 1.0, "browser_used": False}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        keep = {k: getattr(monitor, k) for k in ("DATA_FILE", "USERNAME", "PASSWORD", "BOT_TOKEN", "CHAT_ID",
+                                                 "run_scan", "notify_new_item", "send_schedule_messages",
+                                                 "mfa_allowed", "notify_new_course")}
+        monitor.DATA_FILE = Path(tmp) / "saved_items.json"
+        monitor.USERNAME = monitor.PASSWORD = monitor.BOT_TOKEN = monitor.CHAT_ID = "x"
+        monitor.send_schedule_messages = lambda saved: None
+        monitor.mfa_allowed = lambda saved: False
+        monitor.notify_new_course = lambda course: True
+        monitor.run_scan = fake_scan
+        sent = []
+        monitor.notify_new_item = lambda it, deadline, art, submitted=None: sent.append(it["name"]) or True
+        try:
+            monitor.run()                                   # baseline
+            monitor.run()                                   # Item 2 missing this time
+            monitor.run()                                   # and back
+            assert sent == [], sent
+        finally:
+            for k, v in keep.items():
+                setattr(monitor, k, v)
+
+
 def test_alerts_are_recorded_as_they_are_sent():
     """A run that dies half-way must not make the next one repeat what was already
     delivered: every ID is written down the moment its message goes out."""
@@ -2457,7 +2493,8 @@ def test_alerts_are_recorded_as_they_are_sent():
             # Telegram refusing one item run after run: it is owed every run, and reported once it is stuck
             _fresh_failsafe()
             monitor.save_data({**monitor.load_saved_data(),
-                               "content": {k: v for k, v in monitor.load_saved_data()["content"].items() if k != "1-12"}})
+                               "content": {k: v for k, v in monitor.load_saved_data()["content"].items() if k != "1-12"},
+                               "announced": {k: v for k, v in monitor.load_saved_data()["announced"].items() if k != "1-12"}})
             monitor.notify_new_item = lambda it, deadline, art, submitted=None: False
             for _ in range(monitor.UNDELIVERED_ALERT_RUNS):
                 monitor.run()
@@ -8462,7 +8499,7 @@ if __name__ == "__main__":
                test_fast_scan_helpers, test_gradebook_record, test_results_page_parser,
                test_finals_watch, test_finals_commands_and_file_destination, test_finals_check_ends_on_the_grades_screen, test_transcript_layout, test_portal_answer_is_one_message, test_archive,
                test_archive_layout, test_resource_page_file_link, test_migration_helpers,
-               test_downloader_dedup_and_routing, test_tidy_archive, test_alerts_are_recorded_as_they_are_sent, test_archive_boundary,
+               test_downloader_dedup_and_routing, test_tidy_archive, test_an_announced_item_is_never_announced_again, test_alerts_are_recorded_as_they_are_sent, test_archive_boundary,
                test_auto_done_only_for_saved_files_and_links, test_announce_first_run_and_duplicate_files,
                test_claims_are_exclusive_and_old_ones_are_forgotten, test_help_hub_dashboard_and_campus,
                test_update_routing_from_telegram, test_access_lock, test_modules_import_quietly_and_names_resolve,
