@@ -18,6 +18,7 @@ from uninotifier import maintenance
 from uninotifier import media
 from uninotifier import moodle
 from uninotifier import notifier
+from uninotifier import schedule
 from uninotifier import watchdog
 from uninotifier.httpctx import HttpContext
 from uninotifier.monitor import alerts, config, items, notify, state
@@ -287,6 +288,12 @@ def run_scan(saved: dict, notify_new: bool, mfa_handler=None) -> dict:
         courses = moodle.fetch_courses(http, sesskey)
         deadlines = moodle.update_deadlines(
             saved["deadlines"], moodle.fetch_deadline_events(http, sesskey))
+        try:        # before a folder is made or anything is named: a course renamed on Moodle is still that course
+            schedule.learn_course_names(courses)
+        except Exception as e:
+            log.exception("Could not learn the course names")
+            failsafe.bug("monitor:names", "The course names could not be remembered", e,
+                         "A course renamed on Moodle may show without its timetable until this is fixed.")
         for course in courses.values():
             archive.ensure_course_tree(course["name"])
 

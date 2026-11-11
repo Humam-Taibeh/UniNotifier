@@ -16,7 +16,7 @@ import re
 from datetime import date, datetime, timedelta
 from functools import lru_cache
 
-from uninotifier import failsafe, fileio, paths
+from uninotifier import coursenames, failsafe, fileio, paths
 from uninotifier.archive import course_folder_name
 from uninotifier.notifier import escape_md
 
@@ -282,7 +282,8 @@ def canonical_course(name: str) -> str:
     Arabic names via their Arabic title, English ones via the `portal_aliases`
     table, a spacing-insensitive match, then the same words in another order
     ('Communication Skills in Arabic' is 'Arabic Communication Skills') when
-    exactly one course has them. Unknown names pass through."""
+    exactly one course has them, then a name learnt for a course that was renamed
+    on Moodle (coursenames). Unknown names pass through."""
     if name in _arabic_to_english():
         return _arabic_to_english()[name]
     english = set(_arabic_to_english().values())
@@ -291,7 +292,22 @@ def canonical_course(name: str) -> str:
     if _norm(alias) in known:
         return known[_norm(alias)]
     same_words = [en for en in english if _words(en) == _words(alias)]
-    return same_words[0] if len(same_words) == 1 and _words(alias) else name
+    if len(same_words) == 1 and _words(alias):
+        return same_words[0]
+    learnt = coursenames.alias(name)
+    return learnt if learnt in english else name
+
+
+def known_courses() -> set[str]:
+    """Every course of the timetable, by its name there."""
+    return set(_arabic_to_english().values())
+
+
+def learn_course_names(courses: dict) -> list[tuple[str, str]]:
+    """After a check: remember which timetable course each Moodle course is, by its Moodle id, so
+    a course renamed later is still that course. `courses`: {id: {"name": Moodle's full name}}."""
+    names = {cid: course_folder_name(course["name"]) for cid, course in courses.items()}
+    return coursenames.learn(names, canonical_course, known_courses())
 
 
 def teachers_for(course_en: str, section: str | None, by_course: dict, courses: dict) -> list[str]:

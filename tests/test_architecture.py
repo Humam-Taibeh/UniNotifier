@@ -2067,6 +2067,37 @@ def test_messages_stay_short():
         assert "your number is not in it" in grades.unread_note(listed, "كشف العلامات", None)
 
 
+def test_a_renamed_course_is_still_that_course():
+    """Moodle's name for a course can change mid-term; its id cannot. Each check remembers the
+    timetable course of every id, so a name that matches nothing under a known id is that course."""
+    from uninotifier import coursenames
+    days = {"sun": [{"start": "09:00", "end": "10:00", "course": "Technical Writing", "course_ar": "الكتابة التقنية",
+                     "section": "01", "mode": "In-Person", "label": "In-Person Lecture"}]}
+    keep = schedule.load_schedule
+    schedule.load_schedule = lambda: {"days": days}
+    schedule._arabic_to_english.cache_clear()
+    coursenames.STATE_FILE.unlink(missing_ok=True)
+    try:
+        before = {"801": {"name": "20261-الكتابة التقنية-ش07-3-ك"}, "802": {"name": "20261-Unlisted Course-AllSec-3-"}}
+        assert schedule.learn_course_names(before) == [] and coursenames.load()["ids"] == {"801": "Technical Writing"}
+        # the university renames it to words the timetable does not have
+        after = {"801": {"name": "20261-Report Composition-Sec07-3-E"}, "802": {"name": "20261-Unlisted Course-AllSec-3-"}}
+        assert schedule.canonical_course("Report Composition") == "Report Composition", "unknown before the check"
+        assert schedule.learn_course_names(after) == [("Report Composition", "Technical Writing")]
+        assert schedule.canonical_course("Report Composition") == "Technical Writing"
+        assert media.clean_course_name("20261-Report Composition-Sec07-3-E") == "Technical Writing"
+        assert archive.english_course_name("20261-Report Composition-Sec07-3-E") == "Technical Writing", "the same folder"
+        assert schedule.lectures_for(media.clean_course_name(after["801"]["name"])), "its timetable is still found"
+        assert schedule.canonical_course("Unlisted Course") == "Unlisted Course", "a course outside the timetable stays as it is"
+        # a damaged file is no names, not a crash
+        coursenames.STATE_FILE.write_text("{not json", encoding="utf-8")
+        assert coursenames.alias("Report Composition") is None
+    finally:
+        schedule.load_schedule = keep
+        schedule._arabic_to_english.cache_clear()
+        coursenames.STATE_FILE.unlink(missing_ok=True)
+
+
 def test_study_plan_from_the_portal():
     """The degree's hours come from the student's own plan on the portal — any major, any plan year —
     never from a fixed number: what is required, passed, registered this term, failed and left."""
@@ -8826,7 +8857,7 @@ if __name__ == "__main__":
                test_the_statistics_do_not_grow_forever, test_the_moodle_probe, test_cambridge_one_assignments,
                test_cambridge_signs_in_by_itself, test_log_files_stay_small,
                test_portal_session_is_reused_for_15_minutes, test_portal_answers_from_the_saved_copy, test_study_plan_from_the_portal,
-               test_a_course_cannot_be_asked_for_more_than_it_can_still_reach, test_messages_stay_short,
+               test_a_course_cannot_be_asked_for_more_than_it_can_still_reach, test_messages_stay_short, test_a_renamed_course_is_still_that_course,
                test_replaced_files_move_to_old_versions, test_settings_are_checked_before_anything_runs,
                test_archive_root_defaults_to_documents_university, test_state_backup_lives_in_its_own_repository,
                test_sign_in_needs_no_form_when_microsoft_still_remembers_you,
