@@ -308,7 +308,7 @@ def test_alerts_are_recorded_as_they_are_sent():
         monitor.send_deadline_reminders(due, on_sent=lambda: flags.append(dict(due["assign-1"])))
     finally:
         monitor.send_telegram = orig
-    assert len(flags) == 2 and flags[0].get("reminded_24h") and not flags[0].get("reminded_1h") and flags[1].get("reminded_1h")
+    assert len(flags) == 1 and flags[0].get("reminded_24h") and flags[0].get("reminded_1h"), flags
     with tempfile.TemporaryDirectory() as tmp:
         lock = Path(tmp) / "monitor.lock"
         lock.write_text("1")

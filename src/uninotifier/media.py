@@ -443,6 +443,8 @@ def build_reminder_message(deadline: dict, flag: str, detected_at: float | None 
     left = deadline.get("timestamp", 0) - time.time()
     if flag == "24h" and 0 < left < 23 * 3600:      # published less than a day ahead: say what is really left
         hours = f"about {max(round(left / 3600), 1)} hour{'s' if round(left / 3600) > 1 else ''}"
+    elif flag == "1h" and 0 < left < 50 * 60:       # ... or less than an hour ahead
+        hours = f"about {max(round(left / 60), 1)} minute{'s' if round(left / 60) > 1 else ''}"
     action = ("Closes" if deadline.get("event") == "close" else "Opens") if is_quiz else "Due"
     return "\n".join([
         head, "",

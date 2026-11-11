@@ -40,7 +40,24 @@ def test_deadline_flag_and_reminders():
     assert sent == [], "reminder sent for a submitted assignment"
     soon["assign-7"]["submitted"] = False
     monitor.send_deadline_reminders(soon)
-    assert len(sent) == 2   # 24h and 1h windows both due
+    # found half an hour before it is due: ONE message, the final reminder — not that one and a
+    # "24 hours" reminder beside it — and it says what is really left, not "1 hour"
+    assert len(sent) == 1 and "Final Reminder" in sent[0] and "Due in about 30 minutes." in sent[0], sent
+    assert soon["assign-7"]["reminded_24h"] and soon["assign-7"]["reminded_1h"], "both windows are settled"
+    monitor.send_deadline_reminders(soon)
+    assert len(sent) == 1, "nothing is repeated"
+    # the ordinary case is untouched: a day ahead, then an hour ahead
+    later = {"assign-8": {**saved["assign-7"], "submitted": False, "timestamp": time.time() + 20 * 3600}}
+    monitor.send_deadline_reminders(later)
+    assert len(sent) == 2 and sent[1].startswith("⏰ *Reminder*") and not later["assign-8"].get("reminded_1h")
+    later["assign-8"]["timestamp"] = time.time() + 3500
+    monitor.send_deadline_reminders(later)
+    assert len(sent) == 3 and "Due in 1 hour." in sent[2], sent[2]
+    # a message that fails leaves both flags unset: the next check tries again
+    monitor.send_telegram = lambda text, url=None: False
+    failed = {"assign-9": {**saved["assign-7"], "submitted": False, "timestamp": time.time() + 1800}}
+    monitor.send_deadline_reminders(failed)
+    assert not failed["assign-9"].get("reminded_24h") and not failed["assign-9"].get("reminded_1h")
 
 
 def test_quizzes_keep_their_opening_and_closing_times():

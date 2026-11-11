@@ -29,16 +29,21 @@ def send_deadline_reminders(deadlines: dict, on_sent=None) -> None:
             if d.get("submitted"):
                 continue  # handed in: no more nagging
 
-            for flag, window_seconds in config.REMINDER_WINDOWS:
-                key = f"reminded_{flag}"
-                if d.get(key) or remaining > window_seconds:
-                    continue
-                sent = alerts.send_telegram(media.build_reminder_message(d, flag), d.get("url"))
-                if sent:  # an undelivered reminder is retried on the next run
-                    d[key] = True
-                    log.info("Sent the %s reminder of %s", flag, d.get("name"))
-                    if on_sent:
-                        on_sent()
+            due = [(flag, window_seconds) for flag, window_seconds in config.REMINDER_WINDOWS
+                   if remaining <= window_seconds and not d.get(f"reminded_{flag}")]
+            if not due:
+                continue
+            # One message per check, the nearest window's: a task found half an hour before it is
+            # due gets the final reminder, not that and a "24 hours" one in the same minute. The
+            # wider windows it has already passed are settled with it.
+            flag = min(due, key=lambda entry: entry[1])[0]
+            sent = alerts.send_telegram(media.build_reminder_message(d, flag), d.get("url"))
+            if sent:  # an undelivered reminder is retried on the next run
+                for settled, _ in due:
+                    d[f"reminded_{settled}"] = True
+                log.info("Sent the %s reminder of %s", flag, d.get("name"))
+                if on_sent:
+                    on_sent()
         except Exception:
             log.exception("Skipping a malformed deadline entry: %r", d)
 
