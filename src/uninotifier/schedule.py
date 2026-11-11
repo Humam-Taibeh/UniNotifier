@@ -269,15 +269,29 @@ def _norm(name: str) -> str:
     return "".join(ch for ch in name.lower() if ch.isalnum())
 
 
+_FILLER_WORDS = {"in", "of", "the", "and", "to", "for"}
+
+
+def _words(name: str) -> frozenset[str]:
+    """The words of a name that carry its meaning, whatever their order."""
+    return frozenset(re.findall(r"[^\W_]+", name.lower())) - _FILLER_WORDS
+
+
 def canonical_course(name: str) -> str:
     """Map a portal course name to the English name used in schedule.json:
-    Arabic names via their Arabic title, English ones via spacing-insensitive
-    match plus the `portal_aliases` table. Unknown names pass through."""
+    Arabic names via their Arabic title, English ones via the `portal_aliases`
+    table, a spacing-insensitive match, then the same words in another order
+    ('Communication Skills in Arabic' is 'Arabic Communication Skills') when
+    exactly one course has them. Unknown names pass through."""
     if name in _arabic_to_english():
         return _arabic_to_english()[name]
-    known = {_norm(en): en for en in _arabic_to_english().values()}
+    english = set(_arabic_to_english().values())
+    known = {_norm(en): en for en in english}
     alias = load_schedule().get("portal_aliases", {}).get(name, name)
-    return known.get(_norm(alias), name)
+    if _norm(alias) in known:
+        return known[_norm(alias)]
+    same_words = [en for en in english if _words(en) == _words(alias)]
+    return same_words[0] if len(same_words) == 1 and _words(alias) else name
 
 
 def teachers_for(course_en: str, section: str | None, by_course: dict, courses: dict) -> list[str]:

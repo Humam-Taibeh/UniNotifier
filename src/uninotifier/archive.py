@@ -119,10 +119,10 @@ def safe_name(name: str, fallback: str = "item") -> str:
 
 
 def course_folder_name(full_name: str) -> str:
-    """'20261-Big Data-AllSec-3-' -> 'Big Data';
+    """'20261-Big Data-AllSec-3-' -> 'Big Data'; '20261-Technical Writing-Sec12-3-E' -> 'Technical Writing';
     '20261-الاتصال والتواصل باللغة العربية-ش31-3-ك' -> 'الاتصال والتواصل باللغة العربية'."""
     name = re.sub(r"^\d{4,6}-", "", full_name or "")
-    name = re.split(r"-(?:AllSec|ش\d+)", name, maxsplit=1)[0]
+    name = re.split(r"-(?:AllSec|Sec\d+|ش\d+)", name, maxsplit=1)[0]
     return safe_name(name, fallback=safe_name(full_name, "Course"))
 
 
