@@ -186,8 +186,10 @@ def notify_forum_post(forum: dict, post: dict) -> bool:
             if marks:
                 caption = "\n".join([f'🎉 *Marks Detected:* *{escape_md(marks["summary"])}*', caption,
                                      *media.grade_details(marks)])
-            elif config.STUDENT_ID and grades.unread_note(tmp, f'{filename} {post["subject"]}', None):
-                caption = f'{caption}\n{grades.unread_note(tmp, f"{filename} {post["subject"]}", None)}'
+            elif config.STUDENT_ID:
+                unread = grades.unread_note(tmp, f'{filename} {post["subject"]}', None)
+                if unread:
+                    caption = caption + chr(10) + unread
             notifier.send_document(config.BOT_TOKEN, config.CHAT_ID, tmp, caption, post["url"])
         except OSError:
             log.exception("Could not forward attachment %s", filename)
