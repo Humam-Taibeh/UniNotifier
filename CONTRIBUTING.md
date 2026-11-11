@@ -28,8 +28,9 @@ turn on the project's hook once: `git config core.hooksPath .githooks`.
 1. **Tests are offline.** No test may reach Moodle, the portal, Telegram or any other host, or start a
    real browser: guards refuse it and fail the run. Use local fixtures (`tests/fixtures/`) and loopback
    servers. The suite runs on a made-up `.env` in a temporary folder and uses the made-up student ID
-   `SID`, never a real one. A new test is a `def test_…()` **and** an entry in the runner list at the
-   bottom of `tests/test_architecture.py`.
+   `SID`, never a real one. A new test is a `def test_…()` in the topic file it belongs to
+   (`tests/test_<topic>.py`); the runner, `tests/test_architecture.py`, finds it by its name. A new topic
+   file is added to the runner's `TOPICS`.
 2. **No personal data, ever.** Never commit `.env`, `schedule.json`, `data/`, `assets/` timetables, logs or
    `tests/recorded/` (real pages). Tests fail if a personal path, a real ID, or one of those files shows up.
 3. **Both READMEs change together.** `README.md` and `README.ar.md` must keep identical code blocks,

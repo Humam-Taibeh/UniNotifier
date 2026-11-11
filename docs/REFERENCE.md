@@ -826,7 +826,8 @@ UniNotifier/
 ├── install.bat               the double-click installer (runs scripts/install.ps1)
 ├── backup_usb.bat            double-click: copies the whole project to a USB drive (runs scripts/backup_usb.ps1)
 ├── scripts/                  install.ps1 · backup_usb.ps1 · setup_tasks.ps1 · remove_tasks.ps1 · windows_recovery.ps1
-├── tests/                    test_architecture.py; fixtures/ (a fixed tracker and timetable);
+├── tests/                    test_architecture.py (the runner) · support.py (the isolated home, guards,
+│                             helpers) · test_<topic>.py, one per topic; fixtures/ (a fixed tracker and timetable);
 │                             recorded/ (your real pages, kept out of Git)
 ├── docs/REFERENCE.md         this file
 ├── .github/                  CI (the suite + pyflakes on Python 3.11, 3.13, 3.14 and 3.15, and the installer, on Windows),
@@ -896,7 +897,7 @@ above for update restarts.
 .venv\Scripts\python tests\test_architecture.py
 ```
 
-runs the whole suite offline: no portal, no Telegram. Every state file a test writes goes
+runs the whole suite offline: no portal, no Telegram. The tests are one file per topic (`tests/test_portal.py`, `test_archive.py`, `test_bot_chat.py`, …); `test_architecture.py` runs every `test_*` function of each, in order, and `support.py` holds what they share. Every state file a test writes goes
 to a temporary folder and nothing reaches `data/logs/`, so running it never touches your data. The
 timetable is a fixture (`tests/fixtures/schedule.json`) and the timetable pictures are stand-ins, so a
 fresh clone with no `.env`, `schedule.json` or `assets/` passes exactly like a configured PC.

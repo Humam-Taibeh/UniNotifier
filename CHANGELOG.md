@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- The test suite is one file per topic instead of a single 9,000-line file; it runs the same way.
+
 ## [1.1.0] - 2026-11-11
 
 ### Changed
