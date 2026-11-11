@@ -191,10 +191,36 @@ def recover_state() -> dict:
     return {}
 
 
+READ_TRIES = 5                 # a state file that cannot be opened is tried this often,
+READ_WAIT = 0.3                # this many seconds apart, before the check gives up
+
+
+def read_live_state() -> dict | None:
+    """saved_items.json as it is now; None when its CONTENT is not a JSON object (damaged: see
+    recover_state). A file that cannot be OPENED is another matter — Windows refuses for a moment
+    while the bot replaces it or an antivirus reads it: it is tried again, and then the error is
+    raised. The check fails this once and the next one reads the file; taking it for damaged would
+    set a good state aside and go back to an older backup."""
+    for attempt in range(READ_TRIES):
+        try:
+            data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {}
+        except OSError:
+            if attempt == READ_TRIES - 1:
+                raise
+            time.sleep(READ_WAIT)
+        except ValueError:
+            return None
+        else:
+            return data if isinstance(data, dict) else None
+    return None
+
+
 def load_saved_data() -> dict:
     data = {}
     if DATA_FILE.exists():
-        data = read_state(DATA_FILE)
+        data = read_live_state()
         if data is None:
             data = recover_state()
     for key in STATE_KEYS:

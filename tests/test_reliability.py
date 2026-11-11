@@ -1164,6 +1164,49 @@ def test_state_backup_lives_in_its_own_repository():
         shutil.rmtree(repo, ignore_errors=True)
 
 
+def test_a_state_file_that_is_busy_is_not_taken_for_a_damaged_one():
+    """Windows refuses to open a file for a moment while another process replaces it (the bot
+    writing a "done" mark) or scans it. That is not a damaged file: reading it as one set the good
+    state aside as "corrupt" and went back to an older backup, with an alarm. A file that cannot
+    be OPENED is tried again, and then fails the check (the next one reads it); only a file whose
+    CONTENT is unreadable is recovered from a backup."""
+    from uninotifier.monitor import state
+
+    class File:
+        def __init__(self, failures: int, text: str = '{"courses": {"1": {}}}'):
+            self.failures, self.text, self.reads = failures, text, 0
+
+        def exists(self):
+            return True
+
+        def read_text(self, encoding=None):
+            self.reads += 1
+            if self.reads <= self.failures:
+                raise PermissionError(13, "The process cannot access the file because it is being used")
+            return self.text
+
+    def never():
+        raise AssertionError("a busy file is not a damaged one")
+
+    keep = state.DATA_FILE, state.recover_state, getattr(state, "READ_WAIT", None)
+    recovered = []
+    try:
+        state.READ_WAIT, state.recover_state = 0, never
+        state.DATA_FILE = File(failures=2)
+        assert state.load_saved_data()["courses"] == {"1": {}} and state.DATA_FILE.reads == 3
+        state.DATA_FILE = File(failures=99)
+        try:
+            state.load_saved_data()
+            raise AssertionError("a file that stays locked must fail the check, not start a new baseline")
+        except PermissionError:
+            pass
+        state.recover_state = lambda: recovered.append(1) or {}
+        state.DATA_FILE = File(failures=0, text='{"courses": {"1"')
+        assert state.load_saved_data()["courses"] == {} and recovered == [1], "damaged content is still recovered"
+    finally:
+        state.DATA_FILE, state.recover_state, state.READ_WAIT = keep
+
+
 def test_a_damaged_session_file_does_not_stop_the_browser():
     """Chromium refuses to start a context from a session file that is not JSON (measured: an empty
     or cut-short file raises JSONDecodeError), and Playwright writes that file in place — so a power
