@@ -19,6 +19,7 @@ from uninotifier import guest
 from uninotifier import maintenance
 from uninotifier import notifier
 from uninotifier import portal
+from uninotifier import registration
 from uninotifier import schedule
 from uninotifier import transcript
 from uninotifier.bot import chat, portal_flow
@@ -292,12 +293,26 @@ def send_guest_results(user: str, results: dict) -> None:
                                        retakes=len(record.data.get("retakes") or {}))
     caption = "\n".join([f"{head} — 📜 Transcript", f"🕒 *Retrieved:* {notifier.audit_timestamp()}", "", *summary])
     rows = [portal_flow.record_buttons("guest", bool(plan))]       # the courses are a button away
+    if plan:
+        rows.append([{"text": "🗓️ Registration Plan", "callback_data": "guest:reg"}])
     if record.png:
         guest_file(record.png, f"Guest {user} - Transcript.png", caption, rows)
     else:
         guest_send(caption, rows)
     _guest["record"] = {"semesters": semesters, "figures": record.figures, "plan": plan,     # in memory only,
                         "overlay": finals.marks_overlay(results.get("grades"), semesters)}     # gone at sign-out
+
+
+def _registration_text(record: dict) -> str:
+    """The guest's next term in one message: where they stand, what is open, what is not yet."""
+    plan = record.get("plan")
+    if not plan:
+        return ""
+    term, kind = registration.next_term(registration.latest_term(record.get("semesters") or []))
+    advice = registration.advise(plan, kind)
+    lines = [*registration.overview_lines(advice, term), "", *registration.open_lines(advice), "",
+             *registration.blocked_lines(advice)]
+    return "\n".join(lines)
 
 
 def handle_guest_callback(cb: dict, action: str) -> None:
@@ -310,6 +325,11 @@ def handle_guest_callback(cb: dict, action: str) -> None:
         return                                              # finishes by itself, then offers 🚪
     if kind in ("target", "t", "tcustom", "back"):
         _target_callback(cb, action)
+        return
+    if kind == "reg":                                       # what the guest can register next term
+        record = _guest.get("record") or {}
+        for chunk in notifier.split_text(_registration_text(record) or "🚪 This guest session has ended."):
+            guest_send(chunk)
         return
     if kind in ("taken", "left"):                           # the lists under the guest's transcript
         record = _guest.get("record") or {}

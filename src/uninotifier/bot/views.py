@@ -76,14 +76,16 @@ def view_academic() -> tuple[str, list]:
 
 
 def view_record() -> tuple[str, list]:
-    """📜 Academic Record & Balance: the transcript and the tuition balance."""
+    """📜 Academic Record & Balance: the transcript, the tuition balance and the registration plan."""
     lines = ["📜 *Academic Record & Balance*", media.DIVIDER,
              "📜 *Transcript* — your cumulative GPA, passed hours, status and every term's courses",
-             "💰 *Balance* — your tuition balance"]
+             "💰 *Balance* — your tuition balance",
+             "🗓️ *Registration Plan* — what to register next term: what is open to you, what is not yet and why"]
     return "\n".join(lines), [
         [{"text": "📜 Transcript", "callback_data": "portal:transcript"},
          {"text": "💰 Balance", "callback_data": "portal:balance"}],
-        [{"text": "👤 Guest Look-up", "callback_data": "guest:start"}],
+        [{"text": "🗓️ Registration Plan", "callback_data": "reg:home"},
+         {"text": "👤 Guest Look-up", "callback_data": "guest:start"}],
         chat.BACK_ROW,
     ]
 

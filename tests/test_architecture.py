@@ -2098,6 +2098,127 @@ def test_a_renamed_course_is_still_that_course():
         coursenames.STATE_FILE.unlink(missing_ok=True)
 
 
+REGISTRATION_PLAN = (                   # an invented plan with prerequisites: (status, code, name, hours, what comes first)
+    ("متطلبات جامعية (اجبارية)", 9, 6, 3, [("مجتازة", "0900101", "مهارات الدراسة", 3),
+                                           ("مجتازة", "0900102", "الكتابة الأكاديمية", 3),
+                                           ("", "0900103", "العلوم العسكرية", 3)]),
+    ("متطلبات تخصص (اجبارية)", 22, 6, 16, [("مجتازة", "0900211", "مبادئ البرمجة", 3),
+                                           ("راسب", "0900212", "هياكل البيانات", 3, "(0900211 مبادئ البرمجة)"),
+                                           ("", "0900313", "الخوارزميات", 3, "(0900212 هياكل البيانات)"),
+                                           ("قيد الدراسة", "0900251", "قواعد البيانات (1)", 3),
+                                           ("", "0900352", "قواعد البيانات (2)", 3, "(0900251 قواعد البيانات (1))"),
+                                           ("", "0900314", "نظم التشغيل", 3, "(0900999 مادة من خطة أخرى)"),
+                                           ("", "0900490", "تدريب ميداني", 3),
+                                           ("", "0900492", "مشروع التخرج", 1)]),
+    ("متطلبات تخصص (اختيارية)", 3, 0, 3, [("", "0900331", "أمن الشبكات", 3),
+                                          ("", "0900332", "الحوسبة السحابية", 3)]),
+    ("مواد استدراكية (اجبارية)", 6, 3, 3, [("معفاة", "0900001", "اللغة الانجليزية الاستدراكية", 3),
+                                           ("", "0900002", "مهارات الحاسوب الاستدراكية", 3)]),
+)
+
+
+def test_registration_plan():
+    """What to register next term, from the plan and its prerequisites: this term's courses count
+    as passed, a failed course comes first, a course is held back until what comes before it is
+    passed, training and the project wait for the final year, and the hours follow the term."""
+    import inspect
+    from uninotifier import degreeplan, portal, registration
+    from uninotifier.bot import chat, registration_flow, portal_flow
+
+    plan = degreeplan.parse(_plan_html(REGISTRATION_PLAN))
+    by_code = {c["code"]: c for cat in plan["categories"] for c in cat["courses"]}
+    assert by_code["0900212"]["prereqs"] == ["0900211"] and by_code["0900101"]["prereqs"] == []
+    assert by_code["0900352"]["prereqs"] == ["0900251"], "a name with brackets of its own"
+    assert degreeplan.prerequisites("(0900211 مبادئ البرمجة)(0900251 قواعد البيانات (1))") == ["0900211", "0900251"]
+
+    advice = registration.advise(plan)
+    state = {e["course"]["code"]: e for e in advice["entries"]}
+    # 3 + (16 - 3 this term) + 3 elective + 3 remedial owed
+    assert advice["left"] == 22 and advice["passed"] == 15 and advice["term_courses"] == 1
+    assert "0900251" not in state and "0900101" not in state, "this term's and the passed courses are not offered"
+    assert [e["course"]["code"] for e in advice["entries"]][:2] == ["0900002", "0900212"], "remedial, then the retake"
+    assert state["0900212"]["kind"] == "retake" and state["0900212"]["state"] == "open" and state["0900212"]["unlocks"] == 1
+    assert state["0900313"]["state"] == "blocked" and "هياكل البيانات" in state["0900313"]["why"]
+    assert state["0900352"]["state"] == "if", "open once this term's course is passed"
+    assert state["0900314"]["state"] == "open" and state["0900314"]["unknown"] == ["0900999"], "said, never hidden"
+    assert state["0900490"]["state"] == "blocked" and state["0900490"]["approval"] and "final year" in state["0900490"]["why"]
+    assert state["0900492"]["state"] == "blocked" and state["0900103"]["why"] == "graduation term only"
+    assert advice["needs"] == {"متطلبات تخصص (اختيارية)": 3} and not advice["graduating"] and not advice["senior"]
+    assert advice["open_hours"] == 15, "remedial 3 + retake 3 + two majors 6 + ONE elective 3"
+
+    assert [h for h, _ in registration.options(advice)] == [12, 15, 18, 21]
+    assert registration.options(advice)[-1][1] == "21 hrs ⭐"
+    assert [h for h, _ in registration.options(registration.advise(plan, registration.SUMMER))] == [3, 6, 9]
+    twelve = registration.propose(advice, 12)
+    assert [e["course"]["code"] for e in twelve["entries"]] == ["0900002", "0900212", "0900314", "0900352"]
+    assert twelve["total"] == 12 and not twelve["short"]
+    all_open = registration.propose(advice, 18)
+    assert all_open["total"] == 15 and all_open["short"], "never filled with a course that is not open"
+    assert sum(1 for e in all_open["entries"] if e["kind"] == "elective") == 1, "an elective only up to the category's need"
+    text = "\n".join(registration.proposal_lines(advice, 18, "Second semester 2030/2031"))
+    assert "Only 15 hrs could be filled" in text and "if you pass" in text and "⚠️ needs 0900999" in text
+    assert "allowed only with an excellent CGPA" in "\n".join(registration.proposal_lines(advice, 21, "x"))
+    held = "\n".join(registration.blocked_lines(advice))
+    assert "تدريب ميداني" in held and "department head" in held and "graduation term only" in held
+    for lines in (registration.overview_lines(advice, "Second semester 2030/2031"), registration.open_lines(advice)):
+        assert _legacy_markdown_ok("\n".join(lines))
+
+    # the graduation term: everything left fits and nothing waits — military science opens, the choice is "all"
+    last = [list(c) for c in REGISTRATION_PLAN]
+    last[1] = ["متطلبات تخصص (اجبارية)", 22, 18, 4, [(("مجتازة", *c[1:]) if c[1] not in ("0900490", "0900492") else c)
+                                                    for c in REGISTRATION_PLAN[1][4]]]
+    last[2] = ["متطلبات تخصص (اختيارية)", 3, 3, 0, [("مجتازة", "0900331", "أمن الشبكات", 3)]]
+    last[3] = ["مواد استدراكية (اجبارية)", 6, 6, 0, [("معفاة", "0900001", "اللغة الانجليزية الاستدراكية", 3)]]
+    final = registration.advise(degreeplan.parse(_plan_html(last)))
+    assert final["left"] == 7 and not final["senior"], "under 90 hours passed in this small plan"
+    assert not final["graduating"], "training and the project are still held back: not the last term yet"
+    assert [h for h, _ in registration.options(final)] == [12], "the least a regular term takes is still offered"
+    summer = registration.advise(degreeplan.parse(_plan_html(last)), registration.SUMMER)
+    assert "12 only in your last term" in registration.allowed_line(summer)
+    # with only military science left it is the last term: it opens, and the one choice is all of it
+    done = [list(c) for c in last]
+    done[1] = ["متطلبات تخصص (اجبارية)", 22, 22, 0, [("مجتازة", *c[1:]) for c in REGISTRATION_PLAN[1][4]]]
+    end = registration.advise(degreeplan.parse(_plan_html(done)))
+    assert end["left"] == 3 and end["graduating"] and end["entries"][0]["state"] == "open"
+    assert registration.options(end) == [(3, "3 hrs · all that is left")]
+    end_summer = registration.advise(degreeplan.parse(_plan_html(done)), registration.SUMMER)
+    assert "12 now, as it is your last term" in registration.allowed_line(end_summer)
+
+    # the terms, in order
+    assert registration.next_term("First semester 2030/2031") == ("Second semester 2030/2031", registration.REGULAR)
+    assert registration.next_term("Second semester 2030/2031") == ("Summer semester 2030/2031", registration.SUMMER)
+    assert registration.next_term("Summer semester 2030/2031") == ("First semester 2031/2032", registration.REGULAR)
+    assert registration.other_term("Summer semester 2030/2031", registration.SUMMER)[0] == "First semester 2031/2032"
+    assert registration.latest_term([{"term": "Second semester 2029/2030"}, {"term": "First semester 2030/2031"},
+                                     {"term": "Summer semester 2029/2030"}]) == "First semester 2030/2031"
+
+    # the screens: from the saved transcript, never the portal; nothing here registers anything
+    keep = portal_flow.load_cached
+    try:
+        portal_flow.load_cached = lambda section: None
+        text, rows = registration_flow.view_home()
+        assert "open 📜 Transcript once" in text and rows[0][0]["callback_data"] == "portal:transcript"
+        result = portal.Result(section="transcript", found=True,
+                               data={"plan": plan, "semesters": [{"term": "First semester 2030/2031", "courses": []}]})
+        portal_flow.load_cached = lambda section: (result, 0.0)
+        registration_flow._kind = None
+        text, rows = registration_flow.view_home()
+        assert "Registration Plan* — Second semester 2030/2031" in text and "Left to take:* 22 hrs" in text
+        assert [b["callback_data"] for b in rows[0]] == ["reg:h:12", "reg:h:15", "reg:h:18", "reg:h:21"]
+        assert rows[-1] == chat.RECORD_ROW and "open with the portal's registration period" in text
+        assert "*Total:* 12 hrs" in registration_flow.view_screen("h:12")[0]
+        assert registration_flow.view_screen("held")[1] == [registration_flow.HOME_ROW]
+        old = {"categories": [dict(cat, courses=[{k: v for k, v in c.items() if k != "prereqs"} for c in cat["courses"]])
+                              for cat in plan["categories"]]}
+        result.data["plan"] = old
+        assert "open 📜 Transcript once" in registration_flow.view_home()[0], "a plan saved before prerequisites were read"
+    finally:
+        portal_flow.load_cached = keep
+        registration_flow._kind = None
+    source = inspect.getsource(registration) + inspect.getsource(registration_flow)
+    assert "fetch" not in source and "playwright" not in source, "advice only: the portal is not touched"
+
+
 def test_study_plan_from_the_portal():
     """The degree's hours come from the student's own plan on the portal — any major, any plan year —
     never from a fixed number: what is required, passed, registered this term, failed and left."""
@@ -2107,7 +2228,8 @@ def test_study_plan_from_the_portal():
     assert [c["name"] for c in plan["categories"]] == [name for name, *_ in PLAN_CATEGORIES], "each category once"
     first = plan["categories"][0]
     assert (first["required"], first["passed"], first["remaining"]) == (9, 3, 6)
-    assert first["courses"][0] == {"code": "0900101", "name": "مهارات الدراسة", "hours": 3.0, "status": "passed"}
+    assert first["courses"][0] == {"code": "0900101", "name": "مهارات الدراسة", "hours": 3.0, "status": "passed",
+                                   "prereqs": []}
     assert [c["status"] for cat in plan["categories"] for c in cat["courses"]] == [
         "passed", "in_progress", "open", "passed", "in_progress", "open", "open", "failed", "open", "open", "exempt", "exempt"]
     assert degreeplan.parse("<html><body><p>الصفحة الرئيسية</p></body></html>") is None
@@ -3101,7 +3223,7 @@ def test_gpa_screens_and_flow():
         hub_text = bot.view_academic()[0]
         assert "This Term" not in hub_text and "Course Adjustments" not in hub_text.split("Grade Needed")[0]
         record = [b["callback_data"] for row in bot.view_record()[1] for b in row if "callback_data" in b]
-        assert record == ["portal:transcript", "portal:balance", "guest:start", "menu"], "no combined button"
+        assert record == ["portal:transcript", "portal:balance", "reg:home", "guest:start", "menu"], "no combined button"
         record_text = bot.view_record()[0]
         assert "verification code" not in record_text and "re-syncs" not in record_text
         assert {"gpa", "need", "grades", "transcript", "balance"} <= {c for c, _ in bot.COMMANDS}
@@ -8856,7 +8978,7 @@ if __name__ == "__main__":
                test_the_poll_slows_down_when_telegram_asks, test_an_odd_getupdates_answer_never_stops_the_loop,
                test_the_statistics_do_not_grow_forever, test_the_moodle_probe, test_cambridge_one_assignments,
                test_cambridge_signs_in_by_itself, test_log_files_stay_small,
-               test_portal_session_is_reused_for_15_minutes, test_portal_answers_from_the_saved_copy, test_study_plan_from_the_portal,
+               test_portal_session_is_reused_for_15_minutes, test_portal_answers_from_the_saved_copy, test_study_plan_from_the_portal, test_registration_plan,
                test_a_course_cannot_be_asked_for_more_than_it_can_still_reach, test_messages_stay_short, test_a_renamed_course_is_still_that_course,
                test_replaced_files_move_to_old_versions, test_settings_are_checked_before_anything_runs,
                test_archive_root_defaults_to_documents_university, test_state_backup_lives_in_its_own_repository,

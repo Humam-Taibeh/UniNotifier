@@ -31,7 +31,8 @@ from uninotifier import reminders
 from uninotifier import schedule
 from uninotifier import tasks
 from uninotifier import telegram
-from uninotifier.bot import chat, checks, finals_flow, gpa_flow, guest_flow, portal_flow, reminder_flow, views
+from uninotifier.bot import (chat, checks, finals_flow, gpa_flow, guest_flow, portal_flow, registration_flow,
+                             reminder_flow, views)
 
 log = logging.getLogger("uninotifier")
 
@@ -92,6 +93,7 @@ COMMANDS = [
     ("grades", "🔄 Check Grades Now"),
     ("transcript", "📜 Transcript & Passed Hours"),
     ("balance", "💰 Tuition Balance"),
+    ("register", "🗓️ Registration Plan"),
     ("finals", "🏁 Finals Watch"),
 ]
 
@@ -142,6 +144,8 @@ def handle_command(text: str, message_id: int | None = None) -> None:
             chat.send_view("⏳ *A check is already running.*", [chat.BACK_ROW])
     elif command == "/schedule":
         views.start_schedule_files()
+    elif command == "/register":
+        registration_flow.start()
     elif command == "/help":
         chat.send_view(*views.view_guide_link())
     elif command in views.COMMAND_VIEWS:
@@ -248,6 +252,9 @@ def route_callback(cb: dict, action: str, message_id: int | None) -> None:
         return
     if action.startswith("rec:"):
         portal_flow.handle_record_callback(cb, action)
+        return
+    if action.startswith("reg:"):
+        registration_flow.handle_callback(cb, action, message_id)
         return
     if action.startswith("finals:"):
         chat.answer(cb["id"])

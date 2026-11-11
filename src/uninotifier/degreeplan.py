@@ -4,7 +4,8 @@ parsing and text, no portal, no Telegram.
 
 The page holds the plan as categories of requirements (university, faculty, major, supporting, …,
 compulsory or elective). Each has its courses — code, name, credit hours and a status: مجتازة
-passed, قيد الدراسة registered this term, راسب failed, معفاة exempted, or nothing yet — and the
+passed, قيد الدراسة registered this term, راسب failed, معفاة exempted, or nothing yet — the courses
+to pass before it (المتطلبات السابقة, kept as "prereqs": their codes) and the
 portal's own totals: hours required, passed and left. Nothing here is fixed to one major or one
 plan year: whatever plan the portal shows for the signed-in student is what is counted.
 
@@ -49,7 +50,8 @@ def _columns(panel) -> dict[str, int]:
     """Where each column is, by its title; the order seen on the portal otherwise."""
     found = {"status": 0, "code": 1, "name": 2, "hours": 3}
     for index, title in enumerate(_text(th) for th in panel.xpath(".//thead//th")):
-        for key, word in (("status", "الحالة"), ("code", "رمز"), ("name", "اسم"), ("hours", "الساعات")):
+        for key, word in (("status", "الحالة"), ("code", "رمز"), ("name", "اسم"), ("hours", "الساعات"),
+                          ("prereqs", "السابقة")):
             if word in title:
                 found[key] = index
     return found
@@ -87,19 +89,27 @@ def parse(html: str) -> dict | None:
         courses = []
         for row in panel.xpath(".//tbody/tr"):
             cells = [_text(cell) for cell in row.xpath("./td")]
-            if len(cells) <= max(at.values()):
+            if len(cells) <= max(at[key] for key in ("status", "code", "name", "hours")):
                 continue
             hours = _number(cells[at["hours"]])
             if hours is None or not cells[at["code"]]:
                 continue
+            before = cells[at["prereqs"]] if "prereqs" in at and len(cells) > at["prereqs"] else ""
             courses.append({"code": cells[at["code"]], "name": cells[at["name"]], "hours": hours,
-                            "status": STATUSES.get(cells[at["status"]], "open" if not cells[at["status"]] else "other")})
+                            "status": STATUSES.get(cells[at["status"]], "open" if not cells[at["status"]] else "other"),
+                            "prereqs": prerequisites(before)})
         totals = _totals(panel)
         if not courses or len(totals) < 3:
             continue
         seen.add(name)
         categories.append({"name": name, **totals, "courses": courses})
     return {"categories": categories} if categories else None
+
+
+def prerequisites(cell: str) -> list[str]:
+    """'(0112120 مبادئ البرمجة)' -> ['0112120']: the codes of the courses to pass first (المتطلبات
+    السابقة), each written as (code name) — a name may hold brackets of its own, 'تفاضل وتكامل (1)'."""
+    return list(dict.fromkeys(re.findall(r"[(]\s*([0-9]{5,})", cell or "")))
 
 
 def english(name: str) -> str:
@@ -131,6 +141,11 @@ def _term_hours(category: dict) -> float:
     category still needs adds nothing to the degree."""
     registered = sum(c["hours"] for c in category["courses"] if c["status"] == "in_progress")
     return min(registered, category["remaining"])
+
+
+def after_term(category: dict) -> float:
+    """The category's hours still to take once this term's courses are passed."""
+    return category["remaining"] - _term_hours(category)
 
 
 def progress(plan: dict) -> dict:
