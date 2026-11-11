@@ -166,6 +166,17 @@ def _no_network(url, **kwargs):
 
 _REAL_POST = telegram.post
 telegram.post = _no_network          # no test may talk to the real Telegram
+
+from uninotifier import selfheal  # noqa: E402
+
+
+def _no_machine_commands(cmd, timeout):
+    """selfheal's commands end processes and start this PC's scheduled tasks: never the real ones."""
+    GUARD_HITS.append(f"selfheal ran {' '.join(map(str, cmd[:3]))}")
+    raise AssertionError(f"a test ran a command on this machine: {cmd[:3]} (patch selfheal._run)")
+
+
+selfheal._run = _no_machine_commands   # a test of the restart patches it with its own fake
 schedule.LAST_GOOD_FILE = _REMINDER_TMP / "schedule.last_good.json"
 
 

@@ -10,6 +10,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from uninotifier import heartbeat
 from uninotifier import archive
 from uninotifier import media
 from uninotifier import moodle
@@ -465,6 +466,10 @@ def test_layout_watchdog():
         monitor.send_schedule_messages = lambda saved: None
         monitor.mfa_allowed = lambda saved: False
         monitor.notify_new_course = lambda c: True
+        # No bot pulse on disk: these runs move the clock on by days, and a pulse left by an earlier test
+        # would then look dead — the run would try to restart "the bot" and report it, depending on how
+        # long the machine has been up.
+        heartbeat.FILE.unlink(missing_ok=True)
         announced, said = [], []
         monitor.notify_new_item = lambda it, deadline, art, submitted=None: announced.append(it["name"]) or True
         monitor.send_telegram = lambda text, url=None: said.append(text) or True
@@ -502,13 +507,15 @@ def test_layout_watchdog():
             saved = json.loads(monitor.DATA_FILE.read_text(encoding="utf-8"))
             assert len(saved["content"]) == 46 and announced == [], "known items kept, nothing announced"
             assert said[-1].startswith("🧩 *Moodle looks different*") and "2 item(s) read, 46 known" in said[-1]
-            n = len(said)
+            def alerts_said() -> int:      # the layout alert only: with the clock moved on by hours, the run
+                return sum(1 for text in said if text.startswith("🧩 *Moodle looks different*"))   # may say other things too
+            n = alerts_said()
             clock["now"] += 3600
             run()
-            assert len(said) == n, "not repeated within 6 hours"
+            assert alerts_said() == n, "not repeated within 6 hours"
             clock["now"] += watchdog.REPEAT_SECONDS
             run()
-            assert len(said) == n + 1, "repeated after 6 hours"
+            assert alerts_said() == n + 1, "repeated after 6 hours"
 
             reading["content"] = items(46)                     # the page reads normally again
             clock["now"] += 900

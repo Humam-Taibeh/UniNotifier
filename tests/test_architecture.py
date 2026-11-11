@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from support import GUARD_HITS, _REMINDER_TMP, _package      # noqa: E402 - sets the throw-away home up first
+from support import GUARD_HITS, _REMINDER_TMP, _package, heartbeat      # noqa: E402 - sets the throw-away home up first
 
 TOPICS = ("test_cambridge",
           "test_security_and_privacy",
@@ -41,6 +41,7 @@ def collect() -> list:
 
 
 if __name__ == "__main__":
+    _HEARTBEAT = heartbeat.FILE
     _CHAT_ORIGINALS = {n: getattr(_package("uninotifier.bot"), n) for n in ("send_view", "edit_view", "api")}
     for fn in collect():
         _chat = _package("uninotifier.bot")
@@ -54,6 +55,7 @@ if __name__ == "__main__":
         shutil.rmtree(_chat.CACHE_DIR, ignore_errors=True)    # a portal answer saved by one test is not the next one's
         importlib.import_module("uninotifier.portal").drop_session()   # ... nor its portal session
         _chat.ANSWER_ASYNC = False          # answers are sent in line, so a test can read them at once (test_buttons_are_answered_first covers the worker)
+        _HEARTBEAT.unlink(missing_ok=True)   # a bot pulse left by one test would look like a dead bot to the next one's check
         _chat.DEBOUNCE_SECONDS = 0          # tests press the same button back to back; test_buttons_are_answered_first checks the debounce
         fn()
         if GUARD_HITS:                     # caught even when the code under test swallowed the refusal
