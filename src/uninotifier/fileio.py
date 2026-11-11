@@ -11,6 +11,7 @@ replace is tried again for a few seconds before it gives up.
 import contextlib
 import json
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -22,19 +23,26 @@ REPLACE_WAIT = 0.25          # waiting 0.25, 0.5, … s in between (about 4 s in
 
 def write_text_atomic(path: Path, text: str) -> None:
     path = Path(path)
-    tmp = path.with_name(path.name + ".tmp")
-    with open(tmp, "w", encoding="utf-8", newline="") as f:
-        f.write(text)
-        f.flush()
-        os.fsync(f.fileno())
-    for attempt in range(REPLACE_TRIES):
-        try:
-            os.replace(tmp, path)
-            return
-        except PermissionError:
-            if attempt == REPLACE_TRIES - 1:
-                raise
-            time.sleep(REPLACE_WAIT * (attempt + 1))
+    # A temporary file of this writer's own: the bot and a check write some of the same files, and
+    # with one shared name each could cut short the other's half-written copy or find it moved away.
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        for attempt in range(REPLACE_TRIES):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if attempt == REPLACE_TRIES - 1:
+                    raise
+                time.sleep(REPLACE_WAIT * (attempt + 1))
+    except BaseException:
+        with contextlib.suppress(OSError):
+            tmp.unlink()                      # a write that failed leaves nothing behind
+        raise
 
 
 def write_json_atomic(path: Path, data) -> None:

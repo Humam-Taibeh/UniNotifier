@@ -1085,6 +1085,48 @@ def test_state_files_are_written_through_fileio():
     assert not found, ("write state files with fileio.write_json_atomic / write_text_atomic", found)
 
 
+def test_two_writers_of_one_file_do_not_share_a_temporary_file():
+    """The bot and a check write some of the same files (the alert record, the Telegram statistics,
+    the check-in cache). With one shared "<name>.tmp" each could cut short the other's half-written
+    copy, or find it already moved away. Every writer has a temporary file of its own, and a write
+    that fails leaves none behind."""
+    import threading
+    from uninotifier import fileio
+
+    tmp = Path(tempfile.mkdtemp())
+    target = tmp / "state.json"
+    used, real = [], os.replace
+
+    def record(src, dst):
+        used.append(Path(src).name)
+        real(src, dst)
+
+    def refuse(src, dst):
+        raise OSError("the disk is full")
+
+    try:
+        os.replace = record
+        workers = [threading.Thread(target=fileio.write_json_atomic, args=(target, {"n": n})) for n in range(2)]
+        for worker in workers:
+            worker.start()
+        for worker in workers:
+            worker.join()
+        fileio.write_json_atomic(target, {"n": "main"})
+        assert len(set(used)) == 3 and all(name.endswith(".tmp") for name in used), used
+        assert json.loads(target.read_text(encoding="utf-8")) == {"n": "main"} and not list(tmp.glob("*.tmp"))
+        os.replace = refuse
+        try:
+            fileio.write_json_atomic(target, {"n": "lost"})
+            raise AssertionError("the failure must reach the caller")
+        except OSError as e:
+            assert "disk is full" in str(e)
+        assert not list(tmp.glob("*.tmp")), "a failed write leaves its temporary file behind"
+        assert json.loads(target.read_text(encoding="utf-8")) == {"n": "main"}, "the file itself is untouched"
+    finally:
+        os.replace = real
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_log_files_stay_small():
     """A log starts a new file at LOG_MAX_BYTES and keeps the last LOG_BACKUPS, newest first
     (monitor.log.1), so a year of running cannot fill the disk. Windows refuses to rename a log
