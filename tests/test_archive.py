@@ -361,12 +361,19 @@ def test_a_file_whose_message_failed_is_sent_with_the_file_next_time():
         assert docs[0][1] == pdf and "not attached again" not in docs[0][0], docs
 
         # a record whose file is gone from the disk is downloaded as before
+        asked = []
+
+        class Refuses:
+            def __init__(self):
+                self.request = self
+
+            def get(self, url, **kwargs):
+                asked.append(url)
+                raise OSError("no connection")
+
         gone = {"path": str(Path(tmp) / "missing.pdf"), "size": 1}
-        try:
-            items.process_item(NoDownload(), "key", item, gone)
-            raise AssertionError("a missing file must be downloaded again")
-        except AssertionError as e:
-            assert "downloaded again" in str(e), e
+        art = items.process_item(Refuses(), "key", item, gone)
+        assert asked == [item["url"]] and art["kind"] == "unknown" and not art.get("kept"), (asked, art)
 
 
 def test_an_announced_item_is_never_announced_again():
