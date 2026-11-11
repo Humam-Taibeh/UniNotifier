@@ -205,6 +205,16 @@ def _fields(item: dict, type_label: str, emoji: str, deadline: dict | None,
     return lines
 
 
+def build_assignment_notice(deadline: dict, kind: str) -> str:
+    """An assignment that closed ("closed") or was taken out of the course ("removed") before it was handed in."""
+    head, tail = {
+        "closed": ("🔒 *Assignment Closed — Not Submitted*", "Moodle no longer accepts a submission for it."),
+        "removed": ("🗑️ *Assignment Removed*", "The instructor removed it from the course — there is nothing to hand in."),
+    }[kind]
+    return "\n".join([head, "", f"📘 *Course:* {escape_md(clean_course_name(deadline.get('course', '')))}",
+                      f"📌 *Title:* {escape_md(deadline.get('name', '?'))}", tail, _audit()])
+
+
 def deadline_lines(deadline: dict) -> list[str]:
     """🕐 Due Date for an assignment; 🕐 Opens and/or Closes for a quiz."""
     if deadline.get("type") != "quiz":

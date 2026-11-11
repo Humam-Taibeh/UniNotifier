@@ -4,9 +4,10 @@ that still needs you, for the ⏳ Upcoming Tasks screen and the daily digest.
 
 Open means
   • an assignment that is not submitted, with its due date ahead — or with no due
-    date at all and not marked done — or OVERDUE while Moodle still takes a
-    submission (a date left from last year's copy of the course, late work
-    accepted): it stays until it is handed in, marked done, or closed;
+    date at all — or OVERDUE while Moodle still takes a submission (a date left
+    from last year's copy of the course, late work accepted). An assignment
+    leaves the list only when it is handed in, closed or removed from the
+    course: Moodle's "done" mark does not end it (opening the page can set it);
   • a quiz not attempted yet whose closing time is ahead (or that has none);
   • a Cambridge One assignment with activities left and its due date ahead.
 Any other due date that has passed is no longer a task: its reminders have had their turn.
@@ -46,16 +47,14 @@ def _moodle(state: dict, now: float) -> list[dict]:
     deadlines = state.get("deadlines") or {}
     undated = state.get("undated") or {}
     found = []
-    marked_done = {f'{item.get("type")}-{moodle.extract_cmid(item.get("url", ""))}'
-                   for item in (state.get("content") or {}).values() if item.get("done")}
     for key, d in deadlines.items():
-        if d.get("submitted"):
+        if d.get("submitted") or d.get("notice") == "removed":
             continue
         name, course, url = d.get("name", "?"), d.get("course", ""), d.get("url")
         if d.get("type") == "assign":
             if d.get("timestamp", 0) > now:
                 found.append(_task("assign", name, course, url, d["timestamp"]))
-            elif d.get("late_open") and key not in marked_done:      # overdue, and Moodle still takes it
+            elif d.get("late_open"):                                 # overdue, and Moodle still takes it
                 found.append(_task("assign", name, course, url, d["timestamp"], late=True))
         elif d.get("type") == "quiz":
             opens, closes = moodle.quiz_times(d)
@@ -68,8 +67,10 @@ def _moodle(state: dict, now: float) -> list[dict]:
         if kind not in ("assign", "quiz"):
             continue
         key = f'{kind}-{moodle.extract_cmid(item.get("url", ""))}'
-        if key in deadlines or item.get("done") or undated.get(key):
+        if key in deadlines or undated.get(key):
             continue
+        if item.get("done") and (kind != "assign" or key not in undated):
+            continue        # a quiz marked done; an assignment marked done and not read yet (the next check reads it)
         found.append(_task(kind, item.get("name", "?"), item.get("course", ""), item.get("url"), None))
     return found
 

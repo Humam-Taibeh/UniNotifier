@@ -328,14 +328,75 @@ def test_an_overdue_assignment_that_still_accepts_work_is_a_task():
     text, _ = tasks.digest(listed, now)
     assert text.index("LAST DAY") < text.index("Ahead") < text.index("Overdue — still accepted") < text.index("Activity 4")
     content["c-5"]["done"] = True
-    assert [t["name"] for t in tasks.open_tasks(state, now)] == ["Ahead"], "marked done: no longer listed"
+    assert [t["name"] for t in tasks.open_tasks(state, now)] == ["Activity 4", "Ahead"], \
+        "Moodle's done mark (opening the page can set it) never ends an assignment that is not handed in"
+
+    # closed while it was not handed in: told once, and off the list
+    timed = _package("uninotifier.monitor").timed
+    alerts_module = _package("uninotifier.monitor").alerts
+    pages["5"] = closed_page
+    keep_state, keep_send = moodle.fetch_submission_state, alerts_module.send_telegram
+    keep_exists = moodle.activity_exists
+    told = []
+    moodle.fetch_submission_state = lambda http, url: moodle.read_submission(pages[url[-1]])
+    alerts_module.send_telegram = lambda text, url=None: told.append((text, url)) or True
+    try:
+        assert scan.check_overdue(None, content, deadlines) == [] and deadlines["assign-5"]["notice"] == "closed"
+        assert [t["name"] for t in tasks.open_tasks(state, now)] == ["Ahead"]
+        timed.send_assignment_notices(deadlines)
+        timed.send_assignment_notices(deadlines)
+        assert len(told) == 1 and "Assignment Closed — Not Submitted" in told[0][0] and "Activity 4" in told[0][0]
+        assert told[0][1] == deadlines["assign-5"]["url"] and deadlines["assign-5"]["notice"] == "told"
+        # one that closed long ago and was never seen open is not news
+        deadlines["assign-10"] = entry(10, "Ancient", now - year)
+        content["c-10"] = {"type": "assign", "name": "a10", "url": "https://x/mod/assign/view.php?id=10", "done": False}
+        pages["0"] = closed_page
+        scan.check_overdue(None, content, deadlines)
+        assert deadlines["assign-10"]["late_open"] is False and "notice" not in deadlines["assign-10"]
+        # ... but one whose date has only just passed is
+        deadlines["assign-11"] = entry(11, "Yesterday", now - 3600)
+        content["c-11"] = {"type": "assign", "name": "a11", "url": "https://x/mod/assign/view.php?id=11", "done": False}
+        pages["1"] = closed_page
+        scan.check_overdue(None, content, deadlines)
+        assert deadlines["assign-11"]["notice"] == "closed"
+
+        # removed from the course while still to do: asked for by its own address, told once, forgotten
+        del content["c-9"]
+        asked = []
+        moodle.activity_exists = lambda http, url: asked.append(url) or None
+        scan.check_overdue(None, content, deadlines)
+        assert asked == ["https://x/mod/assign/view.php?id=9"] and "notice" not in deadlines["assign-9"], \
+            "unreachable is not removed"
+        moodle.activity_exists = lambda http, url: False
+        scan.check_overdue(None, content, deadlines)
+        assert deadlines["assign-9"]["notice"] == "removed" and tasks.open_tasks(state, now) == []
+        told.clear()
+        timed.send_assignment_notices(deadlines)
+        removed = [text for text, url in told if "Assignment Removed" in text]
+        assert len(removed) == 1 and "Ahead" in removed[0] and "assign-9" not in deadlines
+
+        # no date at all and marked done: read, so "done" alone does not hide it
+        loose = {"c-20": {"type": "assign", "name": "Loose", "url": "https://x/mod/assign/view.php?id=20", "done": True}}
+        undated: dict = {}
+        loose_state = {"deadlines": {}, "content": loose, "undated": undated}
+        assert tasks.open_tasks(loose_state, now) == [], "not read yet: nothing is claimed"
+        pages["0"] = open_page
+        scan.check_overdue(None, loose, {}, undated)
+        assert undated == {"assign-20": False} and [t["name"] for t in tasks.open_tasks(loose_state, now)] == ["Loose"]
+        pages["0"] = done_page
+        scan.check_overdue(None, loose, {}, undated)
+        assert undated == {"assign-20": True} and tasks.open_tasks(loose_state, now) == []
+    finally:
+        moodle.fetch_submission_state, alerts_module.send_telegram = keep_state, keep_send
+        moodle.activity_exists = keep_exists
+    deadlines["assign-5"].update(late_open=True, notice="told")
     # the flag survives the next calendar read
     merged = moodle.update_deadlines(deadlines, [{"modulename": "assign", "eventtype": "due", "timesort": int(now - year),
                                                   "name": "Activity 4 is due", "course": {"fullname": "c"},
                                                   "action": {"url": "https://x/mod/assign/view.php?id=5"}}])
     assert merged["assign-5"]["late_open"] is True
     assert "already passed" in media.deadline_lines(deadlines["assign-5"])[0]
-    assert "already passed" not in media.deadline_lines(deadlines["assign-9"])[0]
+    assert "already passed" not in media.deadline_lines(entry(9, "Ahead", now + 86400))[0]
 
 
 def test_claims_are_exclusive_and_old_ones_are_forgotten():

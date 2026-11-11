@@ -43,6 +43,29 @@ def send_deadline_reminders(deadlines: dict, on_sent=None) -> None:
             log.exception("Skipping a malformed deadline entry: %r", d)
 
 
+def send_assignment_notices(deadlines: dict, on_sent=None) -> None:
+    """An assignment that closed, or was removed from the course, while it was not handed in
+    (scan.check_overdue left a "notice" on it): told once. A removed one is then forgotten."""
+    for key, d in list(deadlines.items()):
+        kind = d.get("notice")
+        if kind not in ("closed", "removed"):
+            continue
+        try:
+            sent = alerts.send_telegram(media.build_assignment_notice(d, kind),
+                                        d.get("url") if kind == "closed" else None)
+        except Exception:
+            log.exception("Could not tell that %s was %s", d.get("name"), kind)
+            continue
+        if sent:                                    # undelivered: tried again on the next run
+            if kind == "removed":
+                del deadlines[key]
+            else:
+                d["notice"] = "told"
+            log.info("Told that %s was %s", d.get("name"), kind)
+            if on_sent:
+                on_sent()
+
+
 def send_schedule_messages(saved: dict) -> None:
     """Lecture messages (an hour before: text only; at the start: Join Meeting,
     Course Page and the link's screenshot). The bot sends them on the minute;

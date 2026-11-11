@@ -176,23 +176,35 @@ def check_submissions(http, content: dict, deadlines: dict, saved: dict) -> dict
     return submissions
 
 
-def check_overdue(http, content: dict, deadlines: dict) -> list[str]:
-    """An assignment whose due date has passed can still be open: a date left over from last year's
-    copy of the course, or late work accepted. Those were never read again once the date passed, so
-    they vanished from the task list while Moodle still showed "Add submission" (and one handed in
-    late stayed "pending" for ever). Each overdue assignment not known to be submitted or closed is
-    read: "submitted" is brought up to date, and "late_open" says whether it still takes a
-    submission — tasks.py lists it until it is handed in, marked done, or closed. One found closed
-    is not read again. Returns the keys that are open."""
+JUST_CLOSED_SECONDS = 2 * 86400     # an assignment found closed this long after its date closed "now": worth telling
+
+
+def check_overdue(http, content: dict, deadlines: dict, undated: dict | None = None) -> list[str]:
+    """An assignment is over only when it is handed in. Until then it is followed past its date:
+
+    * Overdue but Moodle still takes a submission (a date left over from last year's copy of the
+      course, late work accepted): "late_open" — tasks.py lists it until it is handed in. Moodle's
+      own "done" mark does not end it: opening the page can set that mark by itself.
+    * Found closed while not handed in: "late_open" False, and — when it was open before, or its date
+      passed within JUST_CLOSED_SECONDS — a "closed" notice (timed.send_assignment_notices).
+    * Gone from the course while it was still to do: asked for by its own address; when Moodle says
+      it does not exist, a "removed" notice, after which the entry is dropped.
+    * No date at all and marked done: read too, so `undated` says whether it is really finished
+      (handed in, or closed) rather than only marked.
+
+    One found closed is not read again. Returns the keys that are still open."""
     now = time.time()
+    undated = {} if undated is None else undated
+    present = {f'assign-{moodle.extract_cmid(item["url"])}': item
+               for item in content.values() if item["type"] == "assign"}
     wanted = []
-    for item in content.values():
-        if item["type"] != "assign":
-            continue
-        key = f'assign-{moodle.extract_cmid(item["url"])}'
+    for key, item in present.items():
         deadline = deadlines.get(key)
-        if (deadline and deadline["timestamp"] <= now and not deadline.get("submitted")
-                and deadline.get("late_open") is not False):
+        if deadline:
+            if (deadline["timestamp"] <= now and not deadline.get("submitted")
+                    and deadline.get("late_open") is not False):
+                wanted.append((key, item))
+        elif item.get("done") and undated.get(key) is not True:
             wanted.append((key, item))
     still_open = []
     for (key, item), found, error in pmap(lambda w: moodle.fetch_submission_state(http, w[1]["url"]), wanted):
@@ -200,12 +212,29 @@ def check_overdue(http, content: dict, deadlines: dict) -> list[str]:
             raise error
         if error or found is None:
             continue
-        deadlines[key]["submitted"] = found["submitted"]
-        deadlines[key]["late_open"] = found["accepting"] and not found["submitted"]
-        if deadlines[key]["late_open"]:
+        deadline = deadlines.get(key)
+        if deadline is None:
+            undated[key] = found["submitted"] or not found["accepting"]
+            continue
+        was = deadline.get("late_open")
+        deadline["submitted"] = found["submitted"]
+        deadline["late_open"] = found["accepting"] and not found["submitted"]
+        if deadline["late_open"]:
             still_open.append(key)
+        elif not found["submitted"] and (was or (was is None and now - deadline["timestamp"] <= JUST_CLOSED_SECONDS)):
+            deadline["notice"] = "closed"
         log.info("  overdue assignment %s: %s", item["name"], "submitted" if found["submitted"]
                  else "still accepts a submission" if found["accepting"] else "closed")
+    gone = [(key, d) for key, d in deadlines.items()
+            if d.get("type") == "assign" and key not in present and not d.get("submitted") and not d.get("notice")
+            and (d.get("timestamp", 0) > now or d.get("late_open"))]
+    for (key, deadline), exists, error in pmap(
+            lambda w: moodle.activity_exists(http, w[1].get("url", "").split("&")[0]), gone):
+        if isinstance(error, moodle.SessionExpiredError):
+            raise error
+        if exists is False:
+            deadline.update(notice="removed", late_open=False)
+            log.info("  assignment %s was removed from the course", deadline.get("name"))
     return still_open
 
 
@@ -374,7 +403,7 @@ def run_scan(saved: dict, notify_new: bool, mfa_handler=None) -> dict:
             saved["deep"] = {"at": time.time()}
 
         submissions = check_submissions(http, content, deadlines, saved)
-        check_overdue(http, content, deadlines)
+        check_overdue(http, content, deadlines, saved.setdefault("undated", {}))
         grades = {}
         for key, item in check_grades(http, content, deadlines, saved).items():
             grades[key] = {"item": item, "grade": saved["grades"][key]["grade"], "shots": []}

@@ -252,8 +252,9 @@ def update_deadlines(saved_deadlines: dict, events: list) -> dict:
                 "reminded_1h": existing.get("reminded_1h", False),
                 "submitted": existing.get("submitted", False),
             }
-            if "late_open" in existing:                 # an overdue assignment that still takes a submission
-                entry["late_open"] = existing["late_open"]
+            for kept in ("late_open", "notice"):        # an overdue assignment that still takes a submission;
+                if kept in existing:                    # a "closed" / "removed" notice still to be delivered
+                    entry[kept] = existing[kept]
             if modname == "quiz":
                 opens, closes = quiz_times(existing) if existing else (None, None)
                 if eventtype == "open":
@@ -578,6 +579,18 @@ def fetch_submission_state(context, assign_url: str) -> dict | None:
     except Exception:
         log.exception("Submission state check failed for %s", assign_url)
         return None
+
+
+def activity_exists(context, url: str) -> bool | None:
+    """False when Moodle answers that the activity is not there any more (deleted: 404), True when
+    its page opens, None when that could not be told (the network, another error)."""
+    try:
+        resp = context.request.get(url, timeout=30000)
+    except Exception:
+        return None
+    if "/login/" in resp.url:
+        raise SessionExpiredError(f"redirected to login while fetching {url}")
+    return False if resp.status == 404 else True if resp.ok else None
 
 
 def quiz_attempted(html: str) -> bool | None:

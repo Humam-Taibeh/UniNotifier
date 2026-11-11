@@ -230,6 +230,7 @@ def run(announce: bool = False) -> None:
 
     try:
         timed.send_deadline_reminders(deadlines, on_sent=lambda: state.save_data(saved))
+        timed.send_assignment_notices(deadlines, on_sent=lambda: state.save_data(saved))
     except Exception as e:
         log.exception("Reminder pass failed")
         failsafe.bug("monitor:deadlines", "The deadline reminders failed", e,
