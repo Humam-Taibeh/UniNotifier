@@ -33,13 +33,17 @@ for a day (a lockout is worse than waiting).
                         until it reached Telegram (so a failed send is tried again).
   due date moved        an ordinary alert.
   gone                  an ordinary alert, after it is missing from two answers in a row.
-  24 h before the due   🚨 reminder — while any activity is not done (done = submittedOnce and
-                        status "completed"). Once per due date.
+  24 h before the due   🚨 reminder — while any activity is not done (done = handed in once:
+                        submittedOnce, or completedOnce for one with nothing to submit). Once
+                        per due date.
 The first run only learns what is there.
 
 An assignment as Cambridge sends it (seen 2026-10-21, tests/fixtures/cambridge_assignment.json):
 assigned_path_id (its id), title ("Assignment 1, <class title>"), startdate / duedate (ms), and
 items[] — the activities: name, __analytics.status ("not_started", …), __analytics.submittedOnce.
+The status is no measure of done: opening a finished activity again turns it back to
+"in_complete", and a recording waiting for the teacher's mark stays "in_complete" — while
+Cambridge's own page lists the assignment under Completed (seen 2026-11-10).
 Unknown shapes still parse (usual field names, else a fingerprint that ignores the progress
 fields "__…", so starting an activity never makes an assignment look new).
 
@@ -116,7 +120,6 @@ NESTED_KEYS = ("assignment", "details", "meta", "activity", "data", "attributes"
 DONE_WORDS = {"submitted", "completed", "complete", "done", "graded", "finished", "turned_in", "turnedin"}
 OPEN_WORDS = {"not_started", "notstarted", "in_progress", "inprogress", "pending", "assigned", "open",
               "started", "incomplete", "not_submitted", "notsubmitted", "todo", "new", "overdue"}
-ITEM_DONE_STATUS = "completed"     # an activity is done when submittedOnce and this status (the owner's rule)
 
 
 class Expired(Exception):
@@ -257,14 +260,16 @@ def fingerprint(entity) -> str:
 
 
 def activities(entity: dict) -> list[dict]:
-    """The assignment's activities: {name, done}. Done = submittedOnce and status "completed"."""
+    """The assignment's activities: {name, done}. Done = handed in at least once, which is what
+    Cambridge's own Completed list goes by: submittedOnce, or completedOnce for an activity
+    that has nothing to submit (a listening to play)."""
     found = []
     for item in entity.get("items") or []:
         if not isinstance(item, dict):
             continue
         progress = item.get("__analytics") if isinstance(item.get("__analytics"), dict) else {}
         found.append({"name": str(item.get("name") or "Untitled activity").strip(),
-                      "done": progress.get("submittedOnce") is True and progress.get("status") == ITEM_DONE_STATUS})
+                      "done": progress.get("submittedOnce") is True or progress.get("completedOnce") is True})
     return found
 
 
@@ -330,7 +335,7 @@ def _activity_lines(a: dict) -> list[str]:
 def _progress(a: dict) -> str:
     acts = a.get("activities") or []
     done = sum(1 for act in acts if act["done"])
-    return f"{len(acts) - done} of {len(acts)} activities not done yet" if acts else "not submitted yet"
+    return f"{done} of {len(acts)} activities done — {len(acts) - done} left" if acts else "not submitted yet"
 
 
 def _stamp(now: float) -> str:

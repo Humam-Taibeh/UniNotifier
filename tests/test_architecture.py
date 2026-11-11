@@ -549,7 +549,7 @@ def test_open_tasks_and_the_noon_digest():
             found = tasks.open_tasks(state, t)
             assert [x["name"] for x in found] == ["Quiz 10", "Report 1", "Assignment 1", "Quiz 9", "Project",
                                                   "Reading notes"], found
-            assert found[2]["progress"] == "15 of 15 activities not done yet" and found[2]["kind"] == "cambridge"
+            assert found[2]["progress"] == "0 of 15 activities done — 15 left" and found[2]["kind"] == "cambridge"
 
             text, rows = tasks.digest(found, t)
             assert _legacy_markdown_ok(text), text
@@ -557,7 +557,7 @@ def test_open_tasks_and_the_noon_digest():
             assert "LAST DAY" in last_day and "Quiz 10" in last_day and "Report 1" in last_day and "Project" in still
             assert "Quiz 9" not in text, "a quiz that has not opened yet waits for its own reminders"
             assert "*Closes:*" in last_day and "5h 0m left" in last_day and "20h 0m left" in last_day, last_day
-            assert "No due date set" in still and "15 of 15 activities not done yet" in still
+            assert "No due date set" in still and "0 of 15 activities done — 15 left" in still
             assert rows[0][0]["text"] == "🔗 Open Task 1 · Quiz 10" and rows[2][0]["url"] == "https://cambridge.example/a"
             assert len(rows) == 5, "every task with a link has a button (the 5 that can be done today)"
             assert tasks.digest([], t) is None and tasks.digest([found[3]], t) is None, "nothing to do today: silence"
@@ -7389,11 +7389,15 @@ def test_cambridge_one_assignments():
         return cambridge.parse({**real, "assignmentsData": {"entities": [e]}})[0]
 
     all_done = [(True, "completed")] * 15
-    assert progressed(*all_done)["submitted"] is True, "every activity submitted and completed"
-    assert progressed(*all_done[:14], (True, "in_progress"))["submitted"] is False, "one not completed"
-    assert progressed(*all_done[:14], (False, "completed"))["submitted"] is False, "one never submitted"
+    assert progressed(*all_done)["submitted"] is True, "every activity handed in"
+    assert progressed(*all_done[:14], (True, "in_complete"))["submitted"] is True,         "handed in, then opened again (or waiting for the teacher's mark): Cambridge lists it as Completed"
+    assert progressed(*all_done[:14], (False, "completed"))["submitted"] is False, "one never handed in"
+    played = json.loads(json.dumps(entity))
+    for item in played["items"]:
+        item["__analytics"].update(submittedOnce=False, completedOnce=True)
+    assert cambridge.parse({**real, "assignmentsData": {"entities": [played]}})[0]["submitted"] is True,         "an activity with nothing to submit counts once it is completed"
     half = progressed(*all_done[:5])
-    assert "10 of 15 activities not done yet" in cambridge.reminder_message(half, "", half["due"] - 3600)
+    assert "5 of 15 activities done — 10 left" in cambridge.reminder_message(half, "", half["due"] - 3600)
     # the fallback id ignores progress: starting an activity never makes it a new assignment
     no_id = {k: v for k, v in entity.items() if k != "assigned_path_id"}
     started = json.loads(json.dumps(no_id))
