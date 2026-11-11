@@ -49,6 +49,8 @@ DEADLINE_EVENT_TYPES = {
     "quiz": ("open", "close"),
 }
 
+UNTITLED = "Untitled"            # what an item or a deadline is called when Moodle gives it no name
+
 CONTENT_ITEM_SELECTOR = 'li[data-for="cmitem"]'
 INDEXED_ACTIVITY_TYPES = ("assign", "quiz")
 
@@ -155,7 +157,7 @@ def fetch_course_content(page, course_id: str, course_url: str, course_name: str
                     return clone.textContent.trim();
                 }"""
             )
-            name = re.sub(r"\s+", " ", name or "").strip() or "(بدون اسم)"
+            name = re.sub(r"\s+", " ", name or "").strip() or UNTITLED
 
             cmid = extract_cmid(href) or str(item.get_attribute("data-id") or i)
             content[f"{course_id}-{cmid}"] = {
@@ -243,7 +245,7 @@ def update_deadlines(saved_deadlines: dict, events: list) -> dict:
             course = ev.get("course") or {}
             existing = deadlines.get(key, {})
             entry = {
-                "name": _event_title(ev.get("name")) or existing.get("name") or "(بدون اسم)",
+                "name": _event_title(ev.get("name")) or existing.get("name") or UNTITLED,
                 "course": course.get("fullname") or existing.get("course") or "",
                 "url": url or existing.get("url", ""),
                 "type": modname,
@@ -398,7 +400,7 @@ def _display_name(item: dict, body: str) -> str:
         return name
     if item["type"] == "label":
         return richtext.first_line(body) or name or "Text & Media"
-    return item.get("section") or name or "Untitled"
+    return item.get("section") or name or UNTITLED
 
 
 TEXT_KEPT = 6000        # characters of an item's wording kept between runs, to say what an edit changed
@@ -479,7 +481,7 @@ def fetch_activity_index(page, course_id: str, course_name: str) -> dict:
                     continue
                 name = re.sub(r"\s+", " ", links.nth(i).inner_text() or "").strip()
                 found.setdefault(f"{course_id}-{cmid}", {
-                    "name": name or "Untitled",
+                    "name": name or UNTITLED,
                     "type": modname,
                     "course": course_name,
                     "url": href.split("&", 1)[0],

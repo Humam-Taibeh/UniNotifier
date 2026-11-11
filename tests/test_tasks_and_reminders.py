@@ -26,6 +26,16 @@ def test_submission_status():
     assert not ok("")
 
 
+def test_a_task_without_a_name_is_named_in_english():
+    """Everything the bot itself says is English: a deadline whose event carries no name used to be
+    listed as "(بدون اسم)" while every other nameless item is "Untitled"."""
+    ev = [{"modulename": "assign", "eventtype": "due", "timesort": 2e9, "name": "  ",
+           "action": {"url": "https://x/mod/assign/view.php?id=9"}, "course": {"fullname": "c"}}]
+    assert moodle.update_deadlines({}, ev)["assign-9"]["name"] == moodle.UNTITLED == "Untitled"
+    source = Path(moodle.__file__).read_text(encoding="utf-8")
+    assert "بدون اسم" not in source, "a name the bot makes up is English"
+
+
 def test_deadline_flag_and_reminders():
     ev = [{"modulename": "assign", "eventtype": "due", "timesort": 2e9, "name": "HW",
            "action": {"url": "https://x/mod/assign/view.php?id=7"}, "course": {"fullname": "c"}}]
