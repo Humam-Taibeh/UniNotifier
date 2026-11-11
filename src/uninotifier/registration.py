@@ -209,14 +209,14 @@ def _reachable(entries: list[dict], needs: dict) -> float:
 
 
 def options(advice: dict) -> list[tuple[int, str]]:
-    """The hours to choose from, as (hours, button text). A regular term: 12 / 15 / 18, and 21 ⭐
+    """The hours to choose from, as (hours, button text). A regular term: 12 / 15 / 18, and 21
     (the graduation term or an excellent CGPA); a summer term: 3 / 6 / 9, and 12 in the last term.
     In the graduation term the last choice is everything that is left."""
     left = int(advice["left"]) if float(advice["left"]).is_integer() else advice["left"]
     if advice["kind"] == SUMMER:
         base = [(h, f"{h} hrs") for h in SUMMER_HOURS]
     else:
-        base = [(h, f"{h} hrs") for h in REGULAR_HOURS] + ([] if advice["graduating"] else [(REGULAR_TOP, f"{REGULAR_TOP} hrs ⭐")])
+        base = [(h, f"{h} hrs") for h in REGULAR_HOURS] + ([] if advice["graduating"] else [(REGULAR_TOP, f"{REGULAR_TOP} hrs")])
     if advice["graduating"]:
         return [(h, text) for h, text in base if h < left] + [(left, f"{left:g} hrs · all that is left")]
     return [(h, text) for h, text in base if h <= max(left, base[0][0])]
@@ -261,7 +261,7 @@ def check(advice: dict, codes) -> dict:
         if total > REGULAR_TOP:
             notes.append(f"⛔ A term takes {REGULAR_TOP} hrs at the very most.")
         elif total > REGULAR_HOURS[-1] and not advice["graduating"]:
-            notes.append(f"⭐ More than {REGULAR_HOURS[-1]} hrs is allowed only with an excellent CGPA — "
+            notes.append(f"⚠️ More than {REGULAR_HOURS[-1]} hrs is allowed only with an excellent CGPA — "
                          "it is not your graduation term.")
         if 0 < total < REGULAR_HOURS[0] and not advice["graduating"]:
             notes.append(f"⚠️ A regular term needs at least {REGULAR_HOURS[0]} hrs.")
@@ -316,7 +316,7 @@ def allowed_line(advice: dict) -> str:
                    else f" · {SUMMER_TOP} only in your last term at the university"))
     if advice["graduating"]:
         return f"📏 *Graduation term:* up to {REGULAR_TOP} hrs, and fewer than {REGULAR_HOURS[0]} is allowed"
-    return (f"📏 *Regular term:* {REGULAR_HOURS[0]}–{REGULAR_HOURS[-1]} hrs · ⭐ {REGULAR_TOP} only with an "
+    return (f"📏 *Regular term:* {REGULAR_HOURS[0]}–{REGULAR_HOURS[-1]} hrs · {REGULAR_TOP} only with an "
             "excellent CGPA or in your graduation term")
 
 

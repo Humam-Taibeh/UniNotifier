@@ -2149,7 +2149,7 @@ def test_registration_plan():
     assert advice["open_hours"] == 15, "remedial 3 + retake 3 + two majors 6 + ONE elective 3"
 
     assert [h for h, _ in registration.options(advice)] == [12, 15, 18, 21]
-    assert registration.options(advice)[-1][1] == "21 hrs ⭐"
+    assert registration.options(advice)[-1][1] == "21 hrs"
     assert [h for h, _ in registration.options(registration.advise(plan, registration.SUMMER))] == [3, 6, 9]
     twelve = registration.propose(advice, 12)
     assert [e["course"]["code"] for e in twelve["entries"]] == ["0900002", "0900212", "0900314", "0900352"]

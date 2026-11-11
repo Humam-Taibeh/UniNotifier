@@ -404,7 +404,7 @@ and **✋ Choose Courses Myself**.
 
 | Term | Choices |
 |------|---------|
-| Regular (first, second) | 12 · 15 · 18 · 21 ⭐ — 21 only in your graduation term or with an excellent CGPA (said on the proposal) |
+| Regular (first, second) | 12 · 15 · 18 · 21 — 21 only in your graduation term or with an excellent CGPA (said on the proposal) |
 | Summer | 3 · 6 · 9 — 12 only when it is your last term at the university |
 | Graduation term | the choices below what is left, and *all that is left* |
 
@@ -423,7 +423,7 @@ The suggestion fills the hours in this order, never with a course that is not op
 How hard a course is cannot be known for every major and plan, so the suggestion does not pretend
 to balance it: **✋ Choose Courses Myself** (also ✋ Change These Courses under a suggestion, which
 it starts from) lists every open course as a button — a tap adds it or takes it out — and says the
-total as you go, with what the rules say: fewer than 12 hours, more than 18 (⭐) or than the term
+total as you go, with what the rules say: fewer than 12 hours, more than 18 or than the term
 takes at all, an elective beyond what its group still needs (`adds nothing to your plan`).
 
 A course whose prerequisite you are taking now is offered as `if you pass … this term`. **✅ What I
