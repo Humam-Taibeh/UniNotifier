@@ -91,6 +91,19 @@ def view_record() -> tuple[str, list]:
 
 
 REMINDERS_SHOWN = 10
+LRM, FSI, PDI = "\u200e", "\u2068", "\u2069"
+
+
+def reminder_lines(number: int, reminder: dict) -> list[str]:
+    """One reminder in the list: its title (the note's first line — a pinned post's note is the whole
+    post), then the course and the time, each on a line of its own. The title is direction-isolated,
+    so an Arabic note next to an English course name or a time never reorders the line."""
+    title = next((line.strip() for line in (reminder.get("note") or "").splitlines() if line.strip()), "Reminder")
+    lines = [f"{LRM}{number}. 📝 {FSI}{escape_md(chat._short(title, 70))}{PDI}"]
+    if reminder.get("course") and reminder["course"] not in title:
+        lines.append(f"{LRM}      📘 {escape_md(reminder['course'])}")
+    lines.append(f"{LRM}      🕐 {reminders.when_text(reminder['due'])} · ⏱️ {chat.remaining_text(reminder['due'])}")
+    return lines
 
 
 VIEW_POST_BUTTONS = 6
@@ -113,10 +126,8 @@ def view_tasks() -> tuple[str, list]:
     lines += ["", "🔔 *Your reminders*"]
     if not mine:
         lines.append("None yet — tap ➕ below, or 📌 Add to Reminders under any announcement.")
-    for r in mine[:REMINDERS_SHOWN]:
-        course = f" · {escape_md(r['course'])}" if r.get("course") else ""
-        lines.append(f"• 📝 {escape_md(chat._short(r['note'], 80))}{course}")
-        lines.append(f"    🕐 {reminders.when_text(r['due'])} · ⏱️ {chat.remaining_text(r['due'])}")
+    for n, r in enumerate(mine[:REMINDERS_SHOWN], 1):
+        lines += ["", *reminder_lines(n, r)]
     if len(mine) > REMINDERS_SHOWN:
         lines.append(f"… and {len(mine) - REMINDERS_SHOWN} more")
     # a reminder pinned from a post: one tap back to that message in the chat
