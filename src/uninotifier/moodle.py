@@ -345,7 +345,10 @@ def fetch_course_tree(context, sesskey: str, course_id: str, course_name: str) -
 
 
 def _inner_html(el) -> str:
-    return "".join(lxml_html.tostring(child, encoding="unicode") for child in el) or (el.text or "")
+    """The element's content as HTML: its own leading text (escaped again — lxml hands it over
+    decoded), then every child with the text that follows it."""
+    return html.escape(el.text or "", quote=False) + "".join(
+        lxml_html.tostring(child, encoding="unicode") for child in el)
 
 
 def parse_course_page(page_html: str) -> dict:

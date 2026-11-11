@@ -40,6 +40,19 @@ def test_richtext_and_course_page():
     assert richtext.to_text("<p>a_b *c*</p>") == "a\\_b \\*c\\*"
 
 
+def test_text_before_the_first_tag_is_part_of_a_description():
+    """A description written as plain text followed by markup ("Read this <b>first</b>") lost its
+    opening words: only the child elements were kept. (Measured on the recorded real pages: every
+    body there starts with an element, so no fingerprint moves.)"""
+    from uninotifier import richtext
+    page = moodle.parse_course_page(
+        '<ul><li data-for="cmitem" data-id="7"><div class="activity-altcontent">Bring a &lt;laptop&gt; and '
+        '<b>your ID</b> on Sunday</div></li>'
+        '<li data-for="cmitem" data-id="8"><div class="activity-altcontent">Only words</div></li></ul>')
+    assert richtext.to_text(page["bodies"]["7"]) == "Bring a <laptop> and your ID on Sunday", page["bodies"]["7"]
+    assert richtext.to_text(page["bodies"]["8"]) == "Only words"
+
+
 def test_html_comments_are_not_text():
     """Text pasted from Word carries HTML comments ("<!--[if gte mso 9]>…<![endif]-->"). A comment is
     not an element: reading its class used to raise, which failed the whole course's read. It is
