@@ -26,8 +26,11 @@ All notable changes to this project are documented here. The format follows
   guest look-up gets the same from the guest's plan.
 - 📚 Remaining Courses under the transcript (and a guest's): what the plan still asks for, group by
   group; an elective group lists what can be chosen.
-- Grade Needed knows what a course can still reach: with its syllabus and your marks in ⚙️ Course
-  Adjustments (coursework 30 of 50), it shows 🔝 Best possible: 80, asks that course for no more
+- 📝 Coursework Total in a course's panel (⚙️ Course Adjustments): type your marks before the final
+  once, as `42/60`, and the panel shows the best mark the course can still end on and what the
+  final must bring to pass. It replaces the Set Syllabus and Enter Marks buttons.
+- Grade Needed knows what a course can still reach: with its coursework total (30 of 50), it shows
+  🔝 Best possible: 80, asks that course for no more
   than that and the other courses for the difference, and says a target is out of reach from the
   real ceilings.
 - Upcoming Tasks lists every open task: Cambridge One assignments and tasks without a due date too.

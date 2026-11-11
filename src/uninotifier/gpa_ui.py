@@ -18,7 +18,8 @@ Callbacks (all start with "gpa:"):
   gpa:home          the calculator          gpa:c:<i>      a course's panel
   gpa:h:<i>:<n>     set credit hours        gpa:r:<i>      toggle retake
   gpa:g:<i>         enter its grade         gpa:x:<i>      clear its grade
-  gpa:s:<i>         set syllabus weights    gpa:m:<i>      enter marks so far
+  gpa:w:<i>         coursework total        gpa:wx:<i>     clear it
+  gpa:s:<i>         set syllabus weights    gpa:m:<i>      enter marks so far (older buttons)
   gpa:cg            current CGPA + hours    gpa:need       Grade Needed: pick a scope
   gpa:t:<s|c>       pick a target           gpa:n:<s|c>:<t> the plan for a target
   gpa:v:<s|c>       type a custom target    gpa:cancel     drop a pending question
@@ -39,7 +40,7 @@ CANCEL_ROW = [{"text": "✖️ Cancel", "callback_data": "gpa:cancel"}]
 @dataclass
 class Prompt:
     """A question to ask in chat; the next plain message is the answer."""
-    kind: str                  # grade | old_grade | syllabus | marks | cgpa | target_s | target_c
+    kind: str                  # grade | old_grade | coursework | syllabus | marks | cgpa | target_s | target_c
     index: int | None
     text: str
 
@@ -93,7 +94,7 @@ def view_home(names: list[str]) -> tuple[str, list]:
         lines.append(f"🎓 *Projected CGPA:* {fmt(projected)}%  (from {fmt(cgpa)}% over {fmt(passed)} record hours)")
     else:
         lines.append(f"🎓 *Current CGPA:* {fmt(cgpa)}% over {fmt(passed)} record hours")
-    lines += ["", "Tap a course to change its hours, mark a retake, enter its grade or its syllabus. "
+    lines += ["", "Tap a course for its hours, retake, coursework total and final grade. "
               "Grades marked 🔒 come from the portal."]
 
     buttons = [[{"text": f"{n}. {_label(name, courses[name])}", "callback_data": f"gpa:c:{n - 1}"}]
@@ -113,8 +114,6 @@ def view_course(names: list[str], i: int) -> tuple[str, list]:
     grade = gpa.course_grade(c)
 
     lines = [f"📘 *{escape_md(name)}*", DIVIDER, f"⏱️ *Credit hours:* {fmt(c['hours'])}"]
-    source = "" if c["grade"] is not None or grade is None else " (sum of your marks)"
-    lines.append(f"🎯 *Grade:* {fmt(grade)}{source}" if grade is not None else "🎯 *Grade:* not entered")
     if c["retake"]:
         lines.append(f"🔁 *Retake:* yes — previous grade {fmt(c['old_grade'])}; the new grade replaces it "
                      "and the hours are not counted again")
@@ -123,22 +122,46 @@ def view_course(names: list[str], i: int) -> tuple[str, list]:
                          "switch Retake off so these hours are added instead.")
     else:
         lines.append("🔁 *Retake:* no (counted as a new course)")
-    if c["syllabus"]:
-        marks = c["marks"]
-        parts = [f"{escape_md(n)} {fmt(marks[n]) + '/' if n in marks else ''}{fmt(w)}" for n, w in c["syllabus"]]
-        lines.append(f"📊 *Syllabus:* {' · '.join(parts)}")
-    else:
-        lines.append("📊 *Syllabus:* not set (needed for the “Grade Needed” calculator)")
+    lines += ["", *_coursework_lines(c)]
+    source = "" if c["grade"] is not None or grade is None else " (sum of your marks)"
+    lines += ["", f"🎯 *Final grade:* {fmt(grade)}{source}" if grade is not None
+              else "🎯 *Final grade:* not entered (the course's mark out of 100, once you know it)"]
 
+    work = gpa.coursework(c)
     rows = [[{"text": f'{"✅ " if c["hours"] == h else ""}{h}h', "callback_data": f"gpa:h:{i}:{h}"}
              for h in gpa.HOUR_CHOICES],
             [{"text": f'🔁 Retake: {"On ✅" if c["retake"] else "Off"}', "callback_data": f"gpa:r:{i}"}],
-            [{"text": "✏️ Enter Grade", "callback_data": f"gpa:g:{i}"},
-             {"text": "🧹 Clear Grade", "callback_data": f"gpa:x:{i}"}],
-            [{"text": "📊 Set Syllabus", "callback_data": f"gpa:s:{i}"},
-             {"text": "📝 Enter Marks", "callback_data": f"gpa:m:{i}"}],
-            [{"text": "🔙 Back", "callback_data": "gpa:home"}]]
+            [{"text": "📝 Coursework Total", "callback_data": f"gpa:w:{i}"}]
+            + ([{"text": "🧹 Clear", "callback_data": f"gpa:wx:{i}"}] if work else []),
+            [{"text": "✏️ Final Grade", "callback_data": f"gpa:g:{i}"}]
+            + ([{"text": "🧹 Clear", "callback_data": f"gpa:x:{i}"}] if c["grade"] is not None else []),
+            [{"text": "🔙 Back", "callback_data": "gpa:home"}, NEED_BUTTON]]
     return "\n".join(lines), rows
+
+
+def _coursework_lines(c: dict) -> list[str]:
+    """Your marks before the final, the most the course can still end on, and what the final must
+    bring to pass. Nothing is guessed: without a coursework total it says how to add one."""
+    work = gpa.coursework(c)
+    if not work:
+        return ["📝 *Coursework:* not entered",
+                "_Your total before the final (e.g. 42/60) shows the best mark you can still reach "
+                "and what the final needs._"]
+    got, out_of = work
+    lines = [f"📝 *Coursework:* {fmt(got)} / {fmt(out_of)}"]
+    if len(c["syllabus"]) > 2:                         # entered part by part: say the parts
+        marks = c["marks"]
+        parts = [f"{escape_md(n)} {fmt(marks[n]) + '/' if n in marks else ''}{fmt(w)}" for n, w in c["syllabus"]]
+        lines.append(f"    {' · '.join(parts)}")
+    lines.append(f"🔝 *Best possible:* {fmt(gpa.ceiling(c))}")
+    need = gpa.need_for(c, gpa.PASS_MARK)
+    if need["required"] <= 0:
+        lines.append(f"✅ *To pass ({fmt(gpa.PASS_MARK)}):* already there")
+    elif need["required"] > need["weight"] + 1e-9:
+        lines.append(f"⛔ *To pass ({fmt(gpa.PASS_MARK)}):* out of reach — the final is out of {fmt(need['weight'])}")
+    else:
+        lines.append(f"✅ *To pass ({fmt(gpa.PASS_MARK)}):* {fmt(need['required'])} / {fmt(need['weight'])} on the final")
+    return lines
 
 
 SCOPES = {"s": ("📊", "Target Semester GPA", "semester average"),
@@ -241,7 +264,7 @@ def view_plan(names: list[str], scope: str, target: float) -> tuple[str, list]:
     if result["cgpa"] is not None:
         lines.append(f"🎓 *CGPA{'' if status == 'done' else ' at that pace'}:* {fmt(result['cgpa'])}%")
     if any(gpa.need_for(c, 0) is None for _, c in result["open"]) and status == "reachable":
-        lines += ["", "ℹ️ Add a course's syllabus in ⚙️ Course Adjustments to see the final-exam mark it needs."]
+        lines += ["", "ℹ️ Add a course's coursework total in ⚙️ Course Adjustments to see the final-exam mark it needs."]
 
     other = "c" if scope == "s" else "s"
     return "\n".join(lines), [
@@ -313,8 +336,14 @@ def on_callback(names: list[str], action: str):
             return Prompt("old_grade", i, f"🔁 *Retake — {escape_md(name)}*\n\n"
                           "What was your *previous grade* in this course? (0–100)")
         c["retake"], c["old_grade"] = False, None
+    elif kind == "w":
+        return Prompt("coursework", i, f"📝 *Coursework Total — {escape_md(name)}*\n\n"
+                      "Send your marks *before the final* and what they are out of, e.g. `42/60`\n"
+                      "(midterm, quizzes, assignments — everything together; the final is the rest of the 100).")
+    elif kind == "wx":
+        gpa.clear_coursework(c)
     elif kind == "g":
-        return Prompt("grade", i, f"✏️ *Grade — {escape_md(name)}*\n\nSend the grade (0–100).")
+        return Prompt("grade", i, f"✏️ *Final Grade — {escape_md(name)}*\n\nSend the course's mark out of 100.")
     elif kind == "s":
         return Prompt("syllabus", i, f"📊 *Syllabus — {escape_md(name)}*\n\n"
                       "Send each part of the grade with its weight (out of 100), e.g.\n"
@@ -351,6 +380,8 @@ def on_text(names: list[str], pending: Prompt, text: str) -> tuple[str, list] | 
             c["grade"] = gpa.parse_number(text, what="grade")
         elif pending.kind == "old_grade":
             c["old_grade"], c["retake"] = gpa.parse_number(text, what="grade"), True
+        elif pending.kind == "coursework":
+            gpa.set_coursework(c, *gpa.parse_coursework(text))
         elif pending.kind == "syllabus":
             c["syllabus"], c["marks"] = gpa.parse_syllabus(text), {}
         elif pending.kind == "marks":

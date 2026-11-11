@@ -2880,7 +2880,7 @@ def test_gpa_screens_and_flow():
         err = gpa_ui.on_text(names, prompt, "150")
         assert isinstance(err, str) and "between 0 and 100" in err
         text, rows = gpa_ui.on_text(names, prompt, "85")
-        assert "Grade:* 85" in text
+        assert "Final grade:* 85" in text
         gpa_ui.on_text(names, gpa_ui.on_callback(names, "gpa:g:1"), "40")
         text, _ = gpa_ui.view_home(names)
         assert "✅ 85" in text and "❌ 40" in text and "Below the 50% pass mark:* Big Data" in text
@@ -2916,6 +2916,23 @@ def test_gpa_screens_and_flow():
         assert prompt.kind == "marks"
         text, _ = gpa_ui.on_text(names, prompt, "Midterm 24, Assignments 17")
         assert "Midterm 24/30" in text and "Assignments 17/30" in text and "Final 40" in text
+        assert "Coursework:* 41 / 60" in text and "Best possible:* 81" in text and "To pass (50):* 9 / 40 on the final" in text
+
+        # the coursework total: one figure before the final, typed as marks/out of — the simple way in
+        text, rows = gpa_ui.on_callback(names, "gpa:c:2")
+        assert "Coursework:* not entered" in text
+        assert [b["text"] for b in rows[2]] == ["📝 Coursework Total"] and [b["text"] for b in rows[3]] == ["✏️ Final Grade"]
+        prompt = gpa_ui.on_callback(names, "gpa:w:2")
+        assert prompt.kind == "coursework"
+        for bad in ("42", "70/60", "42/100", "nothing"):
+            assert isinstance(gpa_ui.on_text(names, prompt, bad), str), bad
+        text, rows = gpa_ui.on_text(names, prompt, "٣٠ من ٥٠")
+        assert "Coursework:* 30 / 50" in text and "Best possible:* 80" in text and "To pass (50):* 20 / 50 on the final" in text
+        assert [b["text"] for b in rows[2]] == ["📝 Coursework Total", "🧹 Clear"]
+        assert "already there" in gpa_ui.on_text(names, prompt, "55/60")[0]
+        assert "out of reach" in gpa_ui.on_text(names, prompt, "5/60")[0]
+        text, rows = gpa_ui.on_callback(names, "gpa:wx:2")
+        assert "Coursework:* not entered" in text and gpa.load()["courses"][names[2]]["syllabus"] is None
 
         # Grade Needed: scope -> target -> plan; graded courses are locked, the rest share the target
         text, rows = gpa_ui.on_callback(names, "gpa:need")
@@ -2968,12 +2985,12 @@ def test_gpa_screens_and_flow():
             assert sent[-1][0].startswith("🎓 *Target Cumulative CGPA: 77.5%*") and bot._pending_prompt is None
 
             bot.handle_gpa_callback("gpa:g:2", 7)             # asks, does not edit
-            assert "Send the grade" in sent[-1][0] and sent[-1][1] == [gpa_ui.CANCEL_ROW]
+            assert "Send the course's mark" in sent[-1][0] and sent[-1][1] == [gpa_ui.CANCEL_ROW]
             assert bot._pending_prompt is not None
             bot.handle_command("not a number")                # an unusable answer keeps the question open
             assert "Send just a number" in sent[-1][0] and bot._pending_prompt is not None
             bot.handle_command("92")
-            assert bot._pending_prompt is None and "Grade:* 92" in sent[-1][0]
+            assert bot._pending_prompt is None and "Final grade:* 92" in sent[-1][0]
 
             bot.handle_gpa_callback("gpa:c:2", 7)             # a tapped button edits its message
             assert sent[-1][0] == "edit:7"

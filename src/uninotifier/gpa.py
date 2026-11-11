@@ -248,6 +248,43 @@ def need_for(course: dict, target: float) -> dict | None:
             "missing": [n for n, _ in others if n not in marks]}
 
 
+COURSEWORK = "Coursework"
+
+
+def parse_coursework(text: str) -> tuple[float, float]:
+    """ "42/60", "42 of 60", "42 من 60", "42 60" -> (42.0, 60.0): your marks before the final, and
+    what they are out of. The final is the rest of the 100."""
+    numbers = re.findall(r"\d+(?:\.\d+)?", text.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")))
+    if len(numbers) != 2:
+        raise InputError("Send your marks and what they are out of, e.g. 42/60")
+    got, out_of = float(numbers[0]), float(numbers[1])
+    if not 0 < out_of < 100:
+        raise InputError("The coursework is out of less than 100 (the final is the rest), e.g. 42/60")
+    if got > out_of:
+        raise InputError(f"{fmt(got)} is more than {fmt(out_of)} — send it as marks/out of, e.g. 42/60")
+    return got, out_of
+
+
+def set_coursework(course: dict, got: float, out_of: float) -> None:
+    """Everything before the final as one figure: 42 of 60, the final being the other 40."""
+    course["syllabus"] = [[COURSEWORK, out_of], ["Final", 100 - out_of]]
+    course["marks"] = {COURSEWORK: got}
+
+
+def clear_coursework(course: dict) -> None:
+    course["syllabus"], course["marks"] = None, {}
+
+
+def coursework(course: dict) -> tuple[float, float] | None:
+    """(marks so far, out of) before the final, once any mark is in; None before that."""
+    syllabus, marks = course.get("syllabus"), course.get("marks") or {}
+    final = final_part(syllabus) if syllabus else None
+    if not final or not marks:
+        return None
+    others = [(n, w) for n, w in syllabus if n != final[0]]
+    return sum(marks.get(n, 0) for n, _ in others), sum(w for n, w in others if n in marks)
+
+
 def ceiling(course: dict) -> float:
     """The highest mark the course can still end on: 100 minus what was already lost in the
     parts that have a mark (coursework 30 of 50 leaves 80 at best). 100 without a syllabus."""
