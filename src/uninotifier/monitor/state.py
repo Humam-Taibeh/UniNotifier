@@ -84,6 +84,18 @@ def acquire_lock() -> bool:
     return False
 
 
+def usable_session() -> str | None:
+    """The saved browser session's path, when the file is there and holds a JSON object. Chromium
+    will not start a context from anything else (measured: an empty or cut-short file raises), so a
+    file damaged by a power cut is left out: the check signs in again and writes a good one."""
+    if not SESSION_FILE.exists():
+        return None
+    if read_state(SESSION_FILE) is None:
+        log.warning("%s is unreadable — starting without it and signing in again", SESSION_FILE.name)
+        return None
+    return str(SESSION_FILE)
+
+
 def release_lock() -> None:
     LOCK_FILE.unlink(missing_ok=True)
 

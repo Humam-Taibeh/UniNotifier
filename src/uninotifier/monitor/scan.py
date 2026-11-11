@@ -13,6 +13,7 @@ from playwright.sync_api import sync_playwright
 
 from uninotifier import archive
 from uninotifier import failsafe
+from uninotifier import fileio
 from uninotifier import lecturelinks
 from uninotifier import maintenance
 from uninotifier import media
@@ -77,7 +78,7 @@ class Browser:
             self._pw = sync_playwright().start()
             self._browser = self._pw.chromium.launch(headless=True)
             self._context = self._browser.new_context(
-                storage_state=str(state.SESSION_FILE) if state.SESSION_FILE.exists() else None,
+                storage_state=state.usable_session(),
                 viewport=config.VIEWPORT, device_scale_factor=config.SCALE)
             self._page = self._context.new_page()
             install_virtual_authenticator(self._context, self._page)
@@ -110,8 +111,10 @@ class Browser:
         return self._context.cookies()
 
     def save_state(self) -> None:
+        """Through fileio (a temporary file, then one replace): the browser itself writes the file
+        in place, and a power cut then leaves half a session that nothing can load."""
         if self.started:
-            self._context.storage_state(path=str(state.SESSION_FILE))
+            fileio.write_json_atomic(state.SESSION_FILE, self._context.storage_state())
 
     def close(self) -> None:
         for closer in (lambda: self._browser.close(), lambda: self._pw.stop()):

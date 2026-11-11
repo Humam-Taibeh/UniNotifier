@@ -18,7 +18,7 @@ from playwright.sync_api import sync_playwright
 import os
 
 from uninotifier.zuj_auth import LoginError, install_virtual_authenticator, login_via_sso
-from uninotifier import paths
+from uninotifier import fileio, paths
 
 load_dotenv(paths.ENV_FILE)
 SESSION_FILE = paths.DATA / "auth_state.json"
@@ -47,7 +47,7 @@ def main() -> None:
             browser.close()
             sys.exit(1)
 
-        context.storage_state(path=str(SESSION_FILE))
+        fileio.write_json_atomic(SESSION_FILE, context.storage_state())    # never half a file (see monitor/scan.py)
         print(f"\nSession saved to {SESSION_FILE.name} — monitor.py will reuse it from now on.")
         browser.close()
 

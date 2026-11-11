@@ -1162,3 +1162,60 @@ def test_state_backup_lives_in_its_own_repository():
     finally:
         gitsync.STATE_REPO = keep
         shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_a_damaged_session_file_does_not_stop_the_browser():
+    """Chromium refuses to start a context from a session file that is not JSON (measured: an empty
+    or cut-short file raises JSONDecodeError), and Playwright writes that file in place — so a power
+    cut while it was being written made every check fail until the file was deleted by hand. A
+    file that cannot be read is left out (the check signs in again), and the session is saved
+    through fileio, which never leaves half a file."""
+    from uninotifier import fileio
+    from uninotifier.monitor import scan, state
+
+    started = []
+
+    class Context:
+        def new_page(self):
+            return object()
+
+        def storage_state(self, path=None):
+            assert path is None, "the session must be written by fileio, not in place by the browser"
+            return {"cookies": [{"name": "MoodleSession", "value": "fresh"}], "origins": []}
+
+    class Chromium:
+        def launch(self, **kwargs):
+            return self
+
+        def new_context(self, storage_state=None, **kwargs):
+            if storage_state is not None:
+                json.loads(Path(storage_state).read_text(encoding="utf-8"))     # what Playwright does
+            started.append(storage_state)
+            return Context()
+
+    class Playwright:
+        chromium = Chromium()
+
+        def start(self):
+            return self
+
+    keep = scan.sync_playwright, scan.install_virtual_authenticator, state.SESSION_FILE, fileio.write_json_atomic
+    tmp = Path(tempfile.mkdtemp())
+    written = []
+    try:
+        scan.sync_playwright, scan.install_virtual_authenticator = Playwright, lambda context, page: None
+        state.SESSION_FILE = tmp / "auth_state.json"
+        for damaged in ("", '{"cookies": [{"name": "Moodle'):
+            state.SESSION_FILE.write_text(damaged, encoding="utf-8")
+            browser = scan.Browser()
+            assert browser.page is not None and started[-1] is None, f"{damaged!r} must not be handed to the browser"
+        state.SESSION_FILE.write_text('{"cookies": [], "origins": []}', encoding="utf-8")
+        browser = scan.Browser()
+        assert browser.page is not None and started[-1] == str(state.SESSION_FILE), "a good file is used"
+        fileio.write_json_atomic = lambda path, data: (written.append(path), keep[3](path, data))[1]
+        browser.save_state()
+        assert written == [state.SESSION_FILE], written
+        assert json.loads(state.SESSION_FILE.read_text(encoding="utf-8"))["cookies"][0]["value"] == "fresh"
+    finally:
+        scan.sync_playwright, scan.install_virtual_authenticator, state.SESSION_FILE, fileio.write_json_atomic = keep
+        shutil.rmtree(tmp, ignore_errors=True)
