@@ -179,10 +179,29 @@ label under its first line.
 
 Each label / page / description / section summary is fingerprinted (its
 visible text and image files). When an instructor edits one — e.g. fills in
-the empty "lecture time" in a bio card — you get `✏️ Content Updated` with
-the current version. Every forum (including each course's Announcements) is
-read on each run; new topics arrive as `📢 New Announcement` (Announcements
-forum) or `🗣️ New Forum Topic`, replies as `💬 New Forum Reply`.
+the empty "lecture time" in a bio card — you get `✏️ Content Updated` with a
+picture of the current version and what changed, line by line: *Was* (➖) and
+*Now* (➕). The item's wording is kept between runs for this (up to 6000
+characters, in `saved_items.json`); an edit of a picture or the layout alone
+says so. Every forum (including each course's Announcements) is read on each
+run; new topics arrive as `📢 New Announcement` (Announcements forum) or
+`🗣️ New Forum Topic`, replies as `💬 New Forum Reply` — each as a picture of
+the post itself.
+
+Messages stay short: what an instructor wrote is in the picture, not typed out
+again under it. The wording is sent as text only when there is no picture or
+file to show it.
+
+### A course renamed on Moodle
+
+The timetable, the instructor, the archive folder and the calculator know a
+course by its name in `schedule.json`. Moodle's name can change mid-term. A new
+section tag (`-Sec12-3-E`) is stripped like `-AllSec-`, the same words in
+another order are the same course, and for any other new name the course is
+tied to its Moodle id, which does not change: every check remembers which
+timetable course each id is (`course_names.json`), so a name that matches
+nothing under a known id becomes an alias of that course — before a folder is
+made or anything is named in a message.
 
 ### Teams lectures and attendance
 
@@ -425,12 +444,17 @@ grade × hours.
   ✏️ Custom Value. The plan locks every course that already has a grade (🔒
   official marks from `/grades` or Finals Watch win over typed ones) and shares the rest of
   the target equally over the courses still open: the mark each needs, the semester average
-  and CGPA it leads to, and — for a course with a syllabus — the final-exam mark it takes.
+  and CGPA it leads to, and — for a course with a coursework total — the final-exam mark it takes.
+  A course that already lost marks is never asked for more than it can still reach (coursework
+  30 of 50 leaves 80 at best: 🔝 Best possible); it is asked for that, and the other courses for
+  the difference. A target is out of reach when the courses' best marks together fall short.
   A cumulative target uses your base (CGPA and record hours) and treats retakes correctly.
 * **⚙️ Course Adjustments** (the calculator): tap a course to set its hours (1 / 2 / 3),
-  flag it as a retake (it asks for the previous grade), enter its grade, its syllabus
-  (`Midterm 30, Assignments 10, Project 20, Final 40`, adding up to 100) and marks so far
-  (`Midterm 24, Assignments 8`); **⚙️ CGPA & Record Hours** sets the base. It shows the
+  flag it as a retake (it asks for the previous grade), and enter its **📝 Coursework Total** —
+  your marks before the final and what they are out of, typed once as `42/60` (`42 of 60` and
+  Arabic digits work too; the final is the rest of the 100). The panel then shows the best mark
+  the course can still end on and what the final must bring to pass. **✏️ Final Grade** is the
+  course's mark out of 100 once you know it; **⚙️ CGPA & Record Hours** sets the base. It shows the
   semester average, projected CGPA and any course below the 50 pass mark.
 
 Everything is kept in `gpa.json` (git-ignored: it holds grades). The "record hours"
@@ -862,6 +886,7 @@ Good Standing) and the degree progress:
 ❌ Failed, Not Retaken Yet: 3 hrs · 1 course
 🔁 Repeated Courses: 3 (2 done · 1 this term)
 🏁 Remaining: 60 hrs · 45 after this term
+📝 Placement Exams: all 3 exempt — nothing added to the plan
 📚 Total Attempted Hours: 81 hrs
 ```
 
@@ -869,7 +894,13 @@ Those hours are not a setting: right after the transcript, the same portal sessi
 student's own study plan (`/pages/student/plan/`, "جميع خطة الطالب" — `degreeplan.py`), which lists
 every requirement group of *that* student's major and plan year with its courses, each one's status
 (مجتازة / قيد الدراسة / راسب / معفاة) and the group's own totals. The degree is the sum of the groups'
-required hours; remedial courses (استدراكية) are left out, as the university does; an elective
+required hours. Remedial courses (استدراكية) are the placement exams' other side — Arabic, English
+and computer skills: exempted (معفاة) when the exam was passed, a course to take *on top of* the
+plan's hours when it was not. They are never part of the degree's figure, as the university counts
+it, and are said on their own: `📝 Placement Exams` in the summary (`Arabic ✅ · English ⏳ · Computer
+Skills ▫️ — +9 hrs on top of the plan (6 still to pass)` when some are owed, with `+6 remedial`
+beside the remaining hours) and each exam with its outcome in 📚 Remaining Courses. A plan course
+the portal marks exempted counts as done, as the portal's own totals have it. An elective
 registered beyond what its group still needs does not lower "after this term". If the plan page
 cannot be read, the summary falls back to the hours counted from the record — ⏱️ Passed Hours (with
 ⏳ in progress · ❌ to repeat · 🔁 retaken), 📚 Total Attempted Hours, and 🏁 Remaining Hours only when
