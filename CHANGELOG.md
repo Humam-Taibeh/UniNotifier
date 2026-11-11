@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- An assignment leaves the task list only when it is handed in: Moodle's own *done* mark (which opening
+  the page can set) no longer hides one that is still to do.
+
+### Added
+- 🔒 Assignment Closed — Not Submitted and 🗑️ Assignment Removed: told once when an assignment you
+  have not handed in stops accepting work, or is taken out of the course.
+
 ### Changed
 - The test suite is one file per topic instead of a single 9,000-line file; it runs the same way.
 

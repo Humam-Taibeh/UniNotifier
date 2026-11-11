@@ -940,12 +940,21 @@ There is no manual-check button: the 15-minute schedule and the status line cove
 The planner (`/tasks`) lists every open task (`tasks.py`) — assignments not submitted,
 quizzes not attempted (with their opening and closing times), Cambridge One assignments
 with activities left, and those without a due date — each with course, countdown and a
-**🔗 Open Task** button, then your own reminders. A task whose date has passed leaves the list —
-except an assignment Moodle still takes a submission for (a due date left over from last year's copy
-of the course, or late work accepted): every check reads it, and it stays, marked `⚠️ Overdue — Moodle
-still accepts it` (its own block in the noon message), until it is handed in, marked done, or closed.
-Its 24 h / 1 h reminders cannot be sent — that moment is already behind — so the noon message is its
-reminder, every day.
+**🔗 Open Task** button, then your own reminders.
+
+**An assignment is over only when it is handed in.** One whose date has passed while Moodle still
+takes a submission (a due date left over from last year's copy of the course, or late work accepted)
+is read on every check and stays, marked `⚠️ Overdue — Moodle still accepts it` (its own block in
+the noon message). Its 24 h / 1 h reminders cannot be sent — that moment is already behind — so the
+noon message is its reminder, every day. Moodle's own *done* mark does not end it: opening the page
+can set that mark by itself. It leaves the list when it is handed in — or when it can no longer be:
+
+- `🔒 Assignment Closed — Not Submitted` — Moodle stopped accepting it (told once, when it was open
+  before or its date passed in the last two days);
+- `🗑️ Assignment Removed` — the instructor took it out of the course while it was still to do (the
+  assignment's own address answers that it does not exist; an unreachable page is never taken for that).
+
+A quiz whose closing time has passed leaves the list.
 
 **📋 Your Open Tasks** — every day at noon one message lists what can be worked on now,
 closest first, every day until it is done; anything due within 24 hours comes first under a

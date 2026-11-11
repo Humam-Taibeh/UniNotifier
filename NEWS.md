@@ -4,6 +4,11 @@ What is new, in plain words, for the people who use UniNotifier. The bot shows t
 does not have yet when it tells its owner that a new version is ready (newest first; one entry is
 `## YYYY-MM-DD — Title`, then the text). The full list of changes is in [CHANGELOG.md](CHANGELOG.md).
 
+## 2026-11-12 — Assignments stay until you hand them in
+- An assignment leaves your task list only when it is submitted — not when Moodle marks it done because
+  you opened it.
+- You are told when an assignment you have not submitted is closed or removed by the instructor.
+
 ## 2026-11-11 — Updates from the chat, and the Registration Plan
 - The bot now tells you when a new version is ready, with what is new, and ⬇️ Update Now installs it.
 - 🗓️ Registration Plan (under 📜 Academic Record & Balance): what to register next term, from your own
