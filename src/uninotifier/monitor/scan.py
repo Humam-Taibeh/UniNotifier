@@ -431,7 +431,7 @@ def run_scan(saved: dict, notify_new: bool, mfa_handler=None) -> dict:
                 continue
             log.info("  processing %s: %s", item["type"], item["name"])
             try:
-                artifacts[item_id] = art = items.process_item(http, sesskey, item)
+                artifacts[item_id] = art = items.process_item(http, sesskey, item, saved["files"].get(item_id))
             except Exception as e:
                 log.exception("Failed processing %s", item["name"])
                 failsafe.bug("monitor:item", "A new item could not be processed", e,

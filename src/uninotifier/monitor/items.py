@@ -93,13 +93,33 @@ def capture_screens(page, url: str, selector: str) -> tuple[list[bytes], bool]:
 _SAVED_FOR: dict[str, str] = {}
 
 
-def process_item(context, sesskey: str, item: dict) -> dict:
+def saved_file(record: dict | None) -> Path | None:
+    """The file (or extracted folder) an item's saved_items "files" record points at, if it is
+    still on the disk."""
+    path = Path(record["path"]) if record and record.get("path") else None
+    return path if path is not None and path.exists() else None
+
+
+def process_item(context, sesskey: str, item: dict, record: dict | None = None) -> dict:
     """Handle one item according to its kind (download / resolve). Returns
-    an artifact dict: kind, and as produced: path, size, target, grade."""
+    an artifact dict: kind, and as produced: path, size, target, grade.
+
+    `record`: the item's saved "files" record, when an earlier run already saved its file. That
+    happens when the file was saved but its message never reached Telegram: the item comes round
+    again as new. Its own file is then used as it is ("kept": True) — downloading it again would
+    find the same bytes in the folder and take them for another item's copy ("not attached
+    again", about a file never sent), and a folder would be extracted a second time."""
     kind = media.classify(item)
     artifact = {"kind": kind}
 
-    if kind == "file":
+    kept = saved_file(record) if kind == "file" else None
+    if kept is not None:
+        artifact.update(path=str(kept), size=archive.path_size(kept), kept=True,
+                        sha256=record.get("sha256"), modified=record.get("modified"),
+                        grade=grades.scan_paths(kept, config.STUDENT_ID) if config.STUDENT_ID else None)
+        log.info("    already saved as %s — not downloaded again", kept.name)
+
+    elif kind == "file":
         dest = archive.target(item["course"], item["type"], item["name"])
         try:
             if item["type"] == "resource":

@@ -105,7 +105,7 @@ def run(announce: bool = False) -> None:
 
     # Record every archived file (id + size) so it is never downloaded again.
     for item_id, art in artifacts.items():
-        if art.get("path"):
+        if art.get("path") and not art.get("kept"):       # kept: its record is already there (items.process_item)
             saved["files"][item_id] = {"path": art["path"], "size": art.get("size", 0),
                                        "sha256": art.get("sha256"), "modified": art.get("modified")}
 

@@ -310,6 +310,65 @@ def test_announce_first_run_and_duplicate_files():
     assert docs[0][1] == pdf and docs[1][1] is None and "not attached again" in docs[1][0]
 
 
+def test_a_file_whose_message_failed_is_sent_with_the_file_next_time():
+    """A new file is saved and recorded before its message goes out. When that message failed, the
+    next check processed the item again: the download found the bytes already in the folder and
+    took them for ANOTHER item's file — the message then said "Same file as an item already sent —
+    not attached again" about a file that had never been sent, and a folder was downloaded a second
+    time as "name (1)". The item's own saved file is used as it is: attached, nothing downloaded."""
+    from uninotifier.monitor import items
+    course = "20261-Big Data-AllSec-3-"
+
+    class NoDownload:
+        request = None
+
+        def __init__(self):
+            self.request = self
+
+        def get(self, *args, **kwargs):
+            raise AssertionError("the file is already saved for this item: nothing may be downloaded again")
+
+        head = post = get
+
+    with tempfile.TemporaryDirectory() as tmp:
+        pdf = Path(tmp) / "Lecture 1.pdf"
+        pdf.write_bytes(b"%PDF-1.4 lecture")
+        folder = Path(tmp) / "Sheets"
+        folder.mkdir()
+        (folder / "sheet.txt").write_text("x", encoding="utf-8")
+        for kind, path, size in (("resource", pdf, 16), ("folder", folder, 1)):
+            item = {"name": path.stem, "type": kind, "course": course, "cmid": "1",
+                    "url": f"https://x/mod/{kind}/view.php?id=1"}
+            record = {"path": str(path), "size": size, "sha256": "abc", "modified": 5.0}
+            art = items.process_item(NoDownload(), "key", item, record)
+            assert art["kind"] == "file" and art["path"] == str(path) and art["size"] == size, art
+            assert not art.get("duplicate") and art["kept"] is True, art
+            assert (art["sha256"], art["modified"]) == ("abc", 5.0)
+        assert sorted(p.name for p in Path(tmp).iterdir()) == ["Lecture 1.pdf", "Sheets"], "nothing was saved twice"
+
+        # the message now carries the file
+        monitor = _package("uninotifier.monitor")
+        docs, orig = [], monitor.deliver
+        monitor.deliver = lambda header, body="", url=None, rows=None, shots=(), shot_name="", document=None: \
+            docs.append((header, document)) or True
+        try:
+            item = {"name": "Lecture 1", "type": "resource", "course": course, "cmid": "1",
+                    "url": "https://x/mod/resource/view.php?id=1"}
+            art = items.process_item(NoDownload(), "key", item, {"path": str(pdf), "size": 16})
+            monitor.notify_new_item(item, None, art)
+        finally:
+            monitor.deliver = orig
+        assert docs[0][1] == pdf and "not attached again" not in docs[0][0], docs
+
+        # a record whose file is gone from the disk is downloaded as before
+        gone = {"path": str(Path(tmp) / "missing.pdf"), "size": 1}
+        try:
+            items.process_item(NoDownload(), "key", item, gone)
+            raise AssertionError("a missing file must be downloaded again")
+        except AssertionError as e:
+            assert "downloaded again" in str(e), e
+
+
 def test_an_announced_item_is_never_announced_again():
     """A run that reads a course incompletely (the browser fallback has no section
     descriptions) makes items vanish for one run. When they come back they are not new."""
