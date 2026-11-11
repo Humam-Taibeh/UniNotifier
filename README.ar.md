@@ -262,7 +262,7 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1
 | `/transcript` · `/balance` | كشف العلامات · الرصيد المالي، من بوابة الطالب (تحتاج قيم `PORTAL_*` في `.env`) |
 | `/finals` | مراقبة العلامات النهائية (Finals Watch) في فترة الامتحانات |
 | `/check` | تشغيل فحص فوري الآن |
-| `/help` | دليل النظام (System Guide) |
+| `/help` | رابط لهذا الدليل |
 
 لا يجيب البوت إلا عليك أنت (`ADMIN_USER_ID`)؛ وأي شخص آخر يعثر عليه لا يتلقى أي رد، ويصلك إشعار بذلك.
 

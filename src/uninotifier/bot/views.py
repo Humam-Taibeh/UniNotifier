@@ -10,7 +10,6 @@ import time
 
 from uninotifier import failsafe
 from uninotifier import gpa
-from uninotifier import guide
 from uninotifier import lecturelinks
 from uninotifier import media
 from uninotifier import notifier
@@ -46,8 +45,14 @@ def view_menu() -> tuple[str, list]:
          {"text": "⏳ Upcoming Tasks & Reminders", "callback_data": "tasks"}],
         [{"text": "📊 GPA & Grade Hub", "callback_data": "academic"},
          {"text": "📜 Academic Record & Balance", "callback_data": "record"}],
-        [{"text": "📖 System Guide", "callback_data": "help"}],
     ]
+
+
+def view_guide_link() -> tuple[str, list]:
+    """/help: the guide is the project's README and reference, not screens in the chat."""
+    return ("📖 *Guide* — every feature, the setup steps and the settings are explained in the project's "
+            "`README.md` and `docs/REFERENCE.md` (on its GitHub page, and in the folder next to `bot.py`).",
+            [chat.BACK_ROW])
 
 
 def base_line() -> str:
@@ -59,7 +64,7 @@ def base_line() -> str:
 
 def view_academic() -> tuple[str, list]:
     """📊 GPA & Grade Hub: what each course needs, and the grades as they are released."""
-    lines = ["📊 *GPA & Grade Hub*", guide.DIVIDER, base_line(), "",
+    lines = ["📊 *GPA & Grade Hub*", media.DIVIDER, base_line(), "",
              "🎯 *Grade Needed* — what each course needs for a semester or cumulative target; "
              "hours, retakes and marks are adjusted there",
              "🏁 *Finals Watch* — check this term's grades now, or have each one announced the moment it is released"]
@@ -72,7 +77,7 @@ def view_academic() -> tuple[str, list]:
 
 def view_record() -> tuple[str, list]:
     """📜 Academic Record & Balance: the transcript and the tuition balance."""
-    lines = ["📜 *Academic Record & Balance*", guide.DIVIDER,
+    lines = ["📜 *Academic Record & Balance*", media.DIVIDER,
              "📜 *Transcript* — your cumulative GPA, passed hours, status and every term's courses",
              "💰 *Balance* — your tuition balance"]
     return "\n".join(lines), [
@@ -95,7 +100,7 @@ def view_tasks() -> tuple[str, list]:
     now = time.time()
     upcoming = tasks.open_tasks(chat.load_state(), now)
 
-    lines = ["⏳ *Upcoming Tasks & Reminders*", guide.DIVIDER, "📚 *Course tasks*"]
+    lines = ["⏳ *Upcoming Tasks & Reminders*", media.DIVIDER, "📚 *Course tasks*"]
     if not upcoming:
         lines.append("🎉 No assignments or quizzes ahead.")
     for n, task in enumerate(upcoming, 1):
@@ -131,7 +136,7 @@ def view_courses() -> tuple[str, list]:
     state = chat.load_state()
     count = len(state.get("courses", {}))
     hours = sum(c["hours"] for c in gpa.load()["courses"].values()) or 3 * count
-    text = "\n".join(["📚 *My Courses & Schedule*", guide.DIVIDER,
+    text = "\n".join(["📚 *My Courses & Schedule*", media.DIVIDER,
                       f"{count} course{'' if count == 1 else 's'} · {gpa.fmt(hours)} credit hours · {semester()}",
                       "", "What would you like to see?"])
     return text, [[{"text": "📋 Course List & Details", "callback_data": "courselist"}],

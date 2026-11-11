@@ -67,6 +67,10 @@ All notable changes to this project are documented here. The format follows
   listed online lectures only and duplicated the reminder an hour before each one. A `schedule.json`
   that still has the line is told so on Telegram — delete the line.
 
+### Removed
+- 📖 System Guide: the button, its five pages and `guide.py`. The guide is the README and
+  `docs/REFERENCE.md`; `/help` says where they are.
+
 ### Fixed
 - A picture of a quiz or assignment page no longer comes out blank white: on those pages the
   wrapper around the content is the floating one, and it was hidden with the floating widgets.

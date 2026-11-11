@@ -699,7 +699,7 @@ UniNotifier/
 │   ├── failsafe.py, heartbeat.py, selfheal.py, fileio.py   fail-loud alerts, the bot's pulse, its self-restart, crash-safe writes
 │   ├── telegram.py, access.py, fileids.py                 the one door to Telegram; who may use the bot; uploaded-once files
 │   ├── envcheck.py, doctor.py                             the settings checked before a run; the setup check
-│   ├── zuj_auth.py, mfa.py, notifier.py, guide.py, paths.py            sign-in, Telegram, /help, where files live
+│   ├── zuj_auth.py, mfa.py, notifier.py, paths.py                      sign-in, Telegram, where files live
 │   └── tools/                login_refresh · send_test_message · showcase · record_pages ·
 │                             migrate_archive · tidy_archive · upload_benchmark   (python -m uninotifier.tools.<name>)
 ├── install.bat               the double-click installer (runs scripts/install.ps1)
@@ -808,7 +808,6 @@ courses — above a four-row menu:
 |-----|---------|
 | 1 | 📚 My Courses & Schedule (📋 Course List & Details · 📅 Weekly Timetable) · ⏳ Upcoming Tasks & Reminders |
 | 2 | 📊 GPA & Grade Hub (🎯 Grade Needed — ⚙️ Course Adjustments inside it · 🏁 Finals Watch — 🔄 Check Grades Now and the background switch) · 📜 Academic Record & Balance (📜 Transcript · 💰 Balance · 👤 Guest Look-up) |
-| 3 | 📖 System Guide |
 
 There is no manual-check button: the 15-minute schedule and the status line cover it
 (`/check` still works when typed — the Microsoft-verification alert relies on it).
@@ -849,11 +848,8 @@ in `data/daily_sent/` makes sure it goes out once). A day the PC was off is not 
 * 🗑️ Manage Reminders deletes them. State: `reminders.json` (bot), `reminder_sources.json`
   (what each 📌 refers to, written by the monitor) — both git-ignored.
 
-`/help` opens the **System Guide** (`guide.py`), one section per hub: 📚 Schedule & Moodle
-Monitoring, ⏳ Tasks & Custom Reminders Engine, 📊 Smart GPA, Target Allocation & Finals
-Watch, 📜 Academic Records & Financials, ⚙️ Architecture, Healthchecks & Stealth Engine —
-each ONE self-contained message in plain English (no sub-pages, no ◀️ ▶️ carousel).
-Commands are left to Telegram's own / menu. Pages are edited in place; every one has 🔙 Back to Hub.
+`/help` answers with a link to the README: the guide is the project's page (this file and the
+README), not screens in the chat. Commands are left to Telegram's own / menu.
 
 The 📜 Transcript is ONE message — the page's screenshot with an executive summary: 🎓 Cumulative GPA
 (with the portal's own rounded figure), 📌 Academic Status (the portal's "الحالة", e.g. منتظم → Regular /

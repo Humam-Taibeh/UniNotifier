@@ -630,10 +630,9 @@ def test_bot_views():
     text, rows = bot.view_menu()
     assert [[b["text"] for b in row] for row in rows] == [
         ["📚 My Courses & Schedule", "⏳ Upcoming Tasks & Reminders"],
-        ["📊 GPA & Grade Hub", "📜 Academic Record & Balance"],
-        ["📖 System Guide"]], rows
+        ["📊 GPA & Grade Hub", "📜 Academic Record & Balance"]], rows
     assert [b.get("callback_data") for row in rows for b in row] == [
-        "courses", "tasks", "academic", "record", "help"], "no external site buttons"
+        "courses", "tasks", "academic", "record"], "no external site buttons, no in-chat guide"
     assert len(text.splitlines()) == 2 and text.startswith("🎓 *UniNotifier System* • First Semester 2026/2027")
     assert text.splitlines()[1].endswith("• 6 Courses Tracked"), text
     # My Courses & Schedule is a menu, not a wall of text; Tracked Items and Campus Guide are gone
@@ -3241,51 +3240,15 @@ def _legacy_markdown_ok(text: str) -> bool:
 
 
 def test_help_hub_dashboard_and_campus():
-    """/help is a small site: every page is reachable, valid Markdown, fits one message
-    and leads back to the hub. The dashboard tells the truth about the monitor."""
+    """The guide is the README, not screens in the chat: /help is a link to it, and a button of the
+    old in-chat guide opens the menu. The dashboard tells the truth about the monitor."""
     bot = _package("uninotifier.bot")
-    from uninotifier import guide
+    assert not (paths.ROOT / "src" / "uninotifier" / "guide.py").exists(), "the in-chat guide was removed"
+    assert "help" not in {c for c, _ in bot.COMMANDS} and {"remind", "need"} <= {c for c, _ in bot.COMMANDS}
+    text, rows = bot.view_guide_link()
+    assert "README.md" in text and rows == [bot.BACK_ROW] and _legacy_markdown_ok(text)
 
-    # walk every page reachable from the hub
-    seen, queue_ = {}, ["help"]
-    while queue_:
-        action = queue_.pop()
-        if action in seen:
-            continue
-        seen[action] = text, rows = guide.view(action.partition(":")[2], "🟢 *Live Monitor Active*")
-        assert _legacy_markdown_ok(text) and len(text) < notifier.MESSAGE_LIMIT, (action, text)
-        buttons = [b for row in rows for b in row]
-        assert all(len(b["callback_data"].encode()) <= 64 for b in buttons if "callback_data" in b)
-        if action != "help":
-            assert guide.HUB_BUTTON in rows[-1], f"{action}: no way back to the hub"
-        for b in buttons:
-            if b.get("callback_data", "").startswith("help"):
-                assert b["callback_data"] == "help" or b["callback_data"][5:] in guide.PAGES, b
-                queue_.append(b["callback_data"])
-    assert set(seen) == {"help"} | {f"help:{k}" for k in guide.PAGES}, "every page is linked"
-    hub_text, hub_rows = seen["help"]
-    assert [r[0]["text"] for r in hub_rows] == [
-        "📚 Schedule & Moodle Monitoring", "⏳ Tasks & Custom Reminders Engine",
-        "📊 Smart GPA, Target Allocation & Finals Watch", "📜 Academic Records & Financials",
-        "⚙️ Architecture, Healthchecks & Stealth Engine", "🏠 Main Menu"], "one section per hub, no Command Reference"
-    assert "commands" not in guide.PAGES
-    assert "🟢" in hub_text and "never saved twice" in seen["help:schedule"][0]
-    # one self-contained message per section: no sub-pages, no carousel, only the way back
-    assert set(guide.PAGES) == set(guide.SECTIONS) and len(guide.SECTIONS) == 5
-    for key in guide.SECTIONS:
-        text, rows = seen[f"help:{key}"]
-        assert rows == [[guide.HUB_BUTTON, guide.MENU_BUTTON]], (key, rows)
-        assert not re.search(r"Previous|Next|◀️|▶️", json.dumps(rows, ensure_ascii=False)), key
-    # the buttons of the old two-level guide open the section they belonged to
-    for old_key, section in guide.OLD_PAGES.items():
-        assert guide.view(old_key)[0] == guide.view(section)[0], old_key
-    assert "Check Grades Now" in seen["help:gpa"][0] and "sits inside Grade Needed" in seen["help:gpa"][0]
-    assert "Sunday to Wednesday" in seen["help:tasks"][0] and "replaces" in seen["help:gpa"][0]
-    assert guide.view("no-such-page")[0] == guide.view_hub()[0]
-    assert guide.view("commands")[0] == guide.view_hub()[0], "an old Command Reference button lands on the hub"
-    assert {"help", "remind", "need"} <= {c for c, _ in bot.COMMANDS}
-
-    # dispatch: /help opens the hub; a button edits the page in place; /courses is the submenu
+    # dispatch: /help links to the guide; an old guide button opens the menu; /courses is the submenu
     sent, edited = [], []
     orig = (bot.send_view, bot.edit_view, bot.api)
     bot.send_view = lambda text, rows: sent.append(text)
@@ -3300,7 +3263,7 @@ def test_help_hub_dashboard_and_campus():
         bot.handle_command("/campus")
     finally:
         bot.send_view, bot.edit_view, bot.api = orig
-    assert sent[0].startswith("📖") and "Your own reminders" in edited[0] and edited[1].startswith("📖")
+    assert sent[0].startswith("📖 *Guide*") and edited[0].startswith("🎓 *UniNotifier System*") and edited[1] == edited[0]
     assert sent[1].startswith("📚 *My Courses & Schedule*") and "Section 03" in edited[2]
     assert sent[2].startswith("❓ Unknown command"), "Campus Guide was removed"
     for text in (bot.view_courses()[0], bot.view_course_list()[0], bot.view_tasks()[0]):

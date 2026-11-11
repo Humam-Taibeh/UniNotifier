@@ -260,7 +260,7 @@ Everything is buttons: send `/start` for the menu. A few commands are worth know
 | `/transcript` · `/balance` | from the registration portal (needs `PORTAL_*` in `.env`) |
 | `/finals` | Finals Watch during exam season |
 | `/check` | run a check right now |
-| `/help` | the System Guide |
+| `/help` | a link to this guide |
 
 The bot answers only you (`ADMIN_USER_ID`); anyone else who finds it gets no reply, and you are told.
 

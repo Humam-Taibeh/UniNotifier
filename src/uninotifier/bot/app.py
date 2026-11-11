@@ -18,7 +18,6 @@ from uninotifier import paths
 from uninotifier import envcheck
 from uninotifier import failsafe
 from uninotifier import fileio
-from uninotifier import guide
 from uninotifier import healthcheck
 from uninotifier import heartbeat
 from uninotifier import lectures
@@ -82,7 +81,6 @@ class OutageTracker:
 
 COMMANDS = [
     ("start", "🏠 Main Menu"),
-    ("help", "📖 System Guide"),
     ("courses", "📚 My Courses & Schedule"),
     ("tasks", "⏳ Upcoming Tasks & Reminders"),
     ("remind", "➕ New Custom Reminder"),
@@ -145,7 +143,7 @@ def handle_command(text: str, message_id: int | None = None) -> None:
     elif command == "/schedule":
         views.start_schedule_files()
     elif command == "/help":
-        chat.send_view(*guide.view_hub(chat.monitor_status()))
+        chat.send_view(*views.view_guide_link())
     elif command in views.COMMAND_VIEWS:
         chat.send_view(*views.VIEWS[views.COMMAND_VIEWS[command]]())
     elif command.startswith("/"):
@@ -272,8 +270,8 @@ def route_callback(cb: dict, action: str, message_id: int | None) -> None:
         chat.answer(cb["id"], "🔄 Checking…" if started else "⏳ A check is already running")
         return
     chat.answer(cb["id"])
-    if (action == guide.HUB or action.startswith("help:")) and message_id:
-        chat.edit_view(message_id, *guide.view(action.partition(":")[2], chat.monitor_status()))
+    if (action == "help" or action.startswith("help:")) and message_id:      # a button of the guide that used to be here
+        chat.edit_view(message_id, *views.view_menu())
         return
     if action == "schedule":
         views.start_schedule_files()
