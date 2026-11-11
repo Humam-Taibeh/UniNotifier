@@ -293,11 +293,17 @@ the saved session (refreshed in `auth_state.json` after every run).
 
 ### Grade finder
 
-Every downloaded `.xlsx/.xls/.docx/.txt/.csv` (and every such file inside
+Every downloaded `.xlsx/.xls/.docx/.pdf/.txt/.csv` (and every such file inside
 an extracted folder) is searched for the student number (`STUDENT_ID` in
 `.env`, else `PORTAL_USERNAME`; without either, files aren't searched). If found, the row's marks are put in the
-notification: `🎉 تم رصد علامتك! | الدرجة: 36/40`. Limitation: a file
-re-uploaded under an existing item isn't re-downloaded.
+notification: `🎉 Marks Detected: 36/40` with the row's columns. So are a new version an instructor
+uploads over a file, and a file attached to a forum post. In a PDF (whose tables come out as plain
+lines) and anywhere else the number is only part of a line, that whole line is shown. A scanned PDF
+— pictures of pages — has no text to search.
+
+The mark of a quiz or an assignment needs no file: its own page is read once there can be a mark
+(a quiz that has opened, an assignment handed in or past its due date), every 30 minutes for 45
+days, and the mark is told once as `🎉 Grade Posted`.
 
 ### Class schedule
 

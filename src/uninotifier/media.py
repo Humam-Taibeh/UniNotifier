@@ -222,6 +222,11 @@ def compose(header: str, body: str) -> str:
     return f"{header}\n{DIVIDER}\n{body}" if body else header
 
 
+def grade_details(grade: dict | None) -> list[str]:
+    """The columns of your row in a marks file (grades.py), one per line."""
+    return [f"   • {escape_md(header)}: {escape_md(value)}" for header, value in (grade or {}).get("details", [])[:8]]
+
+
 def build_item_message(item: dict, deadline: dict | None, note: str = "",
                        grade: dict | None = None, status: str | None = None,
                        detected_at: float | None = None) -> str:
@@ -230,10 +235,7 @@ def build_item_message(item: dict, deadline: dict | None, note: str = "",
         head = f'🎉 *Marks Detected:* *{escape_md(grade["summary"])}*'
     else:
         head = NEW_ITEM_HEADINGS.get(item["type"], "🆕 *New Content*")
-    lines = [head, "", *_fields(item, label, emoji, deadline, status)]
-    if grade:
-        for header, value in grade["details"][:8]:
-            lines.append(f"   • {escape_md(header)}: {escape_md(value)}")
+    lines = [head, "", *_fields(item, label, emoji, deadline, status), *grade_details(grade)]
     if note:
         lines += ["", note]
     lines.append(_audit(detected_at))
@@ -305,13 +307,13 @@ def _file_name(name: str) -> str:
 def build_update_message(item: dict, old_modified: float | None, new_modified: float | None,
                          old_name: str | None = None, new_name: str | None = None,
                          where: str | None = None, detected_at: float | None = None,
-                         retired_to: str | None = None) -> str:
+                         retired_to: str | None = None, grade: dict | None = None) -> str:
     """A re-uploaded document: the previous file, the new file and where it was
     saved, where the previous one went (retired_to: its _Old_Versions folder),
     and how long after the previous version the change was made."""
     emoji, label = _label(item)
-    lines = ["🔄 *File Updated*", "",
-             *_fields(item, label, emoji, None, None), ""]
+    lines = [f'🎉 *Marks Detected:* *{escape_md(grade["summary"])}*', "🔄 *File Updated*"] if grade else ["🔄 *File Updated*"]
+    lines += ["", *_fields(item, label, emoji, None, None), *grade_details(grade), ""]
     previous = f"⏮️ *Previous file:* {_file_name(old_name)}" if old_name else "⏮️ *Previous version*"
     lines.append(previous + (f" — {audit_timestamp(old_modified)}" if old_modified else ""))
     if new_name:

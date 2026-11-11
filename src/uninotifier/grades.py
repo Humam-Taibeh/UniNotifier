@@ -1,10 +1,14 @@
 """
 Automated grade finder.
 
-Scans downloaded spreadsheets / Word documents / text files for the
+Scans downloaded spreadsheets / Word documents / PDFs / text files for the
 student's university number and, if present, extracts that row's marks.
 
 Returns {"summary": "18/20", "details": [(header, value), ...]} or None.
+In a table the number sits in a cell of its own and the marks get their column
+titles. Where it is only part of a line — a PDF, whose tables come out as plain
+lines, or a sentence in a document — that whole line is the summary. A scanned
+PDF (pictures of pages) has no text to search.
 """
 
 import csv
@@ -14,7 +18,9 @@ from pathlib import Path
 
 log = logging.getLogger("uninotifier")
 
-SCANNABLE_SUFFIXES = {".xlsx", ".xlsm", ".xls", ".docx", ".txt", ".csv"}
+SCANNABLE_SUFFIXES = {".xlsx", ".xlsm", ".xls", ".docx", ".pdf", ".txt", ".csv"}
+MAX_PDF_PAGES = 80
+_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")     # a list typed with Arabic digits
 
 _TOTAL_HEADER = re.compile(
     r"total|grade|mark|score|final|sum|المجموع|مجموع|العلامة|علامة|الدرجة|درجة|النهائي", re.I)
@@ -28,7 +34,7 @@ def _norm(value) -> str:
         return ""
     if isinstance(value, float) and value.is_integer():
         value = int(value)
-    return re.sub(r"\s+", " ", str(value)).strip()
+    return re.sub(r"\s+", " ", str(value)).strip().translate(_DIGITS)
 
 
 def _is_number(text: str) -> bool:
@@ -59,6 +65,11 @@ def _read_rows(path: Path) -> list[list[str]]:
             rows += [[_norm(c.text) for c in r.cells] for r in table.rows]
             rows.append([])
         rows += [[_norm(p.text)] for p in doc.paragraphs if p.text.strip()]
+    elif suffix == ".pdf":
+        import pypdf
+        reader = pypdf.PdfReader(str(path))
+        for page in reader.pages[:MAX_PDF_PAGES]:
+            rows += [[_norm(line)] for line in (page.extract_text() or "").splitlines() if line.strip()]
     elif suffix in (".txt", ".csv"):
         text = path.read_text(encoding="utf-8-sig", errors="replace")
         for line in text.splitlines():
@@ -98,8 +109,11 @@ def extract_grade(path: Path, student_id: str) -> dict | None:
         log.exception("Could not read %s for grades", path.name)
         return None
 
+    inside = re.compile(rf"(?<!\d){re.escape(student_id)}(?!\d)")
     for idx, row in enumerate(rows):
         if student_id not in row and not any(student_id == c.replace(".0", "") for c in row):
+            if any(inside.search(c) for c in row):       # part of a line, not a cell of its own
+                return {"summary": " | ".join(c for c in row if c)[:120], "details": []}
             continue
         header = _find_header(rows, idx)
         details = []

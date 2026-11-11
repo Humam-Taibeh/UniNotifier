@@ -203,6 +203,7 @@ def check_file_update(context, item: dict, record: dict, shared: bool = False) -
         versions.append({"path": str(retired), "size": record.get("size"), "sha256": record.get("sha256"),
                          "modified": old_mod})
     return {"kind": "file", "updated": True, "path": str(new_path),
+            "grade": grades.scan_paths(new_path, config.STUDENT_ID) if config.STUDENT_ID else None,
             "size": archive.path_size(new_path), "sha256": got["sha256"],
             "modified": got["modified"] or new_mod, "old_modified": old_mod,
             "old_path": str(retired) if retired else record.get("path"), "versions": versions}

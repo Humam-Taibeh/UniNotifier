@@ -18,6 +18,8 @@ All notable changes to this project are documented here. The format follows
   first, until it is done; anything due within a day comes first under a loud 🚨 LAST DAY heading.
 - Your mark on a quiz or an assignment is told the moment Moodle shows it on the activity's own page
   (🎉 Grade Posted, with a picture of the page); a corrected mark is told again.
+- Your marks are found in PDF files too, in a new version an instructor uploads over a file, in a
+  file attached to a forum post, in a line of text and in lists typed with Arabic digits.
 - Upcoming Tasks lists every open task: Cambridge One assignments and tasks without a due date too.
 - `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1, adapted) with a private way to report.
 - A pull request template with the checks the repository relies on.

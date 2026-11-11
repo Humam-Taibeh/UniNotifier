@@ -9,6 +9,7 @@ import logging
 
 from uninotifier import archive
 from uninotifier import failsafe
+from uninotifier import grades
 from uninotifier import lecturelinks
 from uninotifier import lectures
 from uninotifier import media
@@ -72,7 +73,8 @@ def notify_file_update(item: dict, artifact: dict) -> bool:
     retired = artifact.get("old_path") if Path(artifact.get("old_path") or "").parent.name == archive.OLD_VERSIONS else None
     text = media.build_update_message(item, artifact.get("old_modified"), artifact.get("modified"),
                                       old_name=old, new_name=path.name, where=archive.destination(path),
-                                      retired_to=archive.retired_to(Path(retired)) if retired else None)
+                                      retired_to=archive.retired_to(Path(retired)) if retired else None,
+                                      grade=artifact.get("grade"))
     return deliver(text, url=item["url"], rows=reminder_rows(item, "u"),
                    document=path if items.uploadable(path) else None)
 
@@ -164,7 +166,12 @@ def notify_forum_post(forum: dict, post: dict) -> bool:
         tmp = paths.DATA / f"_attachment_{post['id']}_{archive.safe_name(filename, 'file')}"
         try:
             tmp.write_bytes(data)
-            notifier.send_document(config.BOT_TOKEN, config.CHAT_ID, tmp, f"📎 {escape_md(filename)}", post["url"])
+            caption = f"📎 {escape_md(filename)}"
+            marks = grades.extract_grade(tmp, config.STUDENT_ID) if config.STUDENT_ID else None
+            if marks:
+                caption = "\n".join([f'🎉 *Marks Detected:* *{escape_md(marks["summary"])}*', caption,
+                                     *media.grade_details(marks)])
+            notifier.send_document(config.BOT_TOKEN, config.CHAT_ID, tmp, caption, post["url"])
         except OSError:
             log.exception("Could not forward attachment %s", filename)
         finally:

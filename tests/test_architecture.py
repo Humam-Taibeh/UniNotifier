@@ -268,6 +268,42 @@ def test_grades():
         assert grades.extract_grade(tmp / "other.csv", SID) is None
         assert grades.extract_grade(tmp / "slides.pdf", SID) is None
 
+        # a PDF's table comes out as plain lines: the line holding the number is the answer
+        def pdf(*lines):
+            text = b"BT /F1 12 Tf 50 750 Td 14 TL " + b"".join(b"(" + l.encode("latin-1") + b") Tj T* " for l in lines) + b"ET"
+            objects = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+                       b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
+                       b"/Resources << /Font << /F1 5 0 R >> >> >>",
+                       b"<< /Length %d >>\nstream\n" % len(text) + text + b"\nendstream",
+                       b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
+            out, offsets = b"%PDF-1.4\n", []
+            for n, body in enumerate(objects, 1):
+                offsets.append(len(out))
+                out += b"%d 0 obj\n" % n + body + b"\nendobj\n"
+            xref = len(out)
+            out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+            out += b"".join(b"%010d 00000 n \n" % o for o in offsets)
+            return out + b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objects) + 1, xref)
+
+        (tmp / "quiz1.pdf").write_bytes(pdf("No ID Name Quiz1", "1 202300001 Someone 3", f"2 {SID} Me 4.5", f"3 {SID}7 Other 1"))
+        g = grades.extract_grade(tmp / "quiz1.pdf", SID)
+        assert g and g["summary"] == f"2 {SID} Me 4.5" and g["details"] == [], g
+        (tmp / "others.pdf").write_bytes(pdf("No ID Name Quiz1", f"3 {SID}7 Other 1"))
+        assert grades.extract_grade(tmp / "others.pdf", SID) is None, "a longer number that contains mine is not me"
+        (tmp / "broken.pdf").write_bytes(b"not a pdf")
+        assert grades.extract_grade(tmp / "broken.pdf", SID) is None
+
+        # a sentence in a document, and a list typed with Arabic digits
+        (tmp / "note.txt").write_text(f"Student {SID} got 18 out of 20\n", encoding="utf-8")
+        assert grades.extract_grade(tmp / "note.txt", SID)["summary"] == f"Student {SID} got 18 out of 20"
+        arabic = SID.translate(str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩"))
+        (tmp / "ar.csv").write_text(f"الرقم,الاسم,العلامة\n{arabic},أنا,١٧\n", encoding="utf-8")
+        assert grades.extract_grade(tmp / "ar.csv", SID)["summary"] == "17"
+
+    update = media.build_update_message({"name": "Marks", "type": "resource", "course": "20261-Big Data-AllSec-3-"},
+                                        None, None, grade={"summary": "36/40", "details": [("Mid (30)", "27/30")]})
+    assert update.startswith("🎉 *Marks Detected:* *36/40*\n🔄 *File Updated*") and "• Mid (30): 27/30" in update, update
+
 
 def test_schedule():
     sch = schedule.load_schedule()
