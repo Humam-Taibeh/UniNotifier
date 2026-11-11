@@ -1973,8 +1973,8 @@ PLAN_CATEGORIES = (                     # (name, required, passed, left, [(statu
     ("متطلبات تخصص (اجبارية)", 7, 0, 7, [("راسب", "0900301", "هياكل البيانات", 3),
                                          ("", "0900302", "نظم التشغيل", 3),
                                          ("", "0900303", "حلقة بحث", 1)]),
-    ("مواد استدراكية (اجبارية)", 6, 6, 0, [("معفاة", "0900001", "لغة استدراكية", 3),
-                                           ("معفاة", "0900002", "حاسوب استدراكي", 3)]),
+    ("مواد استدراكية (اجبارية)", 6, 6, 0, [("معفاة", "0900001", "اللغة الانجليزية الاستدراكية", 3),
+                                           ("معفاة", "0900002", "مهارات الحاسوب الاستدراكية", 3)]),
 )
 
 
@@ -2062,7 +2062,8 @@ def test_study_plan_from_the_portal():
     assert degreeplan.progress_lines(plan, retakes=1, repeated=3) == [
         "📊 *Degree Plan:* 22 hrs", "✅ *Passed:* 6 hrs", "⏳ *This Term:* 6 hrs · 2 courses (1 retake)",
         "❌ *Failed, Not Retaken Yet:* 3 hrs · 1 course", "🔁 *Repeated Courses:* 3 (2 done · 1 this term)",
-        "🏁 *Remaining:* 16 hrs · 10 after this term"]
+        "🏁 *Remaining:* 16 hrs · 10 after this term",
+        "📝 *Placement Exams:* all 2 exempt — nothing added to the plan"]
     done = degreeplan.parse(_plan_html([("متطلبات الكلية (اجبارية)", 3, 3, 0, [("مجتازة", "0900401", "مقدمة", 3)])]))
     assert degreeplan.progress_lines(done) == ["📊 *Degree Plan:* 3 hrs", "✅ *Passed:* 3 hrs", "🏁 *Remaining:* 0 hrs"]
 
@@ -2078,7 +2079,27 @@ def test_study_plan_from_the_portal():
     block = lines[lines.index("*Major · Compulsory* — 7 of 7 hrs left") + 1:][:3]
     assert block[0].endswith("· 3h — failed, retake") and "❌" in block[0] and "هياكل البيانات" in block[0]
     assert "▫️" in block[1] and block[2].endswith("· 1h")
-    assert "مهارات الدراسة" not in text and "استدراكي" not in text and "Remedial" not in text, "nothing passed, nothing remedial"
+    assert "مهارات الدراسة" not in text, "nothing that was passed"
+    # the placement exams are said on their own, never among the plan's hours
+    at = lines.index("*Placement Exams* — nothing added to the plan")
+    assert [l.lstrip(degreeplan.LRM) for l in lines[at + 1:at + 3]] == ["✅ English — exempt", "✅ Computer Skills — exempt"]
+
+    # one that was not passed is a course on top of the plan: its hours are said, apart from the degree's
+    owed = [list(c) for c in PLAN_CATEGORIES]
+    owed[3] = ["مواد استدراكية (اجبارية)", 9, 3, 6, [("مجتازة", "0900001", "اللغة الانجليزية الاستدراكية", 3),
+                                                     ("قيد الدراسة", "0900002", "مهارات الحاسوب الاستدراكية", 3),
+                                                     ("", "0900003", "اللغة العربية الاستدراكية", 3)]]
+    behind = degreeplan.parse(_plan_html(owed))
+    assert degreeplan.progress(behind)["degree"] == 22, "the degree's hours stay the plan's"
+    assert degreeplan.placement(behind) | {"courses": None} == {"courses": None, "extra": 9, "left": 6, "term": 3}
+    tail = degreeplan.progress_lines(behind)[-2:]
+    assert tail[0] == "🏁 *Remaining:* 16 hrs · 10 after this term · +6 remedial"
+    assert tail[1] == ("📝 *Placement Exams:* English ✅ · Computer Skills ⏳ · Arabic ▫️ — "
+                       "+9 hrs on top of the plan (6 still to pass)")
+    listed = [l.lstrip(degreeplan.LRM) for l in degreeplan.remaining_lines(behind)]
+    assert "*Placement Exams* — +9 hrs on top of the plan, 6 still to pass" in listed
+    assert "✅ English · 3h — taken as a course and passed" in listed and "▫️ Arabic · 3h — to take" in listed
+    assert degreeplan.placement(done) is None and not any("Placement" in l for l in degreeplan.remaining_lines(done))
     assert text.index("الكتابة الأكاديمية") < text.index("العمل التطوعي"), "this term's courses first"
     assert _legacy_markdown_ok(text) and len(text) < notifier.MESSAGE_LIMIT
 

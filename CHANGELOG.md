@@ -24,6 +24,9 @@ All notable changes to this project are documented here. The format follows
   year — instead of a number typed into `schedule.json`: the plan's hours, passed, this term (and
   how many are retakes), failed and not retaken yet, and what is left now and after this term. A
   guest look-up gets the same from the guest's plan.
+- 📝 Placement Exams in the transcript's summary and in Remaining Courses (and a guest's): the
+  Arabic, English and computer-skills exams from the plan's remedial courses — exempt, or a course
+  to take on top of the plan's hours, with those hours said apart from the degree's.
 - 📚 Remaining Courses under the transcript (and a guest's): what the plan still asks for, group by
   group; an elective group lists what can be chosen.
 - 📝 Coursework Total in a course's panel (⚙️ Course Adjustments): type your marks before the final

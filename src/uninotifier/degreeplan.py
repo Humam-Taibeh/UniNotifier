@@ -14,8 +14,11 @@ plan year: whatever plan the portal shows for the signed-in student is what is c
   progress_lines()   those as message lines
   remaining_lines()  the courses still to take, category by category
 
-Remedial courses (استدراكية — placement courses that are not part of the degree's hours) are
-left out of every figure, as the university does.
+Remedial courses (استدراكية) are the placement exams' other side: a new student sits a placement
+exam in Arabic, English and computer skills, and is exempted (معفاة) from the remedial course of
+each one passed. One that was not passed must be taken as a course ON TOP of the plan's hours. So
+they are never part of the degree's figure, as the university counts it, and are shown on their
+own (placement(), placement_lines()): each exam's outcome and the hours it adds, if any.
 """
 
 import re
@@ -146,6 +149,61 @@ def progress(plan: dict) -> dict:
             "failed": sum(c["hours"] for c in failed), "failed_courses": len(failed)}
 
 
+def placement(plan: dict) -> dict | None:
+    """The placement exams, from the plan's remedial courses: {"courses": [...], "extra" (hours they
+    add on top of the plan: every one not exempted), "left" (of those, still to pass), "term"
+    (registered this term)}. None when the plan lists none."""
+    courses = [c for cat in plan["categories"] if is_remedial(cat) for c in cat["courses"]]
+    if not courses:
+        return None
+    owed = [c for c in courses if c["status"] != "exempt"]
+    return {"courses": courses,
+            "extra": sum(c["hours"] for c in owed),
+            "left": sum(c["hours"] for c in owed if c["status"] != "passed"),
+            "term": sum(c["hours"] for c in owed if c["status"] == "in_progress")}
+
+
+_SUBJECTS = (("عربي", "Arabic"), ("نجليزي", "English"), ("حاسوب", "Computer Skills"))
+_OUTCOMES = {"exempt": ("✅", "exempt"), "passed": ("✅", "taken as a course and passed"),
+             "in_progress": ("⏳", "being taken this term"), "failed": ("❌", "failed — to retake"),
+             "open": ("▫️", "to take"), "other": ("▫️", "to take")}
+
+
+def _subject(course: dict) -> str:
+    """'اللغة العربية الاستدراكية' -> 'Arabic'; a subject not known here keeps its published name."""
+    for word, english_name in _SUBJECTS:
+        if word in course["name"]:
+            return english_name
+    return f"{FSI}{escape_md(course['name'] or course['code'])}{PDI}"
+
+
+def placement_line(plan: dict) -> str | None:
+    """One line for the summary: the exams and, when any was not passed, the hours on top of the plan."""
+    p = placement(plan)
+    if not p:
+        return None
+    if not p["extra"]:
+        return f"📝 *Placement Exams:* all {len(p['courses'])} exempt — nothing added to the plan"
+    marks = " · ".join(f"{_subject(c)} {_OUTCOMES[c['status']][0]}" for c in p["courses"])
+    left = f"{_n(p['left'])} still to pass" if p["left"] else "all passed"
+    return f"📝 *Placement Exams:* {marks} — +{_n(p['extra'])} hrs on top of the plan ({left})"
+
+
+def placement_lines(plan: dict) -> list[str]:
+    """The exams one by one, for the list of what is left."""
+    p = placement(plan)
+    if not p:
+        return []
+    head = "nothing added to the plan" if not p["extra"] else (
+        f"+{_n(p['extra'])} hrs on top of the plan" + (f", {_n(p['left'])} still to pass" if p["left"] else ", all passed"))
+    lines = ["", f"*Placement Exams* — {head}"]
+    for course in p["courses"]:
+        icon, outcome = _OUTCOMES[course["status"]]
+        hours = "" if course["status"] == "exempt" else f" · {_n(course['hours'])}h"
+        lines.append(f"{LRM}{icon} {_subject(course)}{hours} — {outcome}")
+    return lines
+
+
 def _n(value: float) -> str:
     return f"{value:g}"
 
@@ -172,7 +230,10 @@ def progress_lines(plan: dict, retakes: int = 0, repeated: int = 0) -> list[str]
     left = f"🏁 *Remaining:* {_n(max(p['remaining'], 0))} hrs"
     if p["term_courses"] and p["after"] != p["remaining"]:
         left += f" · {_n(max(p['after'], 0))} after this term"
-    return lines + [left]
+    exams = placement(plan)
+    if exams and exams["left"]:
+        left += f" · +{_n(exams['left'])} remedial"
+    return lines + [left] + [line for line in (placement_line(plan),) if line]
 
 
 def _course(course: dict) -> str:
@@ -203,6 +264,7 @@ def remaining_lines(plan: dict) -> list[str]:
         choice = " · choose from:" if offered > category["required"] else ""
         lines += ["", f"*{title}* — {_n(category['remaining'])} of {_n(category['required'])} hrs left{choice}"]
         lines += [_course(c) for c in open_courses]
+    lines += placement_lines(plan)
     if complete:
         lines += ["", "✅ *Complete:* " + ", ".join(complete)]
     lines += ["", "_⏳ this term · ❌ failed, retake · ▫️ not taken yet_"]
