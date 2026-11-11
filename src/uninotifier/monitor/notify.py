@@ -85,6 +85,11 @@ def notify_content_update(item: dict, artifact: dict) -> bool:
                    artifact.get("shots", []), shot_filename(item))
 
 
+def notify_grade(item: dict, grade: str, artifact: dict) -> bool:
+    return deliver(media.build_grade_message(item, grade), url=item["url"],
+                   shots=artifact.get("shots", []), shot_name=shot_filename(item))
+
+
 def reminder_rows(item: dict, prefix: str = "i") -> list[list[dict]]:
     """📌 Add to Reminders for anything but an assignment or a quiz (those are
     in Upcoming Tasks already). prefix keeps a new item, a file update and an

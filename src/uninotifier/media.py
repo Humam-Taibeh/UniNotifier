@@ -17,6 +17,7 @@ in full, and a "Mark as Done" toggle when the activity has one.
 """
 
 import re
+import time
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -248,6 +249,19 @@ def build_content_update_message(item: dict, detected_at: float | None = None) -
                       _audit(detected_at)])
 
 
+def build_grade_message(item: dict, grade: str, detected_at: float | None = None) -> str:
+    """Your mark appeared on an assignment's or a quiz's own page."""
+    emoji, label = _label(item)
+    got, _, top = grade.partition("/")
+    try:
+        percent = f" ({float(got) / float(top) * 100:.0f}%)" if float(top) else ""
+    except ValueError:
+        percent = ""
+    return "\n".join(["🎉 *Grade Posted*", "", course_line(item["course"]), f"{emoji} *Type:* {label}",
+                      f'📌 *Title:* {escape_md(item["name"])}',
+                      f"🏆 *Grade:* *{escape_md(grade)}*{percent}", _audit(detected_at)])
+
+
 def build_forum_post_message(forum: dict, post: dict, detected_at: float | None = None) -> str:
     """A new topic or reply in a course forum. Topics in the Announcements
     forum are the instructor's announcements."""
@@ -381,6 +395,9 @@ def build_reminder_message(deadline: dict, flag: str, detected_at: float | None 
     emoji, label = ("📋", "Quiz / Exam") if is_quiz else ("📝", "Assignment")
     head = "🚨 *Final Reminder*" if flag == "1h" else "⏰ *Reminder*"
     hours = "1 hour" if flag == "1h" else "24 hours"
+    left = deadline.get("timestamp", 0) - time.time()
+    if flag == "24h" and 0 < left < 23 * 3600:      # published less than a day ahead: say what is really left
+        hours = f"about {max(round(left / 3600), 1)} hour{'s' if round(left / 3600) > 1 else ''}"
     action = ("Closes" if deadline.get("event") == "close" else "Opens") if is_quiz else "Due"
     return "\n".join([
         head, "",

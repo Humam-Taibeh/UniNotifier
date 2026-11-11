@@ -175,6 +175,61 @@ def check_submissions(http, content: dict, deadlines: dict, saved: dict) -> dict
     return submissions
 
 
+def _grade_due(kind: str, deadline: dict | None, done: bool, record: dict, now: float) -> bool:
+    """Is it time to look for this task's mark? Only once there can be one — a
+    quiz that has opened, an assignment handed in or past its due date — for
+    GRADE_WATCH_SECONDS after that moment, every GRADE_CHECK_SECONDS; a mark
+    already found is looked at once a day, in case it is corrected."""
+    if deadline:
+        opens, closes = moodle.quiz_times(deadline) if kind == "quiz" else (None, deadline["timestamp"])
+        started = (opens or closes or 0) <= now if kind == "quiz" else (done or closes <= now)
+        last_moment = closes or opens or 0
+    else:
+        started, last_moment = done, record.get("since", now)
+    if not started or now - max(last_moment, record.get("since", 0)) > config.GRADE_WATCH_SECONDS:
+        return False
+    wait = config.GRADE_RECHECK_SECONDS if record.get("grade") else config.GRADE_CHECK_SECONDS
+    return now - record.get("checked", 0) >= wait
+
+
+def check_grades(http, content: dict, deadlines: dict, saved: dict) -> dict:
+    """Look for the mark of every assignment and quiz that can have one by now
+    (see _grade_due) on its own page. A mark is kept in saved["grades"][key];
+    returns {key: item} for the marks that are new or changed — the ones to
+    tell. A quiz page that lists an attempt also flags the quiz as attempted:
+    it is read here after closing, when check_submissions no longer does."""
+    now = time.time()
+    records = saved.setdefault("grades", {})
+    undated = saved.setdefault("undated", {})
+    tasks = {f'{item["type"]}-{moodle.extract_cmid(item["url"])}': item
+             for item in content.values() if item["type"] in ("assign", "quiz")}
+    wanted = []
+    for key, item in tasks.items():
+        deadline = deadlines.get(key)
+        done = bool((deadline or {}).get("submitted") or undated.get(key) or item.get("done"))
+        if _grade_due(item["type"], deadline, done, records.get(key, {}), now):
+            wanted.append((key, item))
+    for (key, item), found, error in pmap(lambda w: moodle.fetch_task_page(http, w[1]["url"]), wanted):
+        if isinstance(error, moodle.SessionExpiredError):
+            raise error
+        if error:
+            continue
+        attempted, grade = found
+        if attempted is None and grade is None and item["type"] == "quiz":
+            continue                                    # unreadable: try again next run
+        record = records.setdefault(key, {"since": now})
+        record["checked"] = now
+        if attempted and key in deadlines and not deadlines[key].get("submitted"):
+            deadlines[key]["submitted"] = True
+            log.info("  quiz %s: attempted", item["name"])
+        if grade and grade != record.get("grade"):
+            record["grade"] = grade
+            log.info("  grade of %s: %s", item["name"], grade)
+    # every mark not told yet — one whose message failed is owed until it goes out
+    return {key: item for key, item in tasks.items()
+            if records.get(key, {}).get("grade") and records[key].get("told") != records[key]["grade"]}
+
+
 def refresh_teachers(browser: Browser, courses: dict, saved: dict) -> None:
     """Teacher names change rarely: re-read them at most once a week (the only
     routine use of the browser). saved['teachers'] =
@@ -279,6 +334,14 @@ def run_scan(saved: dict, notify_new: bool, mfa_handler=None) -> dict:
             saved["deep"] = {"at": time.time()}
 
         submissions = check_submissions(http, content, deadlines, saved)
+        grades = {}
+        for key, item in check_grades(http, content, deadlines, saved).items():
+            grades[key] = {"item": item, "grade": saved["grades"][key]["grade"], "shots": []}
+            if notify_new:
+                try:
+                    grades[key]["shots"], _ = items.capture_screens(browser.page, item["url"], "#region-main")
+                except Exception:
+                    log.exception("Could not picture the grade of %s", item["name"])
         try:
             refresh_teachers(browser, courses, saved)
         except Exception as e:
@@ -365,7 +428,7 @@ def run_scan(saved: dict, notify_new: bool, mfa_handler=None) -> dict:
         log.info("Portal read in %.1f s (%s)", seconds, "browser used" if browser.started else "no browser")
         return {"courses": courses, "content": content, "deadlines": deadlines,
                 "artifacts": artifacts, "updates": updates, "edits": edits,
-                "posts": posts, "forum_posts": forum_posts, "submissions": submissions,
+                "posts": posts, "forum_posts": forum_posts, "submissions": submissions, "grades": grades,
                 "link_changes": link_changes, "seconds": seconds, "browser_used": browser.started,
                 "anomalies": anomalies, "accepted": accepted}
     finally:

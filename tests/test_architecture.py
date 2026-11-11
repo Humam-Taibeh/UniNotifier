@@ -450,6 +450,52 @@ def test_quizzes_keep_their_opening_and_closing_times():
     assert found == {"quiz-9": True, "assign-5": False} and deadlines["quiz-9"]["submitted"] is True
     assert saved_state["undated"] == {"assign-5": False}, "an undated task's status is kept beside the deadlines"
 
+    # a reminder sent late (the quiz was published 9 hours before it opens) says the real time left
+    soon = media.build_reminder_message({**q, "opens": time.time() + 9 * 3600, "timestamp": time.time() + 9 * 3600}, "24h")
+    assert "Opens in about 9 hours." in soon, soon
+
+    # Moodle 5 lists attempts as cards (quizreviewsummary), with the mark on the page
+    finished = ('<div role="main"><div class="box py-3 quizinfo"><p>Time limit: 20 mins</p></div>'
+                '<div id="feedback" class="box generalbox"><h3>Your final grade for this quiz is 4.50/5.00.</h3></div>'
+                '<table class="table generaltable generalbox quizreviewsummary"><tr><th>Status</th><td>Finished</td></tr>'
+                '<tr><th>Grade</th><td><b>4.50</b> out of 5.00 (<b>90</b>%)</td></tr></table></div>')
+    assert moodle.quiz_attempted(finished) is True and moodle.task_grade(finished) == "4.5/5"
+    two_attempts = ('<div role="main"><div class="quizinfo"></div><table class="quizreviewsummary">'
+                    '<tr><th>Grade</th><td>2.00 out of 5.00</td></tr></table><table class="quizreviewsummary">'
+                    '<tr><th>Grade</th><td>4.00 out of 5.00</td></tr></table></div>')
+    assert moodle.task_grade(two_attempts) == "4/5", "without the final-grade line: the best attempt"
+    graded = ('<div role="main"><table class="generaltable"><tr><th>Grading status</th><td>Graded</td></tr></table>'
+              '<table class="generaltable"><tr><th>Grade</th><td>80.00 / 100.00</td></tr></table></div>')
+    ungraded = '<div role="main"><table class="generaltable"><tr><th>Grading status</th><td>Not graded</td></tr></table></div>'
+    assert moodle.task_grade(graded) == "80/100" and moodle.task_grade(ungraded) is None
+    assert "🏆 *Grade:* *4.5/5* (90%)" in media.build_grade_message(item, "4.5/5")
+
+    # check_grades: a closed quiz is read once it has opened; its mark is returned until it is told
+    now = time.time()
+    closed = {"type": "quiz", "opens": now - 7200, "closes": now - 3600, "timestamp": now - 7200, "event": "open"}
+    ahead = {"type": "quiz", "opens": now + 7200, "closes": now + 9000, "timestamp": now + 7200, "event": "open"}
+    later = {**item, "url": "https://x/mod/quiz/view.php?id=10", "cmid": "10"}
+    content = {"c-9": item, "c-10": later, "c-4": assign(4), "c-5": assign(5)}
+    deadlines = {"quiz-9": dict(closed), "quiz-10": dict(ahead),
+                 "assign-4": {"type": "assign", "timestamp": now + 86400, "submitted": True}}
+    pages = {url: (True, "5/5"), assign(4)["url"]: (None, None)}
+    read = []
+    keep = moodle.fetch_task_page
+    moodle.fetch_task_page = lambda http, u: read.append(u) or pages[u]
+    try:
+        saved_state = {"content": dict(content)}
+        fresh = scan.check_grades(None, content, deadlines, saved_state)
+        assert sorted(read) == sorted([url, assign(4)["url"]]), "not a quiz still ahead, nor an open assignment not handed in"
+        assert list(fresh) == ["quiz-9"] and saved_state["grades"]["quiz-9"]["grade"] == "5/5"
+        assert deadlines["quiz-9"]["submitted"] is True, "the attempt is seen after closing too"
+        read.clear()
+        assert list(scan.check_grades(None, content, deadlines, saved_state)) == ["quiz-9"] and read == [], \
+            "an untold mark stays owed; nothing is read again within the half hour"
+        saved_state["grades"]["quiz-9"]["told"] = "5/5"
+        assert scan.check_grades(None, content, deadlines, saved_state) == {}
+    finally:
+        moodle.fetch_task_page = keep
+
 
 def test_open_tasks_and_the_noon_digest():
     """Every open task — assignments, quizzes, Cambridge One — in the ⏳ screen and in a
@@ -6520,6 +6566,7 @@ def test_catch_alls_tell_the_owner():
         ("monitor/run.py", "%s failure while talking to the portal%s"),      # alerts.record_failure
         ("monitor/scan.py", "Failed scanning course %s — skipping it this run"),   # read in the browser; watchdog
         ("monitor/scan.py", "Could not keep the screenshot of the link source"),   # the link itself is kept
+        ("monitor/scan.py", "Could not picture the grade of %s"),                  # the grade is told without it
         ("monitor/notify.py", "Could not forward attachment %s"),            # one file; the post still goes out
         ("monitor/notify.py", "Could not download forum attachment %s"),     # one file; the post still goes out
         ("monitor/state.py", "Could not set the unreadable state file aside"),     # the recovery reports right after

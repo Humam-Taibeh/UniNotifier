@@ -74,6 +74,12 @@ NETWORK_ERROR_RE = re.compile(
 REMINDER_WINDOWS = (("24h", 24 * 3600), ("1h", 1 * 3600))
 
 
+# Marks of assignments and quizzes, read from their own pages (scan.check_grades)
+GRADE_CHECK_SECONDS = 30 * 60            # while there is no mark yet
+GRADE_RECHECK_SECONDS = 24 * 3600        # once there is one: has it been corrected?
+GRADE_WATCH_SECONDS = 45 * 24 * 3600     # how long after the due / closing time a mark is waited for
+
+
 # Microsoft verification relayed to Telegram: an unanswered attempt is
 # retried automatically at most hourly and never at night, so an ignored
 # request can't turn into a stream of Authenticator pushes. A manual /check

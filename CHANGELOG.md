@@ -16,6 +16,8 @@ All notable changes to this project are documented here. The format follows
   proof — or a 🚨 with the reason, the page and a button to check in by hand.
 - Every day at noon, one message with every open assignment, quiz and Cambridge One task, closest
   first, until it is done; anything due within a day comes first under a loud 🚨 LAST DAY heading.
+- Your mark on a quiz or an assignment is told the moment Moodle shows it on the activity's own page
+  (🎉 Grade Posted, with a picture of the page); a corrected mark is told again.
 - Upcoming Tasks lists every open task: Cambridge One assignments and tasks without a due date too.
 - `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1, adapted) with a private way to report.
 - A pull request template with the checks the repository relies on.
@@ -49,6 +51,10 @@ All notable changes to this project are documented here. The format follows
   elsewhere, e.g. in an antivirus scan): the save waits a little and tries again.
 - Quizzes had no date and no reminders: this Moodle lists a quiz by its closing event, which was
   ignored. A quiz now has its opening and closing times, and one you have attempted stops reminding.
+- A quiz you had taken stayed "not attempted": Moodle 5 lists attempts in a different block than the
+  one that was looked for. It is read after the quiz closes too.
+- A reminder for something published less than a day ahead said "in 24 hours"; it says the time
+  really left. Every reminder sent is written to the log.
 - The same items were announced as new again and again: when the portal dropped a connection the
   course was read through the browser, which has no section descriptions, so they were forgotten and
   "new" on the next check. What that read lacks is now kept, and an item that was announced once is

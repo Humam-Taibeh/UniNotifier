@@ -36,6 +36,7 @@ def send_deadline_reminders(deadlines: dict, on_sent=None) -> None:
                 sent = alerts.send_telegram(media.build_reminder_message(d, flag), d.get("url"))
                 if sent:  # an undelivered reminder is retried on the next run
                     d[key] = True
+                    log.info("Sent the %s reminder of %s", flag, d.get("name"))
                     if on_sent:
                         on_sent()
         except Exception:

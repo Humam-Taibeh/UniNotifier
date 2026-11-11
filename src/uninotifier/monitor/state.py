@@ -27,7 +27,7 @@ SESSION_FILE = paths.DATA / "auth_state.json"
 
 
 STATE_KEYS = ("courses", "content", "deadlines", "files", "alerts", "schedule_sent", "teachers",
-              "forums", "failures", "mfa", "deep", "layout", "watch", "undelivered", "undated", "announced")
+              "forums", "failures", "mfa", "deep", "layout", "watch", "undelivered", "undated", "announced", "grades")
 
 
 SUMMARY: dict = {"ok": False}

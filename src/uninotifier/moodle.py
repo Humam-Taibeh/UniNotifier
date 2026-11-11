@@ -550,9 +550,63 @@ def quiz_attempted(html: str) -> bool | None:
     previous attempts" — the quizattemptsummary table), False when it is a
     readable quiz page without one, None when it is not a quiz page at all."""
     tree = lxml_html.fromstring(html)
-    if _with_class(tree, "quizattemptsummary"):
+    # Moodle 5 shows one card per attempt (quizreviewsummary); older ones a single table
+    if _with_class(tree, "quizreviewsummary", "quizattemptsummary"):
         return True
     return False if _with_class(tree, "quizinfo", "quizattempt") else None
+
+
+GRADE_HEADERS = {"grade", "العلامة", "الدرجة"}
+_FRACTION_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:/|out of|من)\s*(\d+(?:\.\d+)?)", re.I)
+
+
+def _plain_number(text: str) -> str:
+    """'5.00' -> '5', '4.50' -> '4.5'."""
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def parse_grade(text: str) -> str | None:
+    """'5.00 out of 5.00 (100%)', '80.00 / 100.00' -> '5/5', '80/100'."""
+    match = _FRACTION_RE.search(text or "")
+    return f"{_plain_number(match.group(1))}/{_plain_number(match.group(2))}" if match else None
+
+
+def task_grade(html: str) -> str | None:
+    """Your mark as an assignment or quiz page shows it, or None while there is
+    none: a quiz's "Your final grade for this quiz is 5.00/5.00" (else the best
+    "Grade" row of its attempts), an assignment's "Grade" row under Feedback."""
+    tree = lxml_html.fromstring(html)
+    for box in tree.xpath('//*[@role="main"]//*[@id="feedback"]'):
+        grade = parse_grade(box.text_content())
+        if grade:
+            return grade
+    found = []
+    for row in tree.xpath('//*[@role="main"]//table//tr'):
+        cells = [re.sub(r"\s+", " ", c.text_content()).strip() for c in row.xpath("./th|./td")]
+        if len(cells) >= 2 and cells[0].rstrip(":").strip().lower() in GRADE_HEADERS:
+            grade = parse_grade(cells[1])
+            if grade:
+                found.append(grade)
+
+    def share(grade: str) -> float:
+        got, top = (float(n) for n in grade.split("/"))
+        return got / top if top else 0.0
+    return max(found, key=share) if found else None
+
+
+def fetch_task_page(context, url: str) -> tuple[bool | None, str | None]:
+    """(attempted?, grade) of a quiz page, (None, grade) of an assignment's;
+    (None, None) when the page could not be read."""
+    try:
+        html = fetch_html(context, url)
+        if not html:
+            return None, None
+        return (quiz_attempted(html) if "/mod/quiz/" in url else None), task_grade(html)
+    except SessionExpiredError:
+        raise
+    except Exception:
+        log.exception("Grade check failed for %s", url)
+        return None, None
 
 
 def fetch_quiz_attempted(context, quiz_url: str) -> bool | None:

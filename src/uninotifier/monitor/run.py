@@ -190,6 +190,13 @@ def run(announce: bool = False) -> None:
         else:
             content[iid] = {**content[iid], "hash": saved["content"][iid]["hash"]}
 
+    # A mark is told once; one that failed to deliver is told by the next run. On the
+    # first run the marks already there are old news.
+    for key, found in result.get("grades", {}).items():
+        if is_first_run or notify.notify_grade(found["item"], found["grade"], found):
+            saved["grades"][key]["told"] = found["grade"]
+            state.save_data(saved)
+
     # Forum posts: remember every post seen, except new ones that failed to send.
     undelivered_posts: set[str] = set()
     for iid, fresh in result["posts"].items():
