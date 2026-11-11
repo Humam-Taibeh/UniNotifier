@@ -444,6 +444,46 @@ def test_sign_in_needs_no_form_when_microsoft_still_remembers_you():
             pass
         assert page.filled == [('input[type="email"]', "me@std-zuj.edu.jo")], (form, page.filled)
 
+    # After the form: coming back to the site's own sign-in pages (Moodle's "sign-in failed" page
+    # lives under /auth/oidc/) is not being signed in — only a page past them is.
+    class Nothing:
+        first = None
+
+        def count(self):
+            return 0
+
+    class After(Page):
+        def __init__(self, ends_on):
+            super().__init__("https://login.microsoftonline.com/common/oauth2/authorize")
+            self.ends_on = ends_on
+
+        def fill(self, selector, text):
+            self.filled.append((selector, text))
+
+        def click(self, selector):
+            self.url = self.ends_on                       # the form was sent: Microsoft answers
+
+        def wait_for_load_state(self, *args, **kwargs):
+            pass
+
+        wait_for_timeout = wait_for_load_state
+
+        def locator(self, selector, **kwargs):
+            return Nothing()
+
+        get_by_text = locator
+
+    for ends_on, signed_in in (("https://elearning.zuj.edu.jo/my/", True),
+                               ("https://elearning.zuj.edu.jo/auth/oidc/?error=access_denied", False),
+                               ("https://elearning.zuj.edu.jo/login/index.php", False)):
+        page, handler = After(ends_on), Handler()
+        try:
+            zuj_auth.login_via_sso(page, "me@std-zuj.edu.jo", "pw", mfa_handler=handler, timeout_seconds=0.2)
+            reached = True
+        except zuj_auth.LoginError:
+            reached = False
+        assert reached is signed_in and handler.done == int(signed_in), (ends_on, reached, handler.done)
+
 
 def test_layout_watchdog():
     """A page that suddenly reads short (the site changed) keeps its known items and is

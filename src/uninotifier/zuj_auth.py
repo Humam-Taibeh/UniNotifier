@@ -129,7 +129,7 @@ def login_via_sso(
             pass  # the verification page polls for the approval: never fully idle
         page.wait_for_timeout(800)
 
-        if urlparse(page.url).hostname == "elearning.zuj.edu.jo":
+        if back_on_portal(page):          # past the site's own sign-in pages too: its "sign-in failed" page is one
             if mfa_handler is not None:
                 mfa_handler.succeeded()
             return
