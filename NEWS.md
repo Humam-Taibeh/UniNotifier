@@ -11,3 +11,4 @@ does not have yet when it tells its owner that a new version is ready (newest fi
 - Your marks are found in PDF files too, and a course's coursework total (42/60) shows the best mark it
   can still reach.
 - Messages are shorter: a picture of what the instructor wrote, and what changed when it is edited.
+- The project's license is now noncommercial: free to use and share, not to sell.

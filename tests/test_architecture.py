@@ -2345,6 +2345,31 @@ def test_new_versions_and_news():
     assert [e["id"][:10] for e in own] == sorted((e["id"][:10] for e in own), reverse=True)
 
 
+def test_reminders_list_is_tidy():
+    """A reminder in the list is its title, then the course and the time on lines of their own: an
+    Arabic note never runs into an English course name, and a pinned post is not poured into the list."""
+    from uninotifier.bot import views
+    arabic = views.reminder_lines(1, {"note": "امتحان قصير / شعبة 2", "course": "Technical Writing", "due": 1900000000})
+    assert len(arabic) == 3 and arabic[0].endswith(views.PDI) and views.FSI + "امتحان قصير / شعبة 2" in arabic[0]
+    assert "Technical Writing" in arabic[1] and "Technical Writing" not in arabic[0] and "🕐" in arabic[2]
+    post = views.reminder_lines(2, {"note": "Exam Reminder — Technical Writing\nCourse: Technical Writing\nRoom 12",
+                                    "course": None, "due": 1900000000})
+    assert len(post) == 2 and "Room 12" not in "".join(post), "only the first line of a long note"
+    same = views.reminder_lines(3, {"note": "Technical Writing quiz", "course": "Technical Writing", "due": 1900000000})
+    assert len(same) == 2, "a course already in the title is not said twice"
+    assert all(line.startswith(views.LRM) for line in arabic + post + same)
+
+
+def test_the_license_is_noncommercial():
+    """The license file is the PolyForm Noncommercial text with the author's notice, and both READMEs say so."""
+    text = (paths.ROOT / "LICENSE").read_text(encoding="utf-8")
+    assert text.startswith("# PolyForm Noncommercial License 1.0.0") and "Required Notice: Copyright (c)" in text
+    assert "MIT License" not in text
+    for name in ("README.md", "README.ar.md"):
+        readme = (paths.ROOT / name).read_text(encoding="utf-8")
+        assert "license-PolyForm%20Noncommercial" in readme and "License: MIT" not in readme, name
+
+
 def test_study_plan_from_the_portal():
     """The degree's hours come from the student's own plan on the portal — any major, any plan year —
     never from a fixed number: what is required, passed, registered this term, failed and left."""
@@ -9035,7 +9060,7 @@ def test_the_readme_translations_say_the_same():
         return [line for line in head if line.startswith("[![")]
     assert badges(en) == badges(ar) and len(badges(en)) == 5, "the same five badges on both pages"
     labels = " ".join(badges(en))
-    for label in ("Python 3.11+", "Platform: Windows", "Code style: pyflakes clean", "License: MIT"):
+    for label in ("Python 3.11+", "Platform: Windows", "Code style: pyflakes clean", "License: PolyForm Noncommercial"):
         assert f"[![{label}](" in labels, label
     workflow = f"https://{REPO_PATH}/actions/workflows/tests.yml"
     assert f"[![Tests]({workflow}/badge.svg)]({workflow})" in labels, "the tests badge is the CI workflow's own"
@@ -9104,7 +9129,7 @@ if __name__ == "__main__":
                test_the_poll_slows_down_when_telegram_asks, test_an_odd_getupdates_answer_never_stops_the_loop,
                test_the_statistics_do_not_grow_forever, test_the_moodle_probe, test_cambridge_one_assignments,
                test_cambridge_signs_in_by_itself, test_log_files_stay_small,
-               test_portal_session_is_reused_for_15_minutes, test_portal_answers_from_the_saved_copy, test_study_plan_from_the_portal, test_registration_plan, test_new_versions_and_news,
+               test_portal_session_is_reused_for_15_minutes, test_portal_answers_from_the_saved_copy, test_study_plan_from_the_portal, test_registration_plan, test_new_versions_and_news, test_reminders_list_is_tidy, test_the_license_is_noncommercial,
                test_a_course_cannot_be_asked_for_more_than_it_can_still_reach, test_messages_stay_short, test_a_renamed_course_is_still_that_course,
                test_replaced_files_move_to_old_versions, test_settings_are_checked_before_anything_runs,
                test_archive_root_defaults_to_documents_university, test_state_backup_lives_in_its_own_repository,

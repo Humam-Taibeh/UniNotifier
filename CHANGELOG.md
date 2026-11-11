@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- The license is now PolyForm Noncommercial 1.0.0: free for any noncommercial use, with the copyright
+  notice kept; selling it needs the author's permission. Version 1.0.0 stays under MIT.
+
 ### Added
 - The bot tells you when a new version is ready (once a day, and on `/update`), with what is new from
   `NEWS.md`, and ⬇️ Update Now installs it and restarts the bot — only on your press, only a clean

@@ -8,7 +8,7 @@
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)](https://www.microsoft.com/windows)
 [![Tests](https://github.com/Humam-Taibeh/UniNotifier/actions/workflows/tests.yml/badge.svg)](https://github.com/Humam-Taibeh/UniNotifier/actions/workflows/tests.yml)
 [![Code style: pyflakes clean](https://img.shields.io/badge/code%20style-pyflakes%20clean-brightgreen)](https://github.com/PyCQA/pyflakes)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)](LICENSE)
 
 </div>
 
@@ -126,10 +126,11 @@
 المشروع بعد تنزيله. وأسرع طريقة لذلك: افتح مجلد المشروع في مستكشف الملفات (File Explorer)، واكتب
 `powershell` في شريط العنوان ثم اضغط Enter.
 
-> **اختصار:** بعد الخطوة 1، نزّل الكود (بأمر `git clone` في الخطوة 2 — وهو المُستحسن، إذ يصبح كل تحديث بعدها
-> أمر `git pull` واحداً — أو من صفحة المشروع على GitHub عبر
-> **Code → Download ZIP** ثم فك الضغط) وأنشئ بوتك (الخطوة 4) — ثم انقر نقراً مزدوجاً على **`install.bat`**
-> في مجلد المشروع. سيُنجز عنك بقية الخطوتين 2 و3 ومعظم الخطوة 5 (البيئة `.venv` والمكتبات و Chromium،
+> **اختصار:** بعد الخطوة 1، نزّل الكود بأمر `git clone` في الخطوة 2 وأنشئ بوتك (الخطوة 4) — ثم انقر نقراً
+> مزدوجاً على **`install.bat`** في مجلد المشروع.
+> **استخدم `git clone` لا Download ZIP:** النسخة المستنسخة وحدها يصلها في المحادثة خبر الإصدارات الجديدة
+> والإصلاحات وتثبّتها بضغطة واحدة (انظر [التحديث](#التحديث-والإيقاف-المؤقت-والإزالة)). نسخة ZIP تعمل، لكنها
+> لا تعلم بأي تحديث ويجب استبدالها يدوياً في كل مرة. سيُنجز عنك بقية الخطوتين 2 و3 ومعظم الخطوة 5 (البيئة `.venv` والمكتبات و Chromium،
 > ويفتح لك `.env` و `schedule.json` في Notepad) وينتهي بأداة الفحص. ثم تابع من الخطوة 6.
 
 ### 1. المتطلبات
@@ -349,7 +350,7 @@ powershell -ExecutionPolicy Bypass -File scripts\windows_recovery.ps1 -Undo     
 
 ## التحديث والإيقاف المؤقت والإزالة
 
-**البوت يخبرك حين يصدر إصدار جديد** — مرة في اليوم ينظر إلى المستودع الذي استنسخته، ويرسل رسالة واحدة تذكر ما الجديد، ومعها زر ⬇️ **Update Now**: يثبّت الإصدار ويعيد تشغيل نفسه. لا يُثبَّت شيء بدون هذه الضغطة، والأمر `/update` يفحص فوراً. أما يدوياً فهكذا:
+**البوت يخبرك حين يصدر إصدار جديد** — مرة في اليوم ينظر إلى المستودع الذي استنسخته، ويرسل رسالة واحدة: 🆕 *A new version of UniNotifier is ready*. تذكر ما الجديد بكلام بسيط (يكتب المطوّر هذه الملاحظات في [NEWS.md](NEWS.md)، وبالطريقة نفسها يصلك تنبيه عن مشكلة معروفة) وفيها زرّان: ⬇️ **Update Now** يثبّت الإصدار ويعيد تشغيل البوت — نحو دقيقة، دون المساس بملفات `.env` و `schedule.json` وبياناتك — و ⏰ **Later** يؤجّله إلى الأمر `/update` الذي يفحص فوراً متى أرسلته. لا يُثبَّت شيء أبداً بدون ضغطتك، والإصدار الذي لا يعمل يُتراجع عنه. يتطلب هذا نسخة أُنشئت بأمر `git clone`. أما يدوياً فهكذا:
 
 ```powershell
 # التحديث إلى أحدث إصدار
@@ -430,3 +431,7 @@ powershell -ExecutionPolicy Bypass -File scripts\remove_tasks.ps1
 **[docs/REFERENCE.md](docs/REFERENCE.md)** (بالإنجليزية).
 
 تريد المساهمة؟ في **[CONTRIBUTING.md](CONTRIBUTING.md)** (بالإنجليزية) القواعد التي تفرضها الاختبارات، في صفحة واحدة.
+
+## الترخيص
+
+[PolyForm Noncommercial 1.0.0](LICENSE): مجاني للاستخدام والدراسة والتعديل والمشاركة لأي غرض غير تجاري، مع إبقاء إشعار حقوق النشر. بيعه أو استخدامه في منتج أو خدمة مدفوعة غير مسموح إلا بإذن خطي من المؤلف. الإصدار 1.0.0 نُشر برخصة MIT، وكل ما بعده بهذه الرخصة.

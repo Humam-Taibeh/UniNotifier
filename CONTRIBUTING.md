@@ -48,6 +48,11 @@ CI is green, the maintainer applies the same version change in an ordinary commi
 request, so the project's history and contributors stay human. Playwright updates arrive on their own
 because they change the browser that signs in — after applying one, watch the next real check.
 
+## License of contributions
+
+The project is under the [PolyForm Noncommercial License 1.0.0](LICENSE). By opening a pull request you agree
+that your contribution is licensed under the same terms.
+
 ## Telling users about a release
 
 Every installed copy shows its owner the entries of `NEWS.md` it does not have yet when it finds a new

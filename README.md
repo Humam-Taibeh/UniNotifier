@@ -8,7 +8,7 @@
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)](https://www.microsoft.com/windows)
 [![Tests](https://github.com/Humam-Taibeh/UniNotifier/actions/workflows/tests.yml/badge.svg)](https://github.com/Humam-Taibeh/UniNotifier/actions/workflows/tests.yml)
 [![Code style: pyflakes clean](https://img.shields.io/badge/code%20style-pyflakes%20clean-brightgreen)](https://github.com/PyCQA/pyflakes)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)](LICENSE)
 
 </div>
 
@@ -124,9 +124,11 @@ About 20 minutes. Every command below is typed in **PowerShell** (Start menu →
 inside the project folder once you have it. The quickest way there: in File Explorer, open the project
 folder, type `powershell` in the address bar and press Enter.
 
-> **Shortcut:** after step 1, get the code (step 2's `git clone` — recommended, as every update is then
-> one `git pull` — or **Code → Download ZIP** on GitHub, then unzip it) and create your bot (step 4) —
+> **Shortcut:** after step 1, get the code with step 2's `git clone` and create your bot (step 4) —
 > then double-click **`install.bat`** in the project folder.
+> **Use `git clone`, not Download ZIP:** only a cloned copy is told about new versions and fixes in the
+> chat and can install them with one tap (see [Updating](#updating-pausing-uninstalling)). A ZIP copy
+> works, but it never hears about an update and has to be replaced by hand each time.
 > It does the rest of steps 2 and 3 and most of step 5 for you (`.venv`, the packages, Chromium, your
 > `.env` and `schedule.json` opened in Notepad) and ends with the doctor. Then continue with step 6.
 
@@ -346,7 +348,7 @@ Details in [docs/REFERENCE.md](docs/REFERENCE.md).
 
 ## Updating, pausing, uninstalling
 
-**The bot tells you when a new version is ready** — once a day it looks at the repository you cloned, and sends one message saying what is new, with ⬇️ **Update Now**: it installs the version and restarts itself. Nothing is installed without that press; `/update` looks at once. By hand, it is:
+**The bot tells you when a new version is ready** — once a day it looks at the repository you cloned, and sends one message, 🆕 *A new version of UniNotifier is ready*. It says what is new in plain words (the developer writes these notes in [NEWS.md](NEWS.md); a notice about a known problem reaches you the same way) and has two buttons: ⬇️ **Update Now** installs the version and restarts the bot — about a minute, your `.env`, `schedule.json` and data untouched — and ⏰ **Later** leaves it for `/update`, which looks at once whenever you send it. Nothing is ever installed without your press, and a version that does not start is taken back. This needs a copy made with `git clone`. By hand, it is:
 
 ```powershell
 # update to the latest version
@@ -426,3 +428,7 @@ fresh clone passes exactly like a configured PC. Architecture, every module and 
 **[docs/REFERENCE.md](docs/REFERENCE.md)**.
 
 Want to help? **[CONTRIBUTING.md](CONTRIBUTING.md)** has the rules the tests enforce, on one page.
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE): free to use, study, change and share for any noncommercial purpose, with the copyright notice kept. Selling it, or using it in a paid product or service, is not allowed without the author's written permission. Version 1.0.0 was published under the MIT license; everything after it is under this one.
