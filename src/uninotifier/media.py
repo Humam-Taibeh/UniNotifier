@@ -208,7 +208,8 @@ def _fields(item: dict, type_label: str, emoji: str, deadline: dict | None,
 def deadline_lines(deadline: dict) -> list[str]:
     """🕐 Due Date for an assignment; 🕐 Opens and/or Closes for a quiz."""
     if deadline.get("type") != "quiz":
-        return [f'🕐 *Due Date:* {format_timestamp(deadline["timestamp"])}']
+        passed = " · ⚠️ already passed" if deadline["timestamp"] <= time.time() else ""
+        return [f'🕐 *Due Date:* {format_timestamp(deadline["timestamp"])}{passed}']
     opens, closes = quiz_times(deadline)
     return [f"🕐 *{field}:* {format_timestamp(ts)}" for field, ts in (("Opens", opens), ("Closes", closes)) if ts]
 

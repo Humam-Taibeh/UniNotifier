@@ -252,6 +252,8 @@ def update_deadlines(saved_deadlines: dict, events: list) -> dict:
                 "reminded_1h": existing.get("reminded_1h", False),
                 "submitted": existing.get("submitted", False),
             }
+            if "late_open" in existing:                 # an overdue assignment that still takes a submission
+                entry["late_open"] = existing["late_open"]
             if modname == "quiz":
                 opens, closes = quiz_times(existing) if existing else (None, None)
                 if eventtype == "open":
@@ -548,6 +550,33 @@ def fetch_submission_status(context, assign_url: str) -> bool | None:
         raise
     except Exception:
         log.exception("Submission status check failed for %s", assign_url)
+        return None
+
+
+def read_submission(html: str) -> dict | None:
+    """An assignment page -> {"submitted", "accepting"}: was the work handed in, and does the page
+    still take a submission (its Add / Edit submission button — the form that posts
+    action=editsubmission, whatever the language)? None when it is not a readable assignment page."""
+    tree = lxml_html.fromstring(html)
+    blocks = _with_class(tree, "submissionstatustable", "submissionsummarytable")
+    if not blocks:
+        return None
+    text = " ".join(b.text_content() for b in blocks)
+    accepting = bool(tree.xpath("//form[.//input[@name='action' and @value='editsubmission']]"
+                                " | //a[contains(@href, 'action=editsubmission')]"))
+    return {"submitted": parse_submission_status(text, bool(_with_class(tree, "submissionstatussubmitted"))),
+            "accepting": accepting}
+
+
+def fetch_submission_state(context, assign_url: str) -> dict | None:
+    """read_submission of the assignment's page; None when it could not be read."""
+    try:
+        html = fetch_html(context, assign_url)
+        return read_submission(html) if html else None
+    except SessionExpiredError:
+        raise
+    except Exception:
+        log.exception("Submission state check failed for %s", assign_url)
         return None
 
 

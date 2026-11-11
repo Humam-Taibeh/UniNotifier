@@ -176,6 +176,39 @@ def check_submissions(http, content: dict, deadlines: dict, saved: dict) -> dict
     return submissions
 
 
+def check_overdue(http, content: dict, deadlines: dict) -> list[str]:
+    """An assignment whose due date has passed can still be open: a date left over from last year's
+    copy of the course, or late work accepted. Those were never read again once the date passed, so
+    they vanished from the task list while Moodle still showed "Add submission" (and one handed in
+    late stayed "pending" for ever). Each overdue assignment not known to be submitted or closed is
+    read: "submitted" is brought up to date, and "late_open" says whether it still takes a
+    submission — tasks.py lists it until it is handed in, marked done, or closed. One found closed
+    is not read again. Returns the keys that are open."""
+    now = time.time()
+    wanted = []
+    for item in content.values():
+        if item["type"] != "assign":
+            continue
+        key = f'assign-{moodle.extract_cmid(item["url"])}'
+        deadline = deadlines.get(key)
+        if (deadline and deadline["timestamp"] <= now and not deadline.get("submitted")
+                and deadline.get("late_open") is not False):
+            wanted.append((key, item))
+    still_open = []
+    for (key, item), found, error in pmap(lambda w: moodle.fetch_submission_state(http, w[1]["url"]), wanted):
+        if isinstance(error, moodle.SessionExpiredError):
+            raise error
+        if error or found is None:
+            continue
+        deadlines[key]["submitted"] = found["submitted"]
+        deadlines[key]["late_open"] = found["accepting"] and not found["submitted"]
+        if deadlines[key]["late_open"]:
+            still_open.append(key)
+        log.info("  overdue assignment %s: %s", item["name"], "submitted" if found["submitted"]
+                 else "still accepts a submission" if found["accepting"] else "closed")
+    return still_open
+
+
 def _grade_due(kind: str, deadline: dict | None, done: bool, record: dict, now: float) -> bool:
     """Is it time to look for this task's mark? Only once there can be one — a
     quiz that has opened, an assignment handed in or past its due date — for
@@ -341,6 +374,7 @@ def run_scan(saved: dict, notify_new: bool, mfa_handler=None) -> dict:
             saved["deep"] = {"at": time.time()}
 
         submissions = check_submissions(http, content, deadlines, saved)
+        check_overdue(http, content, deadlines)
         grades = {}
         for key, item in check_grades(http, content, deadlines, saved).items():
             grades[key] = {"item": item, "grade": saved["grades"][key]["grade"], "shots": []}

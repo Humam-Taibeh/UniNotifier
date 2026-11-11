@@ -2370,6 +2370,69 @@ def test_the_license_is_noncommercial():
         assert "license-PolyForm%20Noncommercial" in readme and "License: MIT" not in readme, name
 
 
+def test_an_overdue_assignment_that_still_accepts_work_is_a_task():
+    """A due date left over from last year's copy of a course: the assignment is overdue the day it
+    appears, yet Moodle still shows "Add submission". It is read, listed as a task until it is
+    handed in, marked done or closed, and one handed in late stops being "pending"."""
+    from uninotifier import tasks
+    scan = _package("uninotifier.monitor").scan
+    table = ('<div class="submissionstatustable"><table><tr><td>Submission status</td><td>{status}</td></tr></table></div>')
+    button = ('<div class="singlebutton"><form method="get" action="https://x/mod/assign/view.php">'
+              '<input type="hidden" name="id" value="5"><input type="hidden" name="action" value="editsubmission">'
+              '<button type="submit">Add submission</button></form></div>')
+    open_page = "<html><body>" + table.format(status="No submissions have been made yet") + button + "</body></html>"
+    closed_page = "<html><body>" + table.format(status="No submissions have been made yet") + "</body></html>"
+    done_page = "<html><body>" + table.format(status="Submitted for grading") + button + "</body></html>"
+    assert moodle.read_submission(open_page) == {"submitted": False, "accepting": True}
+    assert moodle.read_submission(closed_page) == {"submitted": False, "accepting": False}
+    assert moodle.read_submission(done_page) == {"submitted": True, "accepting": True}
+    assert moodle.read_submission("<html><body><p>Error</p></body></html>") is None
+
+    now = time.time()
+    year = 365 * 86400
+
+    def entry(cmid, name, ts, **more):
+        return {"name": name, "course": "20261-Technical Writing-AllSec-3-", "type": "assign", "timestamp": ts,
+                "url": f"https://x/mod/assign/view.php?id={cmid}", "submitted": False, **more}
+
+    deadlines = {"assign-5": entry(5, "Activity 4", now - year), "assign-6": entry(6, "Activity 5", now - year),
+                 "assign-7": entry(7, "Activity 1", now - year), "assign-8": entry(8, "Old and closed", now - year, late_open=False),
+                 "assign-9": entry(9, "Ahead", now + 86400)}
+    content = {f"c-{n}": {"type": "assign", "name": f"a{n}", "url": f"https://x/mod/assign/view.php?id={n}", "done": False}
+               for n in (5, 6, 7, 8, 9)}
+    pages = {"5": open_page, "6": closed_page, "7": done_page}
+    read = []
+    keep = moodle.fetch_submission_state
+    moodle.fetch_submission_state = lambda http, url: read.append(url[-1]) or moodle.read_submission(pages[url[-1]])
+    try:
+        assert scan.check_overdue(None, content, deadlines) == ["assign-5"]
+        assert sorted(read) == ["5", "6", "7"], "not the one known to be closed, nor one with its date ahead"
+        assert deadlines["assign-5"]["late_open"] is True and deadlines["assign-6"]["late_open"] is False
+        assert deadlines["assign-7"]["submitted"] is True, "handed in after the date: no longer pending"
+        read.clear()
+        scan.check_overdue(None, content, deadlines)
+        assert read == ["5"], "only the one still open is read again"
+    finally:
+        moodle.fetch_submission_state = keep
+
+    state = {"deadlines": deadlines, "content": content}
+    listed = tasks.open_tasks(state, now)
+    assert [(t["name"], t["late"]) for t in listed] == [("Activity 4", True), ("Ahead", False)]
+    lines = tasks.task_lines(1, listed[0], now)
+    assert any("Overdue — Moodle still accepts it" in line for line in lines) and not any("left" in line for line in lines)
+    text, _ = tasks.digest(listed, now)
+    assert text.index("LAST DAY") < text.index("Ahead") < text.index("Overdue — still accepted") < text.index("Activity 4")
+    content["c-5"]["done"] = True
+    assert [t["name"] for t in tasks.open_tasks(state, now)] == ["Ahead"], "marked done: no longer listed"
+    # the flag survives the next calendar read
+    merged = moodle.update_deadlines(deadlines, [{"modulename": "assign", "eventtype": "due", "timesort": int(now - year),
+                                                  "name": "Activity 4 is due", "course": {"fullname": "c"},
+                                                  "action": {"url": "https://x/mod/assign/view.php?id=5"}}])
+    assert merged["assign-5"]["late_open"] is True
+    assert "already passed" in media.deadline_lines(deadlines["assign-5"])[0]
+    assert "already passed" not in media.deadline_lines(deadlines["assign-9"])[0]
+
+
 def test_study_plan_from_the_portal():
     """The degree's hours come from the student's own plan on the portal — any major, any plan year —
     never from a fixed number: what is required, passed, registered this term, failed and left."""
@@ -9129,7 +9192,7 @@ if __name__ == "__main__":
                test_the_poll_slows_down_when_telegram_asks, test_an_odd_getupdates_answer_never_stops_the_loop,
                test_the_statistics_do_not_grow_forever, test_the_moodle_probe, test_cambridge_one_assignments,
                test_cambridge_signs_in_by_itself, test_log_files_stay_small,
-               test_portal_session_is_reused_for_15_minutes, test_portal_answers_from_the_saved_copy, test_study_plan_from_the_portal, test_registration_plan, test_new_versions_and_news, test_reminders_list_is_tidy, test_the_license_is_noncommercial,
+               test_portal_session_is_reused_for_15_minutes, test_portal_answers_from_the_saved_copy, test_study_plan_from_the_portal, test_registration_plan, test_new_versions_and_news, test_reminders_list_is_tidy, test_an_overdue_assignment_that_still_accepts_work_is_a_task, test_the_license_is_noncommercial,
                test_a_course_cannot_be_asked_for_more_than_it_can_still_reach, test_messages_stay_short, test_a_renamed_course_is_still_that_course,
                test_replaced_files_move_to_old_versions, test_settings_are_checked_before_anything_runs,
                test_archive_root_defaults_to_documents_university, test_state_backup_lives_in_its_own_repository,

@@ -4,10 +4,12 @@ that still needs you, for the ⏳ Upcoming Tasks screen and the daily digest.
 
 Open means
   • an assignment that is not submitted, with its due date ahead — or with no due
-    date at all and not marked done;
+    date at all and not marked done — or OVERDUE while Moodle still takes a
+    submission (a date left from last year's copy of the course, late work
+    accepted): it stays until it is handed in, marked done, or closed;
   • a quiz not attempted yet whose closing time is ahead (or that has none);
   • a Cambridge One assignment with activities left and its due date ahead.
-A due date that has passed is no longer a task: its reminders have had their turn.
+Any other due date that has passed is no longer a task: its reminders have had their turn.
 
 The digest — every day at DIGEST_AT (noon), one message with the open tasks, the
 closest first, so a long assignment is never forgotten while there is still time
@@ -35,22 +37,26 @@ OPEN_BUTTONS = 8          # 🔗 Open Task buttons, closest first
 
 
 def _task(kind: str, name: str, course: str, url: str | None, due: float | None,
-          opens: float | None = None, progress: str | None = None) -> dict:
+          opens: float | None = None, progress: str | None = None, late: bool = False) -> dict:
     return {"kind": kind, "name": name, "course": course, "url": url, "due": due, "opens": opens,
-            "progress": progress}
+            "progress": progress, "late": late}
 
 
 def _moodle(state: dict, now: float) -> list[dict]:
     deadlines = state.get("deadlines") or {}
     undated = state.get("undated") or {}
     found = []
-    for d in deadlines.values():
+    marked_done = {f'{item.get("type")}-{moodle.extract_cmid(item.get("url", ""))}'
+                   for item in (state.get("content") or {}).values() if item.get("done")}
+    for key, d in deadlines.items():
         if d.get("submitted"):
             continue
         name, course, url = d.get("name", "?"), d.get("course", ""), d.get("url")
         if d.get("type") == "assign":
             if d.get("timestamp", 0) > now:
                 found.append(_task("assign", name, course, url, d["timestamp"]))
+            elif d.get("late_open") and key not in marked_done:      # overdue, and Moodle still takes it
+                found.append(_task("assign", name, course, url, d["timestamp"], late=True))
         elif d.get("type") == "quiz":
             opens, closes = moodle.quiz_times(d)
             if closes and closes > now:
@@ -124,7 +130,10 @@ def task_lines(n: int, task: dict, now: float) -> list[str]:
     lines = [f"{n}. {KIND[task['kind']]} *{escape_md(task['name'])}*", f"    📘 *Course:* {escape_md(course)}"]
     if task["kind"] == "quiz" and task["opens"] and task["opens"] > now:
         lines.append(f"    🗓️ *Opens:* {format_timestamp(task['opens'])} · ⏱️ in {_span(task['opens'], now)}")
-    if task["due"]:
+    if task.get("late"):
+        lines.append(f"    🕐 *Due:* {format_timestamp(task['due'])}")
+        lines.append("    ⚠️ Overdue — Moodle still accepts it")
+    elif task["due"]:
         field = "Closes" if task["kind"] == "quiz" else "Due"
         lines.append(f"    🕐 *{field}:* {format_timestamp(task['due'])} · ⏱️ {_span(task['due'], now)} left")
     elif not (task["kind"] == "quiz" and task["opens"]):
@@ -148,9 +157,10 @@ def digest(tasks: list[dict], now: float) -> tuple[str, list] | None:
     doable = [t for t in tasks if is_open_now(t, now)]
     if not doable:
         return None
-    urgent = [t for t in doable if t["due"] and t["due"] - now <= LAST_DAY]
-    rest = [t for t in doable if t not in urgent]
-    ordered = urgent + rest
+    late = [t for t in doable if t.get("late")]
+    urgent = [t for t in doable if t["due"] and t["due"] - now <= LAST_DAY and t not in late]
+    rest = [t for t in doable if t not in urgent and t not in late]
+    ordered = urgent + late + rest
     lines = ["📋 *Your Open Tasks*", f"{len(doable)} still waiting for you — a little every day keeps them easy."]
     n = 0
     if urgent:
@@ -159,6 +169,11 @@ def digest(tasks: list[dict], now: float) -> tuple[str, list] | None:
             n += 1
             lines += task_lines(n, task, now)
         lines.append("⚠️ *Submit before the time above — after it, Moodle may not accept it.*")
+    if late:
+        lines += ["", "⚠️ *Overdue — still accepted*"]
+        for task in late:
+            n += 1
+            lines += task_lines(n, task, now)
     if rest:
         lines += ["", "⏳ *Still open*"]
         for task in rest:
