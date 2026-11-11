@@ -8,6 +8,7 @@ From that, for the term after this one:
   advise()     every course still to take, as open to you or not yet — and why
   options()    the hours you may ask for (the buttons)
   propose()    the courses for that many hours, the most important first
+  check()      a choice of your own: its hours, and what the rules say about it
   *_lines()    those as message lines
 
 This term's courses are counted as passed: the advice is for the term after them. A course that
@@ -18,8 +19,8 @@ The rules (the university's, as its students know them — constants below):
   - a regular term: 12 to 18 hours; 21 in the graduation term, or with an excellent CGPA
   - a summer term: up to 9 hours; 12 only when it is the student's last term at the university
   - the graduation term: everything left fits in the term and nothing is held back by a prerequisite
-  - field training and the graduation project: the final year (SENIOR_HOURS passed and no more than
-    a year's hours left), with the department head's approval
+  - field training and the graduation project: once SENIOR_HOURS of the plan are passed, with the
+    department head's approval
   - military science: the graduation term
   - a failed course is retaken first; then a course that opens the most courses after it; an
     elective only up to what its category still needs
@@ -37,7 +38,6 @@ REGULAR_TOP = 21                    # the graduation term, or an excellent CGPA
 SUMMER_HOURS = (3, 6, 9)
 SUMMER_TOP = 12                     # only the student's last term
 SENIOR_HOURS = 90                   # passed, before training and the graduation project
-YEAR_HOURS = 18 + 18 + 9            # what a last year holds: two terms and a summer
 
 _SENIOR = re.compile(r"تدريب|مشروع\s*(?:ال)?تخرج|منهجية.*مشروع")
 _MILITARY = re.compile(r"العلوم العسكرية|علوم عسكرية")
@@ -166,26 +166,27 @@ def advise(plan: dict, kind: str = REGULAR) -> dict:
             entries.append({"course": course, "category": category["name"],
                             "kind": ("remedial" if remedial else "retake" if course["status"] == "failed"
                                      else "elective" if choice else "compulsory"),
-                            "state": state, "waits": waits, "why": "", "approval": False,
+                            "state": state, "waits": waits, "why": "", "reason": "prereq", "approval": False,
                             "unlocks": unlocks.get(course["code"], 0), "unknown": unknown})
-    senior = passed >= SENIOR_HOURS and left <= YEAR_HOURS
+    senior = passed >= SENIOR_HOURS
     for entry in entries:
         if _SENIOR.search(entry["course"]["name"]):
             entry["approval"] = True
             if not senior:
-                entry["state"], entry["why"] = "blocked", (
-                    f"final year only ({SENIOR_HOURS}+ hrs passed), with the department head's approval")
+                entry["state"], entry["why"], entry["reason"] = "blocked", (
+                    f"after {SENIOR_HOURS} hrs passed, with the department head's approval"), "senior"
     # the last term: all that is left fits in it, with nothing held back (military science waits for this very term)
     top = REGULAR_TOP if kind == REGULAR else SUMMER_TOP
     graduating = 0 < left <= top and _reachable(entries, needs) >= left
     for entry in entries:
         if _MILITARY.search(entry["course"]["name"]) and not graduating:
-            entry["state"], entry["why"] = "blocked", "graduation term only"
+            entry["state"], entry["why"], entry["reason"] = "blocked", "graduation term only", "military"
         if entry["state"] == "blocked" and not entry["why"]:
             entry["why"] = "after " + " and ".join(_name(c) for c in entry["waits"])
     entries.sort(key=lambda e: (_ORDER[e["kind"]], -e["unlocks"], _level(e["course"]), e["course"]["code"]))
     term_courses = sum(1 for c in by_code.values() if c["status"] == "in_progress")
     return {"left": left, "passed": passed, "term_courses": term_courses, "graduating": graduating,
+            "held_hours": left - _reachable([e for e in entries if e["state"] != "blocked"], needs),
             "senior": senior, "entries": entries, "needs": needs, "kind": kind,
             "open_hours": _reachable([e for e in entries if e["state"] != "blocked"], needs)}
 
@@ -238,6 +239,37 @@ def propose(advice: dict, hours: float) -> dict:
     return {"entries": picked, "total": total, "short": total < hours}
 
 
+def check(advice: dict, codes) -> dict:
+    """A choice of your own (course codes, among the open ones): {"entries", "total" (hours
+    registered), "counted" (of those, towards the plan), "notes": what the rules say about it}."""
+    wanted = set(codes)
+    entries = [e for e in advice["entries"] if e["state"] != "blocked" and e["course"]["code"] in wanted]
+    total = sum(e["course"]["hours"] for e in entries)
+    counted = _reachable(entries, advice["needs"])
+    notes = []
+    for name, need in advice["needs"].items():
+        taken = sum(e["course"]["hours"] for e in entries if e["category"] == name)
+        if taken > need:
+            notes.append(f"⚠️ {escape_md(degreeplan.english(name))} needs only {_n(need)} more hrs: "
+                         f"{_n(taken - need)} of these add nothing to your plan.")
+    if advice["kind"] == SUMMER:
+        if total > SUMMER_TOP:
+            notes.append(f"⛔ A summer term takes {SUMMER_TOP} hrs at the very most.")
+        elif total > SUMMER_HOURS[-1] and not advice["graduating"]:
+            notes.append(f"⛔ More than {SUMMER_HOURS[-1]} hrs in a summer term is only for your last term at the university.")
+    else:
+        if total > REGULAR_TOP:
+            notes.append(f"⛔ A term takes {REGULAR_TOP} hrs at the very most.")
+        elif total > REGULAR_HOURS[-1] and not advice["graduating"]:
+            notes.append(f"⭐ More than {REGULAR_HOURS[-1]} hrs is allowed only with an excellent CGPA — "
+                         "it is not your graduation term.")
+        if 0 < total < REGULAR_HOURS[0] and not advice["graduating"]:
+            notes.append(f"⚠️ A regular term needs at least {REGULAR_HOURS[0]} hrs.")
+    if any(e["state"] == "if" for e in entries):
+        notes.append("_A course marked “if you pass” opens only when this term's course is passed._")
+    return {"entries": entries, "total": total, "counted": counted, "notes": notes}
+
+
 # ---------------------------------------------------------------- the text
 
 def _n(value: float) -> str:
@@ -252,15 +284,14 @@ def _count(n: int, word: str) -> str:
     return f"{n} {word}{'' if n == 1 else 's'}"
 
 
-def _notes(entry: dict) -> str:
-    """What to know about a course that is open: a retake, what it opens, what it still depends on."""
+def _notes(entry: dict, kind: bool = True) -> str:
+    """What to know about a course that is open: a retake, what it opens, what it still depends on.
+    `kind` off under a heading that already says it."""
     notes = []
-    if entry["kind"] == "retake":
-        notes.append("retake")
-    elif entry["kind"] == "remedial":
+    if kind and entry["kind"] in ("retake", "elective"):
+        notes.append(entry["kind"])
+    elif kind and entry["kind"] == "remedial":
         notes.append("remedial, on top of the plan")
-    elif entry["kind"] == "elective":
-        notes.append(f"elective · {escape_md(degreeplan.english(entry['category']))}")
     if entry["unlocks"]:
         notes.append(f"opens {_count(entry['unlocks'], 'course')}")
     if entry["state"] == "if":
@@ -272,10 +303,10 @@ def _notes(entry: dict) -> str:
     return " — " + " · ".join(notes) if notes else ""
 
 
-def _line(entry: dict, number: int | None = None) -> str:
-    head = f"{number}. " if number else ""
+def _line(entry: dict, number: int | None = None, kind: bool = True) -> str:
     course = entry["course"]
-    return f"{LRM}{head}{_ICONS[entry['kind']]} {_name(course)} · {_n(course['hours'])}h{_notes(entry)}"
+    head = f"{number}. {_ICONS[entry['kind']]}" if number else "▫️"
+    return f"{LRM}{head} {_name(course)} · {_n(course['hours'])}h{_notes(entry, kind)}"
 
 
 def allowed_line(advice: dict) -> str:
@@ -300,45 +331,80 @@ def overview_lines(advice: dict, term: str) -> list[str]:
     if advice["term_courses"]:
         left += f" — this term's {_count(advice['term_courses'], 'course')} counted as passed"
     lines += [left, f"✅ *Open to you:* {_n(advice['open_hours'])} hrs · {_count(len(can), 'course')}",
-              f"⛔ *Not yet:* {_count(len(entries) - len(can), 'course')}", allowed_line(advice)]
+              f"⛔ *Not yet:* {_n(advice['held_hours'])} hrs · {_count(len(entries) - len(can), 'course')}",
+              allowed_line(advice)]
     if advice["graduating"]:
         lines.append("🎓 *This can be your graduation term:* everything left fits in it.")
     return lines
 
 
 def proposal_lines(advice: dict, hours: float, term: str) -> list[str]:
-    """The courses proposed for `hours`."""
+    """The courses suggested for `hours`."""
     proposal = propose(advice, hours)
-    lines = [f"🗓️ *{_n(hours)} hrs* — {escape_md(term)}", ""]
+    lines = [f"✨ *Suggested: {_n(hours)} hrs* — {escape_md(term)}",
+             "_Failed courses first, then the courses that open the most after them._", ""]
     lines += [_line(entry, n) for n, entry in enumerate(proposal["entries"], 1)]
     lines += ["", f"*Total:* {_n(proposal['total'])} hrs · {_count(len(proposal['entries']), 'course')}"]
     if proposal["short"]:
         lines.append(f"⚠️ Only {_n(proposal['total'])} hrs could be filled: the rest of your plan is not open to you yet.")
-    low = REGULAR_HOURS[0]
-    if advice["kind"] == REGULAR and proposal["total"] < low and not advice["graduating"]:
-        lines.append(f"⚠️ A regular term needs at least {low} hrs.")
-    if advice["kind"] == REGULAR and hours >= REGULAR_TOP and not advice["graduating"]:
-        lines.append(f"⭐ {REGULAR_TOP} hrs is allowed only with an excellent CGPA — it is not your graduation term.")
-    if any(e["state"] == "if" for e in proposal["entries"]):
-        lines.append("_A course marked “if you pass” opens only when this term's course is passed._")
-    return lines
+    return lines + check(advice, [e["course"]["code"] for e in proposal["entries"]])["notes"]
+
+
+def choice_lines(advice: dict, codes, term: str) -> list[str]:
+    """Your own choice among the open courses: what is chosen, its hours, and what the rules say."""
+    chosen = check(advice, codes)
+    lines = [f"✋ *Your Choice* — {escape_md(term)}", "_Tap a course to add it or take it out._", ""]
+    lines += [_line(entry, n) for n, entry in enumerate(chosen["entries"], 1)] or ["Nothing chosen yet."]
+    total = f"*Total:* {_n(chosen['total'])} hrs · {_count(len(chosen['entries']), 'course')}"
+    if chosen["counted"] != chosen["total"]:
+        total += f" · {_n(chosen['counted'])} towards your plan"
+    return lines + ["", total] + chosen["notes"]
+
+
+_HEADINGS = (("remedial", "🧩 *Remedial* — on top of the plan's hours"), ("retake", "🔁 *Retake first*"),
+             ("compulsory", "📘 *Compulsory* — the most important first"))
 
 
 def open_lines(advice: dict) -> list[str]:
-    """Everything that can be registered, the most important first."""
+    """Everything that can be registered, under what it is: retakes, compulsory courses, then each
+    group of electives with the hours it still needs."""
     can = [e for e in advice["entries"] if e["state"] != "blocked"]
-    lines = ["✅ *What You Can Take*", f"{_n(advice['open_hours'])} hrs towards your plan · the most important first", ""]
-    lines += [_line(entry) for entry in can] or ["Nothing is open yet."]
+    lines = ["✅ *What You Can Take*", f"{_n(advice['open_hours'])} hrs towards your plan"]
+    if not can:
+        return lines + ["", "Nothing is open yet."]
+    for kind, title in _HEADINGS:
+        group = [e for e in can if e["kind"] == kind]
+        if group:
+            lines += ["", title] + [_line(e, kind=False) for e in group]
     for name, need in advice["needs"].items():
-        offered = sum(e["course"]["hours"] for e in can if e["category"] == name)
-        if offered > need:
-            lines += ["", f"_🎯 {escape_md(degreeplan.english(name))}: choose {_n(need)} hrs of these electives._"]
+        group = [e for e in can if e["category"] == name]
+        if group:
+            lines += ["", f"🎯 *{escape_md(degreeplan.english(name))}* — choose {_n(need)} hrs"]
+            lines += [_line(e, kind=False) for e in group]
     return lines
 
 
 def blocked_lines(advice: dict) -> list[str]:
-    """What cannot be registered yet, each with its reason."""
+    """What cannot be registered yet, under its reason: a course to pass first (named under each
+    one), the hours the final-year courses wait for, the graduation term."""
     held = [e for e in advice["entries"] if e["state"] == "blocked"]
-    lines = ["⛔ *Not Yet — and Why*", ""]
-    lines += [f"{LRM}▫️ {_name(e['course'])} · {_n(e['course']['hours'])}h — {e['why']}" for e in held]
-    return lines if held else lines + ["Nothing is held back: every course left is open to you."]
+    lines = ["⛔ *Not Yet — and Why*", f"{_n(advice['held_hours'])} hrs towards your plan · {_count(len(held), 'course')}"]
+    if not held:
+        return lines + ["", "Nothing is held back: every course left is open to you."]
+
+    def course(entry: dict) -> str:
+        return f"{LRM}▫️ *{_name(entry['course'])}* · {_n(entry['course']['hours'])}h"
+
+    waiting = [e for e in held if e["reason"] == "prereq"]
+    if waiting:
+        lines += ["", "🔗 *Another course comes first*"]
+        for entry in waiting:
+            lines += [course(entry), f"{LRM}      └ first: " + " and ".join(_name(c) for c in entry["waits"])]
+    senior = [e for e in held if e["reason"] == "senior"]
+    if senior:
+        lines += ["", f"🎓 *After {SENIOR_HOURS} hrs passed* — you have {_n(advice['passed'])} after this term",
+                  "_Each needs the department head's approval._"] + [course(e) for e in senior]
+    military = [e for e in held if e["reason"] == "military"]
+    if military:
+        lines += ["", "🏁 *Graduation term only*"] + [course(e) for e in military]
+    return lines

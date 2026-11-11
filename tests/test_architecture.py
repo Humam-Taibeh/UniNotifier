@@ -2141,7 +2141,9 @@ def test_registration_plan():
     assert state["0900313"]["state"] == "blocked" and "هياكل البيانات" in state["0900313"]["why"]
     assert state["0900352"]["state"] == "if", "open once this term's course is passed"
     assert state["0900314"]["state"] == "open" and state["0900314"]["unknown"] == ["0900999"], "said, never hidden"
-    assert state["0900490"]["state"] == "blocked" and state["0900490"]["approval"] and "final year" in state["0900490"]["why"]
+    assert state["0900490"]["state"] == "blocked" and state["0900490"]["approval"] and state["0900490"]["reason"] == "senior"
+    assert state["0900313"]["reason"] == "prereq" and state["0900103"]["reason"] == "military"
+    assert advice["held_hours"] == 7 and advice["open_hours"] + advice["held_hours"] == advice["left"], "nothing lost"
     assert state["0900492"]["state"] == "blocked" and state["0900103"]["why"] == "graduation term only"
     assert advice["needs"] == {"متطلبات تخصص (اختيارية)": 3} and not advice["graduating"] and not advice["senior"]
     assert advice["open_hours"] == 15, "remedial 3 + retake 3 + two majors 6 + ONE elective 3"
@@ -2157,9 +2159,28 @@ def test_registration_plan():
     assert sum(1 for e in all_open["entries"] if e["kind"] == "elective") == 1, "an elective only up to the category's need"
     text = "\n".join(registration.proposal_lines(advice, 18, "Second semester 2030/2031"))
     assert "Only 15 hrs could be filled" in text and "if you pass" in text and "⚠️ needs 0900999" in text
-    assert "allowed only with an excellent CGPA" in "\n".join(registration.proposal_lines(advice, 21, "x"))
-    held = "\n".join(registration.blocked_lines(advice))
-    assert "تدريب ميداني" in held and "department head" in held and "graduation term only" in held
+    assert "excellent CGPA" not in text, "15 hrs were filled: nothing above 18 to warn about"
+    held = registration.blocked_lines(advice)
+    assert held[1] == "7 hrs towards your plan · 4 courses"
+    at = held.index("🔗 *Another course comes first*")
+    assert "الخوارزميات" in held[at + 1] and held[at + 2].lstrip(degreeplan.LRM).strip().startswith("└ first:")
+    assert "هياكل البيانات" in held[at + 2], "what comes first is named under the course"
+    assert "🎓 *After 90 hrs passed* — you have 15 after this term" in held and "🏁 *Graduation term only*" in held
+    assert "_Each needs the department head's approval._" in held
+    listed = registration.open_lines(advice)
+    assert "🔁 *Retake first*" in listed and "🎯 *Major · Elective* — choose 3 hrs" in listed
+    assert not any("elective ·" in line for line in listed), "the heading says what they are: not repeated on every line"
+    assert "⛔ *Not yet:* 7 hrs · 4 courses" in registration.overview_lines(advice, "x")
+
+    # your own choice: the hours, and what the rules say
+    mine = registration.check(advice, ["0900212", "0900331", "0900332", "0900313"])
+    assert [e["course"]["code"] for e in mine["entries"]] == ["0900212", "0900331", "0900332"], "a held course cannot be chosen"
+    assert mine["total"] == 9 and mine["counted"] == 6
+    assert any("needs only 3 more hrs: 3 of these add nothing" in n for n in mine["notes"])
+    assert any("needs at least 12 hrs" in n for n in mine["notes"])
+    assert registration.check(advice, [])["notes"] == []
+    summer_choice = registration.check(registration.advise(plan, registration.SUMMER), [e["course"]["code"] for e in advice["entries"]])
+    assert summer_choice["total"] == 18 and any("12 hrs at the very most" in n for n in summer_choice["notes"])
     for lines in (registration.overview_lines(advice, "Second semester 2030/2031"), registration.open_lines(advice)):
         assert _legacy_markdown_ok("\n".join(lines))
 
@@ -2170,7 +2191,7 @@ def test_registration_plan():
     last[2] = ["متطلبات تخصص (اختيارية)", 3, 3, 0, [("مجتازة", "0900331", "أمن الشبكات", 3)]]
     last[3] = ["مواد استدراكية (اجبارية)", 6, 6, 0, [("معفاة", "0900001", "اللغة الانجليزية الاستدراكية", 3)]]
     final = registration.advise(degreeplan.parse(_plan_html(last)))
-    assert final["left"] == 7 and not final["senior"], "under 90 hours passed in this small plan"
+    assert final["left"] == 7 and not final["senior"] and final["passed"] == 27, "under 90 hours passed in this small plan"
     assert not final["graduating"], "training and the project are still held back: not the last term yet"
     assert [h for h, _ in registration.options(final)] == [12], "the least a regular term takes is still offered"
     summer = registration.advise(degreeplan.parse(_plan_html(last)), registration.SUMMER)
@@ -2205,9 +2226,22 @@ def test_registration_plan():
         text, rows = registration_flow.view_home()
         assert "Registration Plan* — Second semester 2030/2031" in text and "Left to take:* 22 hrs" in text
         assert [b["callback_data"] for b in rows[0]] == ["reg:h:12", "reg:h:15", "reg:h:18", "reg:h:21"]
+        assert rows[1][0]["callback_data"] == "reg:pick" and rows[-2][1]["callback_data"] == "portal:transcript"
         assert rows[-1] == chat.RECORD_ROW and "open with the portal's registration period" in text
-        assert "*Total:* 12 hrs" in registration_flow.view_screen("h:12")[0]
+        assert "Your plan as read from the portal" in text and "Update My Plan" in text, "read long ago: said"
+        assert "Update My Plan" not in registration_flow.read_line(1000.0, now=1500.0)
+        suggested, rows = registration_flow.view_screen("h:12")
+        assert "✨ *Suggested: 12 hrs*" in suggested and "*Total:* 12 hrs" in suggested and rows[0][0]["callback_data"] == "reg:pick"
+        # ✋ starts from the suggestion; a tap takes a course out or adds one; every open course is a button
+        picked, rows = registration_flow.view_screen("pick")
+        assert "*Total:* 12 hrs · 4 courses" in picked and len([r for r in rows if r[0]["callback_data"].startswith("reg:t:")]) == 6
+        assert rows[0][0]["text"].startswith("✅") and rows[-1] == registration_flow.HOME_ROW
+        assert "*Total:* 9 hrs · 3 courses" in registration_flow.view_screen("t:0900212")[0]
+        assert "*Total:* 12 hrs · 4 courses" in registration_flow.view_screen("t:0900331")[0]
+        assert "Nothing chosen yet." in registration_flow.view_screen("clear")[0]
+        assert "Nothing chosen yet." in registration_flow.view_screen("t:0900490")[0], "a held course is never chosen"
         assert registration_flow.view_screen("held")[1] == [registration_flow.HOME_ROW]
+        assert all(len(b["callback_data"].encode()) <= 64 for r in rows for b in r)
         old = {"categories": [dict(cat, courses=[{k: v for k, v in c.items() if k != "prereqs"} for c in cat["courses"]])
                               for cat in plan["categories"]]}
         result.data["plan"] = old
@@ -2215,6 +2249,7 @@ def test_registration_plan():
     finally:
         portal_flow.load_cached = keep
         registration_flow._kind = None
+        registration_flow._chosen.clear()
     source = inspect.getsource(registration) + inspect.getsource(registration_flow)
     assert "fetch" not in source and "playwright" not in source, "advice only: the portal is not touched"
 
