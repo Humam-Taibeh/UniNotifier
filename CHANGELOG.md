@@ -7,6 +7,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- Upcoming Tasks & Reminders shows each reminder whole: only its first line was listed, so a note
+  of several lines (a pasted announcement with its date, time and place) looked cut off. If ten long
+  reminders would not fit in one Telegram message, whole reminders are left off the end and the
+  screen says how many.
 - The bot reads Moodle in English whatever language you use there: dates and attendance choices were
   only understood in English, so an Arabic Moodle would have made it miss lectures. It asks for English
   in its own session (`?lang=en`); your own Moodle language is not touched.

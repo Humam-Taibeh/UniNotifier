@@ -289,14 +289,16 @@ def test_open_tasks_and_the_noon_digest():
 
 def test_reminders_list_is_tidy():
     """A reminder in the list is its title, then the course and the time on lines of their own: an
-    Arabic note never runs into an English course name, and a pinned post is not poured into the list."""
+    Arabic note never runs into an English course name. The note is shown whole, line by line under its
+    title, and the screen only ever drops whole reminders (never half of one) to stay under Telegram's limit."""
     from uninotifier.bot import views
     arabic = views.reminder_lines(1, {"note": "امتحان قصير / شعبة 2", "course": "Technical Writing", "due": 1900000000})
     assert len(arabic) == 3 and arabic[0].endswith(views.PDI) and views.FSI + "امتحان قصير / شعبة 2" in arabic[0]
     assert "Technical Writing" in arabic[1] and "Technical Writing" not in arabic[0] and "🕐" in arabic[2]
     post = views.reminder_lines(2, {"note": "Exam Reminder — Technical Writing\nCourse: Technical Writing\nRoom 12",
                                     "course": None, "due": 1900000000})
-    assert len(post) == 2 and "Room 12" not in "".join(post), "only the first line of a long note"
+    assert len(post) == 4 and "Course: Technical Writing" in post[1] and "Room 12" in post[2], "the whole note, not its first line"
+    assert post[0].startswith(views.LRM + "2. 📝") and "🕐" in post[3]
     same = views.reminder_lines(3, {"note": "Technical Writing quiz", "course": "Technical Writing", "due": 1900000000})
     assert len(same) == 2, "a course already in the title is not said twice"
     assert all(line.startswith(views.LRM) for line in arabic + post + same)
@@ -718,3 +720,33 @@ def test_pin_rule_and_forum_announcements():
         finally:
             for k, v in keep.items():
                 setattr(monitor, k, v)
+
+
+def test_a_full_reminders_screen_fits_in_one_telegram_message():
+    """Every reminder is shown whole, so ten long ones could pass Telegram's 4096 characters. The
+    screen then drops whole reminders from the end (never half of one), says how many are left and
+    where the rest is, and keeps its buttons; a pinned post's button is named by its first line."""
+    from uninotifier import reminders, tasks
+    from uninotifier.bot import chat, views
+
+    note = "Announcement title\n" + "\n".join(f"Line {n} of what the instructor wrote, in full." for n in range(1, 6))
+    note = note[:reminders.NOTE_LIMIT]
+    items = [{"id": n, "note": note, "course": "Technical Writing", "due": 1900000000 + n, "message_id": 100 + n}
+             for n in range(1, 11)]
+    keep = (reminders.pending, tasks.open_tasks, chat.load_state)
+    try:
+        reminders.pending = lambda now=None: list(items)
+        tasks.open_tasks = lambda state, now: []
+        chat.load_state = lambda: {}
+        text, rows = views.view_tasks()
+        shown = text.count("📝")
+        assert len(text) <= 4096, len(text)
+        assert 1 <= shown < 10 and f"… and {10 - shown} more" in text, (shown, text[-300:])
+        assert text.count("Line 5 of what the instructor wrote, in full.") == shown, "each shown reminder is whole"
+        labels = [b["text"] for row in rows for b in row if b.get("callback_data", "").startswith("rem:view:")]
+        assert labels and all("Line 1" not in label and "Announcement title" in label for label in labels), labels
+        reminders.pending = lambda now=None: items[:2]
+        text, rows = views.view_tasks()
+        assert text.count("📝") == 2 and "more" not in text
+    finally:
+        reminders.pending, tasks.open_tasks, chat.load_state = keep

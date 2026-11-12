@@ -91,15 +91,19 @@ def view_record() -> tuple[str, list]:
 
 
 REMINDERS_SHOWN = 10
+SCREEN_BUDGET = 3600                 # Telegram stops a message at 4096 characters; room is kept for the footer
 LRM, FSI, PDI = "\u200e", "\u2068", "\u2069"
 
 
 def reminder_lines(number: int, reminder: dict) -> list[str]:
-    """One reminder in the list: its title (the note's first line — a pinned post's note is the whole
-    post), then the course and the time, each on a line of its own. The title is direction-isolated,
-    so an Arabic note next to an English course name or a time never reorders the line."""
-    title = next((line.strip() for line in (reminder.get("note") or "").splitlines() if line.strip()), "Reminder")
-    lines = [f"{LRM}{number}. 📝 {FSI}{escape_md(chat._short(title, 70))}{PDI}"]
+    """One reminder in the list, all of it: its title (the note's first line), the rest of the note
+    under it (a pinned post's note is the whole post, up to reminders.NOTE_LIMIT characters), then the
+    course and the time, each on a line of its own. Every note line is direction-isolated, so an
+    Arabic note next to an English course name or a time never reorders the line."""
+    written = [line.strip() for line in (reminder.get("note") or "").splitlines() if line.strip()] or ["Reminder"]
+    title = written[0]
+    lines = [f"{LRM}{number}. 📝 {FSI}{escape_md(title)}{PDI}"]
+    lines += [f"{LRM}      {FSI}{escape_md(line)}{PDI}" for line in written[1:]]
     if reminder.get("course") and reminder["course"] not in title:
         lines.append(f"{LRM}      📘 {escape_md(reminder['course'])}")
     lines.append(f"{LRM}      🕐 {reminders.when_text(reminder['due'])} · ⏱️ {chat.remaining_text(reminder['due'])}")
@@ -126,13 +130,19 @@ def view_tasks() -> tuple[str, list]:
     lines += ["", "🔔 *Your reminders*"]
     if not mine:
         lines.append("None yet — tap ➕ below, or 📌 Add to Reminders under any announcement.")
-    for n, r in enumerate(mine[:REMINDERS_SHOWN], 1):
-        lines += ["", *reminder_lines(n, r)]
-    if len(mine) > REMINDERS_SHOWN:
-        lines.append(f"… and {len(mine) - REMINDERS_SHOWN} more")
+    shown = []
+    for r in mine[:REMINDERS_SHOWN]:
+        block = ["", *reminder_lines(len(shown) + 1, r)]
+        if len("\n".join(lines + block)) > SCREEN_BUDGET:     # whole reminders only: never one cut in half
+            break
+        lines += block
+        shown.append(r)
+    if len(mine) > len(shown):
+        lines.append(f"… and {len(mine) - len(shown)} more — 🗑️ Manage Reminders lists them all")
     # a reminder pinned from a post: one tap back to that message in the chat
-    for r in [r for r in mine[:REMINDERS_SHOWN] if r.get("message_id")][:VIEW_POST_BUTTONS]:
-        rows.append([{"text": f"🔗 View Original Post · {chat._short(r['note'], 24)}",
+    for r in [r for r in shown if r.get("message_id")][:VIEW_POST_BUTTONS]:
+        first = next((x.strip() for x in r["note"].splitlines() if x.strip()), "Reminder")
+        rows.append([{"text": f"🔗 View Original Post · {chat._short(first, 24)}",
                       "callback_data": f"rem:view:{r['id']}"}])
     last = chat.load_last_run().get("finished")
     if last:
