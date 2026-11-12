@@ -272,11 +272,21 @@ def test_portal_timetable():
             retry = later + classtable.RETRY_AFTER
             assert not classtable.update("t", "c", now=retry) and len(calls) == 5
             assert len(reports) == 1 and reports[0][0] == "classtable:portal" and "/check" in reports[0][2], reports
+            # an error nobody expected (the browser missing, a page that changed) is not retried every
+            # 10 minutes — each try is a sign-in to the portal — but after RETRY_AFTER like the others
+            answers["home"] = [RuntimeError("Executable doesn't exist at chrome.exe")]
+            odd = retry + classtable.RETRY_AFTER
+            try:
+                classtable.update("t", "c", now=odd)
+                raise AssertionError("the bot's loop reports it (failsafe.bug)")
+            except RuntimeError:
+                pass
+            assert len(calls) == 6 and not classtable.update("t", "c", now=odd + classtable.TICK) and len(calls) == 6
             answers["home"] = [{"home": portal.Result(section="home", found=True, data={"timetable": []})}]
-            assert not classtable.update("t", "c", now=retry + classtable.RETRY_AFTER) and len(calls) == 6
+            assert not classtable.update("t", "c", now=odd + classtable.RETRY_AFTER) and len(calls) == 7
             assert len(classtable.load()["slots"]) == 6, "a home page without a timetable keeps the old one"
             answers["home"] = [{"home": portal.Result(section="home", found=True, data={"timetable": rows})}]
-            assert classtable.update("t", "c", now=retry + 2 * classtable.RETRY_AFTER) and classtable.known(retry + 2 * classtable.RETRY_AFTER)
+            assert classtable.update("t", "c", now=odd + 2 * classtable.RETRY_AFTER) and classtable.known(odd + 2 * classtable.RETRY_AFTER)
 
             # /check reads it again, behind the portal lock, and says so only when something changed
             from uninotifier.bot import checks, portal_flow

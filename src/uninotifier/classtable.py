@@ -131,6 +131,9 @@ def refresh(now: float | None = None) -> bool:
     now = time.time() if now is None else now
     cache = load()
     cache["tried"] = now
+    # the attempt is on file before the portal is opened: an error nobody expected (raised to the
+    # bot's loop, which reports it) must not make the next tick sign in again 10 minutes later
+    fileio.write_json_atomic(CACHE_FILE, cache)
     try:
         slots, unclear = read()
     except maintenance.PortalUnavailable as e:
