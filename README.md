@@ -300,7 +300,7 @@ Finals Watch. The portal is only contacted when you ask (or while Finals Watch i
 
 **Health monitoring** — a free [healthchecks.io](https://healthchecks.io) account tells you when your
 PC is off or the program stopped. Create two checks and put their ping URLs in `HEALTHCHECK_URL`
-(period 15 min, grace 1 h 45 min) and `BOT_HEALTHCHECK_URL` (period 5 min, grace 15 min).
+(period 15 min, grace 45 min) and `BOT_HEALTHCHECK_URL` (period 5 min, grace 15 min).
 
 **Off-PC backup of your state** — keep a copy of your tracker, GPA plan and reminders in a
 **private** GitHub repository of its own (create an empty private repo first):

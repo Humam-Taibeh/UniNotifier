@@ -627,8 +627,8 @@ hear about what the bot itself can't tell you: the PC off or asleep, the
 scheduled task stopped, a hung run, or the session failing for hours.
 
 1. Create a check there. Suggested settings: **Period 15 minutes** (the
-   schedule) and **Grace time 1 hour 45 minutes**, so an alert comes after about
-   2 hours without a successful check. Add Telegram / e-mail as its integration.
+   schedule) and **Grace time 45 minutes**, so an alert comes after about
+   an hour without a successful check. Add Telegram / e-mail as its integration.
 2. Put its ping URL in `.env` as `HEALTHCHECK_URL=https://hc-ping.com/<uuid>`
    (leave it unset to disable). Treat the URL as a secret; it is never logged.
 
