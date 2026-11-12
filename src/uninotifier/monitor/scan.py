@@ -301,7 +301,10 @@ def refresh_teachers(browser: Browser, courses: dict, saved: dict) -> None:
     routine use of the browser). saved['teachers'] =
     {'fetched': ts, 'by_course': {course_id: [...]}}."""
     teachers = saved["teachers"]
-    if time.time() - teachers.get("fetched", 0) < config.TEACHERS_REFRESH_SECONDS and teachers.get("by_course"):
+    # a refresh that read nothing is tried again sooner — but not on every check: each try starts
+    # the browser and can wait up to 90 s per course
+    wait = config.TEACHERS_REFRESH_SECONDS if teachers.get("by_course") else config.TEACHERS_RETRY_SECONDS
+    if "fetched" in teachers and time.time() - teachers["fetched"] < wait:
         return
     by_course = dict(teachers.get("by_course", {}))
     for course_id in courses:

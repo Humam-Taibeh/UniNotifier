@@ -718,3 +718,38 @@ def test_the_moodle_probe():
             assert not probe.tick(q, t + 100 * probe.PROBE_SECONDS) and q.http is None
         finally:
             probe.HttpContext.from_state_file, moodle.ajax_batch, probe.launch_check, probe.MONITOR_LOCK = keep
+
+
+def test_unreadable_instructor_pages_do_not_start_the_browser_every_check():
+    """The instructors' names are read with the browser once a week. When no course's participants
+    page could be read, nothing was kept, so EVERY check started the browser and waited up to 90 s
+    per course again. A failed refresh now waits TEACHERS_RETRY_SECONDS before it is tried again."""
+    from uninotifier.monitor import config, scan
+
+    class NoBrowser:
+        @property
+        def page(self):
+            raise AssertionError("the browser was started")
+
+    class Browser:
+        page = object()
+
+    calls = []
+    keep = moodle.fetch_teachers
+    try:
+        moodle.fetch_teachers = lambda page, course_id: calls.append(course_id)    # None: unreadable
+        saved = {"teachers": {}}
+        scan.refresh_teachers(Browser(), {"1": {}, "2": {}}, saved)
+        assert calls == ["1", "2"] and saved["teachers"]["by_course"] == {}
+        scan.refresh_teachers(NoBrowser(), {"1": {}, "2": {}}, saved)          # the next check: left alone
+        saved["teachers"]["fetched"] -= config.TEACHERS_RETRY_SECONDS + 1
+        scan.refresh_teachers(Browser(), {"1": {}, "2": {}}, saved)            # ... until the retry is due
+        assert calls == ["1", "2", "1", "2"], calls
+        moodle.fetch_teachers = lambda page, course_id: [{"name": "Dr. Invented", "role": "Teacher", "groups": ""}]
+        saved["teachers"]["fetched"] -= config.TEACHERS_RETRY_SECONDS + 1
+        scan.refresh_teachers(Browser(), {"1": {}}, saved)
+        assert saved["teachers"]["by_course"]["1"][0]["name"] == "Dr. Invented"
+        saved["teachers"]["fetched"] -= config.TEACHERS_RETRY_SECONDS + 1
+        scan.refresh_teachers(NoBrowser(), {"1": {}}, saved)                   # a good read waits a week
+    finally:
+        moodle.fetch_teachers = keep

@@ -94,6 +94,7 @@ MANUAL_RUN = os.getenv("UNINOTIFIER_MANUAL") == "1"
 
 
 TEACHERS_REFRESH_SECONDS = 7 * 86400
+TEACHERS_RETRY_SECONDS = 6 * 3600            # after a refresh that could not read any course's page
 
 
 # A lecturer re-uploading a file is rare, but every run used to ask the portal about EVERY archived
