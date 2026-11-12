@@ -753,3 +753,41 @@ def test_unreadable_instructor_pages_do_not_start_the_browser_every_check():
         scan.refresh_teachers(NoBrowser(), {"1": {}}, saved)                   # a good read waits a week
     finally:
         moodle.fetch_teachers = keep
+
+
+def test_mark_as_done_from_the_chat_uses_the_shared_http_layer():
+    """The ✅ Mark as Done button used a requests session of its own, without the retries every other
+    Moodle request has (a dropped connection failed the press). It now goes through HttpContext, and a
+    missing or expired session says "expired" rather than "the portal didn't accept"."""
+    posted = []
+
+    class Response:
+        def json(self):
+            return [{"error": False, "data": {"status": True}}]
+
+    class Http:
+        def __init__(self, key):
+            self.key, self.request = key, self
+
+        def sesskey(self):
+            return self.key
+
+        def post(self, url, data=None, headers=None, timeout=30000):
+            posted.append((url, json.loads(data)))
+            return Response()
+
+    keep = moodle.HttpContext.from_state_file
+    try:
+        moodle.HttpContext.from_state_file = classmethod(lambda cls, path: Http("K1"))
+        assert moodle.http_set_completion("57", True) is True
+        assert "sesskey=K1" in posted[0][0] and posted[0][1][0]["args"] == {"cmid": 57, "completed": True}
+        for http in (None, Http(None)):
+            moodle.HttpContext.from_state_file = classmethod(lambda cls, path, http=http: http)
+            try:
+                moodle.http_set_completion("57", False)
+                raise AssertionError("no session must read as expired")
+            except moodle.SessionExpiredError:
+                pass
+    finally:
+        moodle.HttpContext.from_state_file = keep
+    assert not hasattr(moodle, "http_session"), "one HTTP layer"

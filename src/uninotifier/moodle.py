@@ -23,11 +23,11 @@ import json
 import logging
 import re
 
-import requests
 from lxml import html as lxml_html
 from playwright.sync_api import TimeoutError as PWTimeoutError
 
 from uninotifier import richtext
+from uninotifier.httpctx import HttpContext
 from uninotifier.zuj_auth import BASE_URL
 from uninotifier import paths
 
@@ -741,28 +741,15 @@ def set_completion(context, sesskey: str, cmid: str, done: bool) -> bool:
     return ok
 
 
-def http_session() -> requests.Session:
-    """A plain-HTTP session carrying the saved browser cookies — for quick
-    portal calls from the Telegram bot, which has no browser."""
-    session = requests.Session()
-    state = json.loads(SESSION_FILE.read_text(encoding="utf-8"))
-    for c in state.get("cookies", []):
-        session.cookies.set(c["name"], c["value"], domain=c.get("domain"), path=c.get("path", "/"))
-    return session
-
-
 def http_set_completion(cmid: str, done: bool) -> bool:
-    """set_completion without a browser. Raises SessionExpiredError when the
-    saved session no longer logs in."""
-    session = http_session()
-    resp = session.get(f"{BASE_URL}/my/", timeout=30)
-    match = re.search(r'"sesskey":"([a-zA-Z0-9]+)"', resp.text)
-    if "/login/" in resp.url or not match:
+    """set_completion without a browser (the bot's ✅ Mark as Done), over the same HTTP layer as
+    every other Moodle request — with its retries. Raises SessionExpiredError when there is no
+    saved session, or it no longer signs in."""
+    http = HttpContext.from_state_file(SESSION_FILE)
+    sesskey = http.sesskey() if http else None
+    if not sesskey:
         raise SessionExpiredError("the saved portal session has expired")
-    payload = [{"index": 0, "methodname": COMPLETION_METHOD,
-                "args": {"cmid": int(cmid), "completed": done}}]
-    result = session.post(f"{AJAX_URL}?sesskey={match.group(1)}&info={COMPLETION_METHOD}",
-                          json=payload, timeout=30).json()[0]
+    result = ajax_call(http, sesskey, COMPLETION_METHOD, {"cmid": int(cmid), "completed": done})
     return not result.get("error") and (result.get("data") or {}).get("status") is True
 
 
