@@ -791,3 +791,160 @@ def test_mark_as_done_from_the_chat_uses_the_shared_http_layer():
     finally:
         moodle.HttpContext.from_state_file = keep
     assert not hasattr(moodle, "http_session"), "one HTTP layer"
+
+
+def test_one_check_reads_a_whole_course_from_moodle():
+    """run_scan() from start to finish against a made-up Moodle answering over plain HTTP: the course
+    list, the deadlines, the course tree, the course page's texts, a forum, an assignment's status
+    and a file. The first check is the silent baseline (no browser, the file saved); the next one
+    finds an edited text and a new forum post — and only then starts the browser, for their pictures."""
+    from uninotifier import archive, schedule
+    from uninotifier.monitor import config, items, scan, state
+
+    base, due = "https://elearning.zuj.edu.jo", time.time() + 3 * 86400
+    welcome = {"text": "<p>Welcome to the course</p>"}
+    posts = [{"id": 9000, "discussionid": 900, "subject": "Course outline", "author": {"fullname": "Dr. Invented"},
+              "timecreated": 1_800_000_000, "message": "<p>Outline</p>", "hasparent": False,
+              "urls": {"view": f"{base}/mod/forum/discuss.php?d=900#p9000"}, "attachments": []}]
+    cms = [{"id": 501, "name": ".", "module": "label", "sectionid": 10, "url": ""},
+           {"id": 502, "name": "Announcements", "module": "forum", "sectionid": 10, "url": f"{base}/mod/forum/view.php?id=502"},
+           {"id": 503, "name": "Homework 1", "module": "assign", "sectionid": 10, "url": f"{base}/mod/assign/view.php?id=503"},
+           {"id": 504, "name": "Lecture 1", "module": "resource", "sectionid": 10, "url": f"{base}/mod/resource/view.php?id=504"}]
+    pdf = {"content-type": "application/pdf", "content-disposition": 'attachment; filename="Lecture 1.pdf"',
+           "last-modified": "Wed, 01 Jan 2025 00:00:00 GMT", "content-length": "16"}
+
+    class Response:
+        def __init__(self, url, body="", status=200, headers=None, data=None):
+            self.url, self.status, self.ok = url, status, 200 <= status < 300
+            self.headers = {"content-type": "text/html"} if headers is None else headers
+            self._body, self._data = body, data
+
+        def text(self):
+            return self._body if isinstance(self._body, str) else self._body.decode()
+
+        def body(self):
+            return self._body if isinstance(self._body, bytes) else self._body.encode()
+
+        def json(self):
+            return self._data
+
+    class Moodle:
+        """Moodle as the check sees it: AJAX calls by method name, pages by address."""
+        def __init__(self):
+            self.request, self.pages, self.methods = self, [], []
+
+        def sesskey(self):
+            return "KEY"
+
+        def save_cookies(self, path):
+            pass
+
+        def post(self, url, data=None, headers=None, timeout=30000):
+            answers = []
+            for call in json.loads(data):
+                method, args = call["methodname"], call["args"]
+                self.methods.append(method)
+                if method == "core_course_get_enrolled_courses_by_timeline_classification":
+                    answers.append({"error": False, "data": {"courses": [
+                        {"id": 8801, "fullname": "20261-Big Data-AllSec-3-", "viewurl": f"{base}/course/view.php?id=8801"}]}})
+                elif method == "core_calendar_get_action_events_by_timesort":
+                    answers.append({"error": False, "data": {"events": [
+                        {"modulename": "assign", "eventtype": "due", "timesort": due, "name": "Homework 1 is due",
+                         "action": {"url": f"{base}/mod/assign/view.php?id=503"},
+                         "course": {"fullname": "20261-Big Data-AllSec-3-"}}]}})
+                elif method == "core_courseformat_get_state":
+                    answers.append({"error": False, "data": json.dumps({
+                        "section": [{"id": 10, "title": "Week 1", "visible": True}], "cm": cms})})
+                elif method == "mod_forum_get_discussion_posts":
+                    answers.append({"error": False, "data": {
+                        "posts": [p for p in posts if p["discussionid"] == args["discussionid"]]}})
+                else:
+                    raise AssertionError(f"unexpected AJAX call {method}")
+            return Response(url, data=answers)
+
+        def get(self, url, timeout=30000, max_redirects=None):
+            self.pages.append(url.replace(base, ""))
+            if "/course/view.php?id=8801" in url:
+                return Response(url, '<ul><li data-for="section" data-id="10"><div data-for="sectioninfo"></div><ul>'
+                                     '<li data-for="cmitem" data-id="501"><div class="activity-altcontent">'
+                                     + welcome["text"] + "</div></li></ul></li></ul>")
+            if "/mod/forum/view.php" in url:
+                return Response(url, f'<a href="{base}/mod/forum/discuss.php?d=900">Course outline</a>')
+            if "/mod/assign/view.php" in url:
+                return Response(url, '<table class="submissionstatustable"><tr><td>Submission status</td>'
+                                     '<td>No attempt</td></tr></table>'
+                                     '<form><input name="action" value="editsubmission"></form>')
+            if "/mod/resource/view.php" in url:
+                return Response(f"{base}/pluginfile.php/1/mod_resource/content/1/Lecture%201.pdf",
+                                b"%PDF-1.4 lecture", headers=pdf)
+            raise AssertionError(f"unexpected page {url}")
+
+        def head(self, url, timeout=30000, max_redirects=None):
+            return Response(url, b"", headers=pdf)
+
+    started, pictured = [], []
+
+    class Browser:
+        def __init__(self):
+            self.started = False
+
+        @property
+        def page(self):
+            self.started = True
+            started.append(1)
+            return "page"
+
+        def save_state(self):
+            pass
+
+        def close(self):
+            pass
+
+    site = Moodle()
+    keep = (scan.HttpContext.from_state_file, scan.Browser, items.capture_screens, config.FILE_PROBE_SECONDS,
+            archive.ARCHIVE_ROOT, archive._ARCHIVE_ROOT_RESOLVED)
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            scan.HttpContext.from_state_file = classmethod(lambda cls, path: site)
+            scan.Browser = Browser
+            items.capture_screens = lambda page, url, selector: (pictured.append((url, selector)) or [b"PNG"], False)
+            config.FILE_PROBE_SECONDS = config.SCAN_SLOT_SECONDS          # every saved file is asked about each check
+            archive.ARCHIVE_ROOT, archive._ARCHIVE_ROOT_RESOLVED = Path(tmp), Path(tmp).resolve()
+            saved = {key: {} for key in state.STATE_KEYS}
+            saved["deep"] = {"at": time.time()}                            # the browser-only checks are not due
+            saved["teachers"] = {"fetched": time.time(), "by_course": {"8801": []}}
+
+            first = scan.run_scan(saved, notify_new=False)
+            assert first["browser_used"] is False and started == [], "a routine check needs no browser"
+            assert set(first["content"]) == {"8801-501", "8801-502", "8801-503", "8801-504"}, set(first["content"])
+            label = first["content"]["8801-501"]
+            assert label["name"] == "Welcome to the course" and label["text"] == "Welcome to the course" and label["hash"]
+            assert first["deadlines"]["assign-503"]["name"] == "Homework 1"
+            assert first["submissions"] == {"assign-503": False}
+            assert first["posts"] == {} and [p["id"] for p in first["forum_posts"]["8801-502"]] == ["9000"]
+            lecture = first["artifacts"]["8801-504"]
+            assert lecture["kind"] == "file" and Path(lecture["path"]).read_bytes() == b"%PDF-1.4 lecture"
+            assert Path(lecture["path"]).parent.name == archive.LECTURES and set(first["artifacts"]) == {"8801-504"}
+
+            # what run.run() keeps after a good first check
+            saved.update(courses=first["courses"], content={k: state.public(v) for k, v in first["content"].items()},
+                         files={"8801-504": {k: lecture[k] for k in ("path", "size", "sha256", "modified")}},
+                         forums={"8801-502": ["9000"]}, deadlines=first["deadlines"])
+            welcome["text"] = "<p>Welcome to the course</p><p>The quiz moved to Sunday</p>"
+            posts.append({**posts[0], "id": 9001, "subject": "Quiz on Sunday", "timecreated": 1_800_000_500,
+                          "urls": {"view": f"{base}/mod/forum/discuss.php?d=900#p9001"}})
+            site.pages.clear()
+
+            second = scan.run_scan(saved, notify_new=True)
+            assert list(second["edits"]) == ["8801-501"], second["edits"]
+            assert second["edits"]["8801-501"]["old_text"] == "Welcome to the course"
+            assert [p["id"] for p in second["posts"]["8801-502"]] == ["9001"], second["posts"]
+            assert second["browser_used"] is True and started, "pictures need the browser"
+            assert (f"{base}/course/view.php?id=8801", "#module-501") in pictured, pictured
+            assert any(selector == "#p9001" for _, selector in pictured), "the new post is pictured as it looks on Moodle"
+            assert second["artifacts"] == {} and second["updates"] == {}, "the saved file is unchanged"
+            assert not any("/mod/resource/view.php" in page for page in site.pages), "and is not downloaded again"
+        finally:
+            (scan.HttpContext.from_state_file, scan.Browser, items.capture_screens, config.FILE_PROBE_SECONDS,
+             archive.ARCHIVE_ROOT, archive._ARCHIVE_ROOT_RESOLVED) = keep
+            schedule.load_schedule()
