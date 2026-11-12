@@ -979,7 +979,7 @@ in `data/daily_sent/` makes sure it goes out once). A day the PC was off is not 
 * At the exact minute the bot sends `⏰ Reminder` with **⏰ Snooze 1 h** and **✅ Done**
   (and 🌐 Open on Moodle when it came from a post). A reminder pinned from a message
   remembers that message: it is delivered as a **reply quoting it**, and in Upcoming Tasks
-  **🔗 View Original Post** sends a reply to it — tap the quote and Telegram jumps straight
+  **🔗 View Original Post (n)** — n is the reminder's number in the list, renumbered as the list changes — sends a reply to it — tap the quote and Telegram jumps straight
   to the announcement and its screenshot (private chats have no message links). If that
   message was deleted, the Moodle link is offered instead. That reply is the menu itself: at the bottom of
   the chat, replacing the previous menu, with ⏳ Tasks & Reminders and 🔙 Main Menu under it. The scheduled monitor sends due reminders

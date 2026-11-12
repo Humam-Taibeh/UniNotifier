@@ -602,7 +602,8 @@ def test_tasks_and_reminders_planner():
             views_btns = [r[0] for r in rows if r[0].get("callback_data", "").startswith("rem:view:")]
             pinned = [r for r in reminders.pending() if r.get("message_id")]
             assert len(views_btns) == len(pinned) == 2, "one per pinned reminder; the typed one has none"
-            assert views_btns[0]["text"].startswith("🔗 View Original Post · Install Hadoop")
+            numbered = [f"🔗 View Original Post ({n})" for n, r in enumerate(reminders.pending(), 1) if r.get("message_id")]
+            assert [b["text"] for b in views_btns] == numbered and len(numbered) == 2, "numbered as the list numbers them"
             assert [b["callback_data"] for b in rows[3]] == ["rem:new", "rem:list"]
 
             # 🔗 View Original Post: a reply quoting the pinned message (tap the quote to jump)
@@ -783,7 +784,7 @@ def test_a_full_reminders_screen_fits_in_one_telegram_message():
         assert 1 <= shown < 10 and f"… and {10 - shown} more" in text, (shown, text[-300:])
         assert text.count("Line 5 of what the instructor wrote, in full.") == shown, "each shown reminder is whole"
         labels = [b["text"] for row in rows for b in row if b.get("callback_data", "").startswith("rem:view:")]
-        assert labels and all("Line 1" not in label and "Announcement title" in label for label in labels), labels
+        assert labels == [f"🔗 View Original Post ({n})" for n in range(1, len(labels) + 1)], labels
         reminders.pending = lambda now=None: items[:2]
         text, rows = views.view_tasks()
         assert text.count("📝") == 2 and "more" not in text
@@ -880,3 +881,43 @@ def test_reminder_buttons_and_edits_survive_a_reminder_that_is_gone():
             (reminders.STATE_FILE, reminders.SOURCES_FILE, reminders.CLAIM_DIR, bot.send_view, bot.edit_view, bot.api) = keep
             bot._reminder_draft.clear()
             bot._reminder_wait = None
+
+
+def test_view_original_post_buttons_carry_the_number_the_list_gives():
+    """Each 🔗 View Original Post button says which reminder it is for — the number in the list — and
+    the numbers follow the list: finish the first and the rest move up, the buttons with them. A
+    reminder typed by hand has no original post, so it has no button but still takes its number. A
+    button opens the reminder by its id, so a screen that is a little old never opens another one."""
+    from uninotifier import reminders, tasks
+    from uninotifier.bot import chat, views
+
+    def item(n, pinned):
+        return {"id": n, "note": f"Reminder {n}", "course": None, "due": 1900000000 + n,
+                "message_id": 100 + n if pinned else None}
+
+    items = [item(1, True), item(2, False), item(3, True), item(4, True)]
+    keep = (reminders.pending, tasks.open_tasks, chat.load_state)
+    try:
+        reminders.pending = lambda now=None: list(items)
+        tasks.open_tasks = lambda state, now: []
+        chat.load_state = lambda: {}
+
+        def buttons():
+            text, rows = views.view_tasks()
+            return [(b["text"], b["callback_data"]) for row in rows for b in row if b.get("callback_data", "").startswith("rem:view:")], text
+
+        found, text = buttons()
+        assert found == [("🔗 View Original Post (1)", "rem:view:1"), ("🔗 View Original Post (3)", "rem:view:3"),
+                         ("🔗 View Original Post (4)", "rem:view:4")], found
+        assert "3. 📝" in text and "2. 📝" in text
+        del items[0]                                           # the first one is done: the rest move up
+        found, text = buttons()
+        assert found == [("🔗 View Original Post (2)", "rem:view:3"), ("🔗 View Original Post (3)", "rem:view:4")], found
+        assert "Reminder 3" in text.split("2. 📝")[1].split("3. 📝")[0], "the number on the button is the number in the list"
+        del items[1]
+        found, _ = buttons()
+        assert found == [("🔗 View Original Post (2)", "rem:view:4")], found
+        items.clear()
+        assert buttons()[0] == []
+    finally:
+        reminders.pending, tasks.open_tasks, chat.load_state = keep

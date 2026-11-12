@@ -139,11 +139,12 @@ def view_tasks() -> tuple[str, list]:
         shown.append(r)
     if len(mine) > len(shown):
         lines.append(f"… and {len(mine) - len(shown)} more — 🗑️ Manage Reminders lists them all")
-    # a reminder pinned from a post: one tap back to that message in the chat
-    for r in [r for r in shown if r.get("message_id")][:VIEW_POST_BUTTONS]:
-        first = next((x.strip() for x in r["note"].splitlines() if x.strip()), "Reminder")
-        rows.append([{"text": f"🔗 View Original Post · {chat._short(first, 24)}",
-                      "callback_data": f"rem:view:{r['id']}"}])
+    # a reminder pinned from a post: one tap back to that message in the chat. The button carries the
+    # number the list gives the reminder (so it is renumbered with the list), and the reminder's own id
+    # (so a screen that is a little old still opens the right one).
+    pinned = [(n, r) for n, r in enumerate(shown, 1) if r.get("message_id")]
+    for n, r in pinned[:VIEW_POST_BUTTONS]:
+        rows.append([{"text": f"🔗 View Original Post ({n})", "callback_data": f"rem:view:{r['id']}"}])
     last = chat.load_last_run().get("finished")
     if last:
         lines += ["", f"🕒 *Last Checked:* {notifier.audit_timestamp(last)}"]
