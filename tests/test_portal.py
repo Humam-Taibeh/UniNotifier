@@ -748,6 +748,22 @@ def test_portal():
                     os.environ[k] = v
     text = bot.portal_setup_text()
     assert "PORTAL_USERNAME" in text and "PORTAL_PASSWORD" in text and "never send" in text
+    # it says when the portal is really contacted: Finals Watch and automatic check-in read it too
+    assert "Finals Watch" in text and "check-in" in text and "only contacted when you send" not in text, text
+
+    # the code request reads as a sentence, for a guest too
+    from uninotifier.bot import chat as chat_part, guest_flow, portal_flow
+    sent, keep = [], (chat_part.send_view, guest_flow.guest_send, portal_flow.PORTAL_WAIT_FOR_CODE)
+    chat_part.send_view = lambda text, rows: sent.append(text)
+    guest_flow.guest_send = lambda text, rows=None: sent.append(text)
+    portal_flow.PORTAL_WAIT_FOR_CODE = 0.01
+    try:
+        portal_flow.ask_portal_code(0, False)
+        portal_flow.ask_portal_code(0, False, for_guest=True)
+    finally:
+        chat_part.send_view, guest_flow.guest_send, portal_flow.PORTAL_WAIT_FOR_CODE = keep
+    assert "sent you a verification code. Reply here with it." in sent[0], sent[0]
+    assert "sent the student a verification code. Ask them for it and reply here with it." in sent[1], sent[1]
 
     # the portal's verification code is relayed through the chat
     replies = []

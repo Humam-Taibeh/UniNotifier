@@ -53,8 +53,9 @@ def portal_setup_text() -> str:
         "Add these two lines to the `.env` file next to `bot.py` (never send them in chat):", "",
         f"`{portal.ENV_USERNAME}=your portal username`",
         f"`{portal.ENV_PASSWORD}=your portal password`", "",
-        "No restart is needed — `.env` is read on every request. The portal is only contacted "
-        "when you send /grades, /transcript or /balance."])
+        "No restart is needed — `.env` is read on every request. The portal is contacted when you ask "
+        "(Transcript, Balance, Finals Watch's check), and by itself only for what you switch on: "
+        "Finals Watch, and automatic check-in's look at your timetable."])
 
 
 def handle_portal_code(text: str) -> bool:
@@ -74,11 +75,12 @@ def ask_portal_code(attempt: int, rejected: bool, for_guest: bool = False) -> st
     global _portal_code
     answers: queue.Queue = queue.Queue()
     _portal_code = answers
-    whom = "the student a verification code — ask them for it and" if for_guest else "you a verification code."
+    whom = ("the student a verification code. Ask them for it and reply here with it." if for_guest
+            else "you a verification code. Reply here with it.")
     try:
         text = (("❌ *The portal didn't accept that code.*\n\n" if rejected else "") +
-                f"🔐 *Portal Verification*\n\nThe ZUJ registration portal sent {whom} "
-                "Reply here with it.\n⏱️ Waiting up to 5 minutes.")
+                f"🔐 *Portal Verification*\n\nThe ZUJ registration portal sent {whom}"
+                "\n⏱️ Waiting up to 5 minutes.")
         (guest_flow.guest_send(text) if for_guest else chat.send_view(text, []))
         return answers.get(timeout=PORTAL_WAIT_FOR_CODE)
     except queue.Empty:
