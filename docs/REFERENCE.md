@@ -981,7 +981,8 @@ in `data/daily_sent/` makes sure it goes out once). A day the PC was off is not 
   remembers that message: it is delivered as a **reply quoting it**, and in Upcoming Tasks
   **🔗 View Original Post** sends a reply to it — tap the quote and Telegram jumps straight
   to the announcement and its screenshot (private chats have no message links). If that
-  message was deleted, the Moodle link is offered instead. The scheduled monitor sends due reminders
+  message was deleted, the Moodle link is offered instead. That reply is the menu itself: at the bottom of
+  the chat, replacing the previous menu, with ⏳ Tasks & Reminders and 🔙 Main Menu under it. The scheduled monitor sends due reminders
   too when the bot is down; a claim file makes sure each goes out once.
 * ✏️ Manage Reminders: tap a reminder to read it whole, then **✏️ Edit Text**, **🗓️ Change Date**, **🕐 Change Time**
   or **🗑️ Delete** (which asks first — a tap never deletes). State: `reminders.json` (bot), `reminder_sources.json`

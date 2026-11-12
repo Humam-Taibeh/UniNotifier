@@ -201,9 +201,8 @@ def show_original(reminder_id: int, answer) -> None:
         answer("That reminder has no original post.")
         return
     text = f"📌 *Original post* ⬆️ — tap the quote to jump to it.\n📝 {escape_md(item['note'])}"
-    sent = chat.api("sendMessage", chat_id=chat.CHAT_ID, text=text, parse_mode="Markdown",
-               reply_parameters={"message_id": item["message_id"]},
-               reply_markup={"inline_keyboard": [[{"text": "⏳ Tasks & Reminders", "callback_data": "tasks"}]]})
+    way_back = [[{"text": "⏳ Tasks & Reminders", "callback_data": "tasks"}], chat.BACK_ROW]
+    sent = chat.send_reply_view(text, way_back, item["message_id"])       # the bottom of the chat, with its way back
     if sent:
         answer()
         return
@@ -211,7 +210,7 @@ def show_original(reminder_id: int, answer) -> None:
     answer("⚠️ That message is no longer in the chat.")
     rows = [[{"text": "🌐 Open on Moodle", "url": item["url"]}]] if item.get("url") else []
     chat.send_view(f"⚠️ The original message was deleted from the chat.\n📝 {escape_md(item['note'])}",
-              rows + [[{"text": "⏳ Tasks & Reminders", "callback_data": "tasks"}]])
+              rows + [[{"text": "⏳ Tasks & Reminders", "callback_data": "tasks"}], chat.BACK_ROW])
 
 
 def _strip_actions(cb: dict) -> None:

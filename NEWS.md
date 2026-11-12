@@ -5,6 +5,7 @@ does not have yet when it tells its owner that a new version is ready (newest fi
 `## YYYY-MM-DD — Title`, then the text). The full list of changes is in [CHANGELOG.md](CHANGELOG.md).
 
 ## 2026-11-12 — Steadier checks
+- The buttons are always at the bottom of the chat, also after 🔗 View Original Post, with 🔙 Main Menu under it.
 - Reminders can be changed: open one in Manage Reminders to edit its text, date or time — deleting asks first.
 - You can type any date for a reminder (like `26/11`); the buttons showed only the next week.
 - Your reminders are listed in full, with everything you saved in them — not just the first line.

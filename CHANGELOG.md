@@ -7,6 +7,8 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- 🔗 View Original Post no longer leaves the menu above its reply: the reply is the bottom screen, takes the
+  previous menu out and has 🔙 Main Menu under it. A test now fails when a screen is sent around the menu.
 - Upcoming Tasks & Reminders shows each reminder whole: only its first line was listed, so a note
   of several lines (a pasted announcement with its date, time and place) looked cut off. If ten long
   reminders would not fit in one Telegram message, whole reminders are left off the end and the

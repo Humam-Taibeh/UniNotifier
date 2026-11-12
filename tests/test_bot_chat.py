@@ -782,3 +782,70 @@ def test_a_manual_check_reports_what_it_found():
     finally:
         (chat_part.send_view, chat_part.edit_view, chat_part.load_last_run, checks.subprocess.run,
          checks._read_timetable, checks.threading.Thread, checks.failsafe.bug) = keep
+
+
+def test_a_reply_that_quotes_a_message_is_the_bottom_screen_with_its_way_back():
+    """🔗 View Original Post answers with a reply quoting the message. It is not left under an older
+    menu: it is the menu itself — sent at the bottom, the previous menu taken out, a second one
+    replacing the first — and it carries Tasks & Reminders and 🔙 Main Menu. Pressing a button on it
+    opens the next screen below instead of editing it (an edit would keep the quote on top of the
+    new screen). A quoted message that is gone changes nothing."""
+    from uninotifier import reminders
+    from uninotifier.bot import reminder_flow
+    bot = _package("uninotifier.bot")
+    log_, ids, fail = [], iter(range(100, 10 ** 6)), {"send": False}
+
+    def fake(method, **data):
+        log_.append((method, data))
+        if method == "sendMessage":
+            return None if fail["send"] else {"message_id": next(ids)}
+        return True
+
+    keep = (bot.api, reminders.get)
+    bot.api = fake
+    reminders.get = lambda reminder_id: {"id": reminder_id, "note": "Midterm", "message_id": 5}
+    try:
+        bot.reset_menu()
+        menu = bot.send_view("Tasks", [[{"text": "x", "callback_data": "x"}]])["message_id"]
+        log_.clear()
+        reminder_flow.show_original(1, lambda text=None: None)
+        sends = [d for m, d in log_ if m == "sendMessage"]
+        assert sends[0]["reply_parameters"] == {"message_id": 5}, "it quotes the original post"
+        rows = sends[0]["reply_markup"]["inline_keyboard"]
+        assert rows[-1] == bot.BACK_ROW and rows[0][0]["callback_data"] == "tasks", rows
+        first = bot.current_menu_id()
+        assert first != menu and ("deleteMessage", {"chat_id": bot.CHAT_ID, "message_id": menu}) in log_, "the old menu is gone"
+        reminder_flow.show_original(1, lambda text=None: None)
+        assert bot.current_menu_id() not in (menu, first), "a second reply replaces the first"
+        assert any(m == "deleteMessage" and d["message_id"] == first for m, d in log_)
+
+        reply = {"message_id": bot.current_menu_id(), "reply_to_message": {"message_id": 5}}
+        assert bot.is_file_message(reply) and not bot.is_file_message({"message_id": 1, "text": "Tasks"})
+
+        before = bot.current_menu_id()
+        fail["send"] = True
+        log_.clear()
+        reminder_flow.show_original(1, lambda text=None: None)
+        assert bot.current_menu_id() == before and not [1 for m, _ in log_ if m == "deleteMessage"], "a gone message changes nothing"
+    finally:
+        bot.api, reminders.get = keep
+        bot.reset_menu()
+
+
+def test_no_screen_is_sent_around_the_menu():
+    """The chat keeps one menu at the bottom (chat.send_view / edit_view / send_reply_view). A flow that
+    sends its own message with buttons straight to Telegram would leave the real menu above it —
+    the bug a stacked 'Original post' reply showed. Only chat.py (the menu itself) and the guest
+    session (which removes its own messages on Sign Out) may do it."""
+    import re
+    root = Path(__file__).resolve().parent.parent / "src" / "uninotifier" / "bot"
+    offenders = []
+    for path in sorted(root.glob("*.py")):
+        if path.name in ("chat.py", "guest_flow.py"):
+            continue
+        source = path.read_text(encoding="utf-8")
+        for found in re.finditer(r'api\(\s*"sendMessage"', source):
+            call = source[found.start(): found.start() + 600].split("\n\n")[0]
+            if "reply_markup" in call or "inline_keyboard" in call:
+                offenders.append(f"{path.name}: {source[:found.start()].count(chr(10)) + 1}")
+    assert not offenders, f"screens sent around the menu: {offenders}"

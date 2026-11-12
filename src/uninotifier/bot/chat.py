@@ -309,8 +309,10 @@ def retire(message_id: int | None) -> None:
         api("editMessageReplyMarkup", chat_id=CHAT_ID, message_id=message_id, reply_markup={"inline_keyboard": []})
 
 
-def _post_menu(text: str, rows: list, silent: bool = False) -> dict | None:
+def _post_menu(text: str, rows: list, silent: bool = False, reply_to: int | None = None) -> dict | None:
     extra = {"disable_notification": True} if silent else {}
+    if reply_to:
+        extra["reply_parameters"] = {"message_id": reply_to}
     sent = api("sendMessage", chat_id=CHAT_ID, text=text, parse_mode="Markdown",
                disable_web_page_preview=True, reply_markup={"inline_keyboard": rows}, **extra)
     if isinstance(sent, dict) and sent.get("message_id"):
@@ -333,6 +335,13 @@ def send_view(text: str, rows: list) -> dict | None:
     return _post_menu(text, rows)
 
 
+def send_reply_view(text: str, rows: list, reply_to: int) -> dict | None:
+    """A screen that quotes an earlier message (tap the quote to jump to it). It is the menu like any
+    screen: it goes to the bottom, takes the previous menu out, and carries the way back in its own
+    buttons. None when the quoted message is gone (nothing changes then)."""
+    return _post_menu(text, rows, reply_to=reply_to)
+
+
 def leave_menu() -> None:
     """An answer that carries its own way back (a transcript with its buttons) is now the bottom
     of the chat: the menu above it is taken out, not repeated under it."""
@@ -345,8 +354,10 @@ def leave_menu() -> None:
 
 
 def is_file_message(message: dict | None) -> bool:
-    """A file or picture with buttons under it (a transcript): it cannot become a screen, and it stays in the chat."""
-    return bool(message) and bool(message.get("document") or message.get("photo"))
+    """A file, a picture or a reply that quotes another message, with buttons under it (a transcript, an
+    original post): it cannot become a screen — an edit would keep its file or its quote — so the new
+    screen opens below it and it is taken out when that replaces it as the menu."""
+    return bool(message) and bool(message.get("document") or message.get("photo") or message.get("reply_to_message"))
 
 
 def edit_view(message_id: int, text: str, rows: list) -> None:
