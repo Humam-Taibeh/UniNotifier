@@ -115,19 +115,19 @@ def test_gradebook_record():
 
 
 def test_results_page_parser():
-    from uninotifier import portal
+    from uninotifier import portal_pages
 
     grids = [{"heads": ["x"], "rows": []},
              {"heads": ["رمز المقرر", "اسم المقرر", "النشاط", "الحالة", "العلامة", "ناجح؟"],
               "rows": [["0101221", "جبر خطي (1)", "نظري", "مسجلة", "70", "\u2713"],
                        ["0135220", "قواعد البيانات", "نظري", "مسجلة", "", "\u2717"],
                        ["لا يوجد نتائج للمساقات المسجلة حاليا"]]}]
-    rows = portal.parse_results(grids)
+    rows = portal_pages.parse_results(grids)
     assert rows == [
         {"code": "0101221", "name": "جبر خطي (1)", "activity": "نظري", "status": "مسجلة", "mark": 70.0, "passed": True},
         {"code": "0135220", "name": "قواعد البيانات", "activity": "نظري", "status": "مسجلة", "mark": None, "passed": False}]
-    assert portal.parse_results([{"heads": ["رمز المقرر", "العلامة"], "rows": [["لا يوجد نتائج"]]}]) == []
-    lines = portal.results_lines({"term": "الفصل الأول 2026/2027", "text": ""}, [], rows)
+    assert portal_pages.parse_results([{"heads": ["رمز المقرر", "العلامة"], "rows": [["لا يوجد نتائج"]]}]) == []
+    lines = portal_pages.results_lines({"term": "الفصل الأول 2026/2027", "text": ""}, [], rows)
     assert lines[0] == "📅 *First semester 2026/2027*" and lines[1].endswith("(نظري) · 70 ✅") and lines[2].endswith("· —")
 
 

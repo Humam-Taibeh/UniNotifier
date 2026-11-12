@@ -16,10 +16,12 @@ from pathlib import Path
 import playwright.sync_api as _playwright_api
 from uninotifier import gpa
 from uninotifier import notifier
+from uninotifier import portal_pages
 
 
 def test_portal_parsers():
     from uninotifier import portal
+    from uninotifier import portal_pages
 
     heads = ["رمز المقرر", "اسم المقرر", "الحالة", "عدد الساعات المعتمدة", "العلامة", "ناجح؟", "معادة"]
     ok, no = "✓", "✗"
@@ -37,7 +39,7 @@ def test_portal_parsers():
         {"legend": "الفصل الأول 2023/2024 20231", "heads": heads, "text": "المعدل الفصلي 70",
          "rows": [["3", "Stats", "مسجلة", "3", "60", ok, no]]},          # passed twice: counted once
     ]
-    semesters = portal.parse_transcript(raw)
+    semesters = portal_pages.parse_transcript(raw)
     assert [s["term"] for s in semesters] == [
         "First semester 2026/2027", "Second semester 2025/2026", "First semester 2024/2025",
         "Second semester 2024/2025", "First semester 2023/2024"]
@@ -45,33 +47,33 @@ def test_portal_parsers():
     assert semesters[1]["average"] == 76 and len(semesters[1]["courses"]) == 2, "the stale duplicate row is hidden"
     assert semesters[0]["courses"][0]["passed"] is None and semesters[2]["courses"][0]["passed"] is False
     assert semesters[2]["courses"][0]["repeated"] is True and semesters[3]["courses"] == []
-    assert portal.passed_hours(semesters) == 3 + 3 + 2, "88 + 74 + 95 (hours 3 + 3 + 2); a failed course adds nothing"
-    lines = "\n".join(portal.transcript_lines(semesters))
+    assert portal_pages.passed_hours(semesters) == 3 + 3 + 2, "88 + 74 + 95 (hours 3 + 3 + 2); a failed course adds nothing"
+    lines = "\n".join(portal_pages.transcript_lines(semesters))
     assert "In Progress" in lines and "✅ *88*" in lines and "🔁 *35*" in lines and "average 76 · cumulative 71.3" in lines
     assert lines.index("In Progress") < lines.index("Second semester 2025/2026"), "the semester in progress comes first"
     assert "⏳ \u2068Algebra\u2069 · 3h" in lines, "an in-progress course shows ⏳, its name isolated from its neighbours"
     assert lines.rstrip().endswith("⏳ in progress_"), "a one-line legend closes the blocks"
     assert "Second semester 2024/2025" not in lines, "an empty semester is skipped"
-    assert portal.english_term("الفصل الصيفي 2023/2024 20233") == "Summer semester 2023/2024"
+    assert portal_pages.english_term("الفصل الصيفي 2023/2024 20233") == "Summer semester 2023/2024"
 
     text = "الرصيد الكلي 1250 مدين"
     tables = [[["", "الفصل الدراسي", "الحالة", "عدد الساعات", "الرصيد"],
                ["", "الفصل الأول 2026/2027", "منتظم", "18", "د.أ1250"],
                ["", "الفصل الثاني 2025/2026", "منتظم", "12", "د.أ0"]]]
-    info = portal.parse_balance(text, tables)
+    info = portal_pages.parse_balance(text, tables)
     assert info["total"] == 1250 and info["rows"][0] == ("First semester 2026/2027", 18.0, 1250.0)
-    out = portal.balance_lines(info)
+    out = portal_pages.balance_lines(info)
     assert out[0] == "💰 *Total balance:* 1,250 JD — owed to the university (debit)", out
     assert out[1] == "• First semester 2026/2027 · 18h · 1,250 JD" and "All other semesters: 0 JD" in out[-1]
-    assert portal.parse_balance("الرصيد الكلي 40.5 دائن", [])["total"] == -40.5
-    assert "in your favour" in portal.balance_lines({"total": -40.5, "rows": []})[0]
-    assert "settled" in portal.balance_lines({"total": 0.0, "rows": []})[0]
+    assert portal_pages.parse_balance("الرصيد الكلي 40.5 دائن", [])["total"] == -40.5
+    assert "in your favour" in portal_pages.balance_lines({"total": -40.5, "rows": []})[0]
+    assert "settled" in portal_pages.balance_lines({"total": 0.0, "rows": []})[0]
 
     empty = [[["رمز المقرر", "اسم المقرر", "العلامة"], ["لا يوجد نتائج للمساقات المسجلة حاليا"]]]
-    out = portal.results_lines({"term": "الفصل الأول 2026/2027", "text": "لا يوجد نتائج"}, empty)
+    out = portal_pages.results_lines({"term": "الفصل الأول 2026/2027", "text": "لا يوجد نتائج"}, empty)
     assert out[0] == "ℹ️ No results are published yet for First semester 2026/2027."
     full = [[["رمز المقرر", "اسم المقرر", "العلامة"], ["1", "Algebra", "80"]]]
-    out = portal.results_lines({"term": "الفصل الأول 2026/2027", "text": ""}, full)
+    out = portal_pages.results_lines({"term": "الفصل الأول 2026/2027", "text": ""}, full)
     assert out[0] == "📅 *First semester 2026/2027*" and out[1] == "*Code | Course | Mark*" and out[2] == "1 | Algebra | 80"
     assert set(portal.SECTIONS) == {"grades", "transcript", "balance", "home"}
     assert all(s["path"].startswith("/faces/ui/pages/student/") for s in portal.SECTIONS.values())
@@ -656,14 +658,14 @@ def test_portal_answer_is_one_message():
         # a balance: everything in the one message
         reset()
         info = {"total": 1250.0, "rows": [("First semester 2026/2027", 18.0, 1250.0), ("Second semester 2025/2026", 12.0, 0.0)]}
-        balance = portal.Result("balance", True, b"png", [], {"balance": 1250.0}, [], portal.balance_lines(info))
+        balance = portal.Result("balance", True, b"png", [], {"balance": 1250.0}, [], portal_pages.balance_lines(info))
         bot.send_portal_result(balance)
         assert len(sent_files) == 1 and sent_msgs == [], "a balance is one message"
         assert "Total balance:* 1,250 JD" in sent_files[0][1] and "First semester 2026/2027 · 18h · 1,250 JD" in sent_files[0][1]
         # ... unless it cannot fit a caption: the total stays there, the rest follows once
         reset()
         long_rows = [(f"Semester {n}", 15.0, 100.0 + n) for n in range(60)]
-        big = portal.Result("balance", True, b"png", [], {"balance": 9.0}, [], portal.balance_lines({"total": 9000.0, "rows": long_rows}))
+        big = portal.Result("balance", True, b"png", [], {"balance": 9.0}, [], portal_pages.balance_lines({"total": 9000.0, "rows": long_rows}))
         bot.send_portal_result(big)
         assert len(sent_files) == 1 and len(sent_files[0][1]) <= notifier.CAPTION_LIMIT and "Total balance" in sent_files[0][1]
         assert [k for k, _ in sent_msgs] == ["long"] and "Semester 59" in sent_msgs[0][1] and "Total balance" not in sent_msgs[0][1]
@@ -722,17 +724,17 @@ def test_portal():
     raw = [[["Course", "Mark"], ["Big Data", " 85 "], ["", ""]],
            [["menu"], ["x"]],                         # a one-column table is layout, not data
            [["Code", "Name", "Hours"], ["1", "Databases", "3"]]]
-    tables = portal.clean_tables(raw)
+    tables = portal_pages.clean_tables(raw)
     assert tables == [[["Course", "Mark"], ["Big Data", "85"]], [["Code", "Name", "Hours"], ["1", "Databases", "3"]]]
-    lines = portal.table_lines(tables)
+    lines = portal_pages.table_lines(tables)
     assert lines[0] == "*Course | Mark*" and lines[1] == "Big Data | 85"
-    assert "more rows" in portal.table_lines(tables, limit=2)[-1]
+    assert "more rows" in portal_pages.table_lines(tables, limit=2)[-1]
 
     text = "الساعات المنجزة: 33\nالمعدل التراكمي 72.5\nالرصيد: -1,250.50"
-    assert portal.find_figures(text) == {"passed_hours": 33.0, "cgpa": 72.5, "balance": -1250.5}
-    assert portal.find_figures("Passed credit hours 45 | Cumulative GPA 68.4 | Balance 120") == {
+    assert portal_pages.find_figures(text) == {"passed_hours": 33.0, "cgpa": 72.5, "balance": -1250.5}
+    assert portal_pages.find_figures("Passed credit hours 45 | Cumulative GPA 68.4 | Balance 120") == {
         "passed_hours": 45.0, "cgpa": 68.4, "balance": 120.0}
-    assert portal.find_figures("nothing useful") == {}
+    assert portal_pages.find_figures("nothing useful") == {}
 
     # credentials: from .env, never asked for in chat
     with tempfile.TemporaryDirectory() as tmp:
@@ -1119,10 +1121,10 @@ def test_guest_summary_and_target_math():
     table = [["", "الفصل الدراسي", "الحالة", "التخصص", "عدد الساعات", "الرصيد"],
              ["", "الفصل الأول 2026/2027", "منتظم", "نظم المعلومات", "18", "د.أ1250"],
              ["", "الفصل الثاني 2025/2026", "منتظم", "علم الحاسوب", "12", "د.أ0"]]
-    assert portal.parse_major([table]) == "نظم المعلومات", "the newest semester's"
-    assert portal.parse_major([[["الفصل الدراسي", "الرصيد"], ["x", "1"]]]) is None
-    assert portal.parse_major([[["التخصص"], [""], ["12"], ["علم الحاسوب"]]]) == "علم الحاسوب", "empty and numeric cells skipped"
-    assert portal.parse_major([]) is None
+    assert portal_pages.parse_major([table]) == "نظم المعلومات", "the newest semester's"
+    assert portal_pages.parse_major([[["الفصل الدراسي", "الرصيد"], ["x", "1"]]]) is None
+    assert portal_pages.parse_major([[["التخصص"], [""], ["12"], ["علم الحاسوب"]]]) == "علم الحاسوب", "empty and numeric cells skipped"
+    assert portal_pages.parse_major([]) is None
 
     # --- degree_hours is a setting like the others
     from uninotifier import schedule

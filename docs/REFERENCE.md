@@ -812,7 +812,7 @@ UniNotifier/
 │   ├── tasks.py              every open task: the Upcoming Tasks list and the noon digest
 │   ├── checkin.py            automatic attendance check-in for the online lectures
 │   ├── classtable.py         your weekly timetable, read from the portal (which days are online)
-│   ├── gpa.py, gpa_ui.py, gradebook.py, transcript.py, portal.py, finals.py, guest.py   grades, GPA, the portal
+│   ├── gpa.py, gpa_ui.py, gradebook.py, transcript.py, portal.py, portal_pages.py, finals.py, guest.py   grades, GPA, the portal (portal_pages: its pages read, no browser)
 │   ├── updates.py            a new version of the project: the daily look, NEWS.md, Update Now
 │   ├── degreeplan.py, registration.py                                  the study plan, and what to register next term
 │   ├── cambridge.py                                                    Cambridge One assignments (optional)

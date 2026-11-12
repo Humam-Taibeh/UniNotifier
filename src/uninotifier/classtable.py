@@ -46,7 +46,7 @@ TICK = 600                          # seconds between the bot thread's looks
 
 
 def slots_from_rows(rows: list[dict]) -> list[dict]:
-    """The portal's rows (portal.timetable_rows) as one slot per day:
+    """The portal's rows (portal_pages.timetable_rows) as one slot per day:
     {"day", "start", "end", "mode", "code", "course_ar", "section", "activity", "room"}."""
     slots = []
     for row in rows:

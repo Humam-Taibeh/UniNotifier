@@ -8,7 +8,7 @@ The academic record as a message — pure text, no portal, no Telegram.
                    ✅ passed · ❌ failed · 🔁 replaced by a later retake · ⏳ in progress, each
                    with its mark and credit hours
 
-Works on portal.parse_transcript()'s semester list (newest first). Course names are shown as the
+Works on portal_pages.parse_transcript()'s semester list (newest first). Course names are shown as the
 portal publishes them (often Arabic); each is wrapped in a Unicode isolate and every line starts
 with a left-to-right mark, so an Arabic name cannot reorder the mark and hours around it.
 """

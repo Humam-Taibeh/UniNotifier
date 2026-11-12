@@ -325,7 +325,7 @@ def monitor_failure_kind(exc):
 
 
 def _sem(term, courses, cumulative=None):
-    """A transcript semester as portal.parse_transcript returns it; courses are
+    """A transcript semester as portal_pages.parse_transcript returns it; courses are
     (code, name, hours, mark) — mark None while in progress."""
     return {"term": term, "average": None, "cumulative": cumulative, "courses": [
         {"code": c, "name": n, "hours": h, "mark": m,
@@ -410,7 +410,7 @@ REGISTRATION_PLAN = (                   # an invented plan with prerequisites: (
 def _sample_transcript():
     """A parsed transcript: a term in progress, two finished terms (one with a failed attempt a later
     retake replaced), Arabic and Latin names, a name with Markdown characters."""
-    from uninotifier import portal
+    from uninotifier import portal_pages
     heads = ["", "رمز المقرر", "اسم المقرر", "الحالة", "عدد الساعات", "العلامة", "ناجح؟", "معادة"]
     ok, no = "✓", "✗"
 
@@ -427,7 +427,7 @@ def _sample_transcript():
          "rows": [row("0101221", "جبر خطي (1)", 3, 35, no, True), row("0142251", "قواعد البيانات", 3, 35, no),
                   row("0420155", "القانون في حياتنا", 2, 95, ok), row("0112212", "تراكيب البيانات", 3, 30, no)]},
     ]
-    return portal.parse_transcript(raw)
+    return portal_pages.parse_transcript(raw)
 
 
 def _approx(a, b, tol=1e-6):

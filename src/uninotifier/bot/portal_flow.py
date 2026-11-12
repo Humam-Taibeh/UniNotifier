@@ -23,6 +23,7 @@ from uninotifier import maintenance
 from uninotifier import notifier
 from uninotifier import paths
 from uninotifier import portal
+from uninotifier import portal_pages
 from uninotifier import schedule
 from uninotifier import transcript
 from uninotifier.bot import chat, guest_flow
@@ -109,10 +110,10 @@ def compose(result: portal.Result, when: str) -> tuple[str, list[str], list]:
         if result.menu:
             lines += ["", escape_md(" · ".join(result.menu))]
     else:
-        body = list(result.lines) or portal.table_lines(result.tables)
+        body = list(result.lines) or portal_pages.table_lines(result.tables)
         if result.section == "transcript":
             semesters = (result.data or {}).get("semesters") or []
-            status = portal.english_status(result.data["status"]) if result.data.get("status") else None
+            status = portal_pages.english_status(result.data["status"]) if result.data.get("status") else None
             degree, passed = schedule.load_schedule().get("degree_hours"), result.figures.get("passed_hours")
             remaining = degree - passed if degree and passed is not None else None
             plan = result.data.get("plan")

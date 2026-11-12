@@ -19,6 +19,7 @@ from uninotifier import guest
 from uninotifier import maintenance
 from uninotifier import notifier
 from uninotifier import portal
+from uninotifier import portal_pages
 from uninotifier import registration
 from uninotifier import schedule
 from uninotifier import transcript
@@ -283,11 +284,11 @@ def send_guest_results(user: str, results: dict) -> None:
     major = None
     finance = results.get("balance")
     if finance and finance.found:
-        major = portal.parse_major(finance.tables)
+        major = portal_pages.parse_major(finance.tables)
     passed = record.figures.get("passed_hours")
     degree = schedule.load_schedule().get("degree_hours")
     remaining = degree - passed if degree and passed is not None else None
-    status = portal.english_status(record.data["status"]) if record.data.get("status") else None
+    status = portal_pages.english_status(record.data["status"]) if record.data.get("status") else None
     plan = record.data.get("plan")
     summary = transcript.summary_lines(semesters, record.figures, status, major, remaining, plan=plan,
                                        retakes=len(record.data.get("retakes") or {}))

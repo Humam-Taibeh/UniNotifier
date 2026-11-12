@@ -13,7 +13,7 @@ cumulative average at every semester of the transcript to rounding):
   * cumulative average = sum(recorded mark x hours) / sum(hours) over the
     counted attempts; semester average is the same over that semester's courses.
 
-Pure functions over portal.parse_transcript()'s semester list (newest first).
+Pure functions over portal_pages.parse_transcript()'s semester list (newest first).
 """
 
 import re

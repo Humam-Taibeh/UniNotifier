@@ -186,13 +186,14 @@ def test_portal_timetable():
     import threading
     from datetime import datetime
     from uninotifier import checkin, classtable, failsafe, maintenance, portal, schedule
+    from uninotifier import portal_pages
 
-    rows = portal.timetable_rows(_portal_home(PORTAL_ROWS))
+    rows = portal_pages.timetable_rows(_portal_home(PORTAL_ROWS))
     assert [r["code"] for r in rows] == ["0900111", "0900222", "0900333", "0900444"], rows
     assert rows[2] == {"code": "0900333", "name": "مادة إلكترونية", "section": "3", "activity": "نظري", "room": "",
                        "time": "[ 19:00_20:30 ] ن (ن) ر (ك)"}
-    assert portal.timetable_rows("") == [] and portal.timetable_rows("<html><body>nothing</body></html>") == []
-    assert portal.timetable_rows(_portal_home([]).replace("</tbody>", '<tr class="ui-datatable-empty-message">'
+    assert portal_pages.timetable_rows("") == [] and portal_pages.timetable_rows("<html><body>nothing</body></html>") == []
+    assert portal_pages.timetable_rows(_portal_home([]).replace("</tbody>", '<tr class="ui-datatable-empty-message">'
                                                           '<td colspan="6">No records found.</td></tr></tbody>')) == []
     assert [s["mode"] for s in schedule.parse_codes(rows[1]["time"])] == ["Blended", "Activity"], "م is the in-person day"
     slots = classtable.slots_from_rows(rows)
@@ -257,7 +258,7 @@ def test_portal_timetable():
             # a timetable that changed is told (the Wednesday lecture became an activity)
             moved = [(*PORTAL_ROWS[2][:5], "[ 19:00_20:30 ] ن (ن) ر (ن)") if row[0] == "0900333" else row for row in PORTAL_ROWS]
             answers["home"] = [{"home": portal.Result(section="home", found=True, data={
-                "timetable": portal.timetable_rows(_portal_home(moved))})}]
+                "timetable": portal_pages.timetable_rows(_portal_home(moved))})}]
             assert classtable.update("t", "c", force=True, now=now + 200) and len(told) == 2
             assert told[1].startswith("🗓️ *Your timetable on the portal changed*") and "No online lectures" in told[1], told[1]
             assert classtable.mode_at(at(4, 19, 5), now) == "Activity"

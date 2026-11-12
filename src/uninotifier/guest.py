@@ -22,6 +22,7 @@ from pathlib import Path
 from uninotifier import gpa
 from uninotifier import gradebook
 from uninotifier import portal
+from uninotifier import portal_pages
 
 TARGETS = (60, 65, 70, 75, 80, 85)
 
@@ -101,7 +102,7 @@ def build_report(username: str, result: portal.Result) -> str:
     if "record_hours" in f:
         out.append(f"Hours in the GPA:     {gpa.fmt(f['record_hours'])}  (every attempt; failures count as 35)")
     if result.data.get("status"):
-        out.append(f"Academic status:      {portal.english_status(result.data['status'])}")
+        out.append(f"Academic status:      {portal_pages.english_status(result.data['status'])}")
 
     current, history = semesters[0], semesters[1:]
     in_progress = any(c["passed"] is None for c in current["courses"])
