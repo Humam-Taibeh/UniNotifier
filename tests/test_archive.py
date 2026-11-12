@@ -562,3 +562,45 @@ def test_replaced_files_move_to_old_versions():
             assert len([p for p in folder.iterdir() if p.name.startswith("Shared")]) == 2, "repeated: no third copy"
         finally:
             archive.ARCHIVE_ROOT, archive._ARCHIVE_ROOT_RESOLVED, archive.probe_resource = keep
+
+
+def test_a_folder_download_that_fails_leaves_nothing_behind():
+    """A Moodle folder arrives as a zip. When it is not a readable zip (cut off on the way, an error
+    page), the extraction folder stayed behind, empty — and every later check, trying again, made
+    "Sheets (1)", "Sheets (2)", … beside it. A failed download removes what it made."""
+    class Resp:
+        ok, headers = True, {"content-type": "application/zip"}
+
+        def __init__(self, body):
+            self._body = body
+
+        def body(self):
+            return self._body
+
+    class Ctx:
+        def __init__(self, body):
+            self.request, self._body = self, body
+
+        def get(self, url, timeout=0):
+            return Resp(self._body)
+
+    import io
+    import zipfile
+    with tempfile.TemporaryDirectory() as tmp:
+        keep = archive.ARCHIVE_ROOT, archive._ARCHIVE_ROOT_RESOLVED
+        archive.ARCHIVE_ROOT, archive._ARCHIVE_ROOT_RESOLVED = Path(tmp), Path(tmp).resolve()
+        try:
+            for _ in range(2):
+                try:
+                    archive.download_folder(Ctx(b"PK\x03\x04 cut short"), "key", "5", "Sheets", Path(tmp))
+                    raise AssertionError("a broken zip must fail")
+                except zipfile.BadZipFile:
+                    pass
+            assert list(Path(tmp).iterdir()) == [], list(Path(tmp).iterdir())
+            good = io.BytesIO()
+            with zipfile.ZipFile(good, "w") as zf:
+                zf.writestr("sheet 1.pdf", b"%PDF")
+            folder = archive.download_folder(Ctx(good.getvalue()), "key", "5", "Sheets", Path(tmp))
+            assert folder.name == "Sheets" and [p.name for p in folder.iterdir()] == ["sheet 1.pdf"]
+        finally:
+            archive.ARCHIVE_ROOT, archive._ARCHIVE_ROOT_RESOLVED = keep

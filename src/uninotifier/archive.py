@@ -22,6 +22,7 @@ import hashlib
 import logging
 import os
 import re
+import shutil
 import zipfile
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -418,12 +419,17 @@ def download_folder(context, sesskey: str, cmid: str, folder_name: str,
     ensure_inside_archive(target_dir)
     target_dir.mkdir(parents=True)
     zip_path = target_dir / "_download.zip"
-    zip_path.write_bytes(resp.body())
     try:
+        zip_path.write_bytes(resp.body())
         with zipfile.ZipFile(zip_path) as zf:
             for member in zf.namelist():
                 ensure_inside_archive(target_dir / member)  # blocks zip-slip
             zf.extractall(target_dir)
+    except BaseException:
+        # nothing half-made stays behind: the next check tries again under the same name
+        # (left there, every retry used to add "name (1)", "name (2)", …)
+        shutil.rmtree(target_dir, ignore_errors=True)
+        raise
     finally:
         zip_path.unlink(missing_ok=True)
     return target_dir
