@@ -9,6 +9,24 @@ All notable changes to this project are documented here. The format follows
 ### Fixed
 - An assignment leaves the task list only when it is handed in: Moodle's own *done* mark (which opening
   the page can set) no longer hides one that is still to do.
+- A course text that holds an HTML comment (text pasted from Word) no longer fails the course's read.
+- A description keeps the words before its first formatting tag.
+- A saved Moodle session cut short by a power loss no longer stops every check until it is deleted by
+  hand: the check signs in again, and the session is now written in one step.
+- `saved_items.json` that another process holds open for a moment is read again instead of being set
+  aside as damaged and replaced by an older backup.
+- A new file whose message failed is sent WITH the file on the next check (it said "same file as an
+  item already sent" about a file never sent; a folder was saved twice).
+- An assignment or quiz first seen less than an hour before its time gets one reminder, saying the
+  minutes really left — not a "24 hours" and a "1 hour" reminder in the same minute.
+- Moodle's own "sign-in failed" page is no longer taken for a successful sign-in.
+- Two writers of the same state file (the bot and a check) no longer share one temporary file.
+- Unreadable instructor pages no longer start the browser on every check (tried again after 6 h).
+- An unexpected error reading the portal timetable no longer signs in to the portal every 10 minutes.
+- A folder download that fails leaves no empty folder (each retry used to add "name (1)", "(2)", …).
+- A long file name is never cut so that it ends in a space or a dot (Windows drops those).
+- A nameless Moodle item or deadline is called "Untitled" (it was the Arabic "بدون اسم").
+- The portal-setup and verification-code messages say when the portal is really contacted, in full sentences.
 
 ### Added
 - 🔒 Assignment Closed — Not Submitted and 🗑️ Assignment Removed: told once when an assignment you
