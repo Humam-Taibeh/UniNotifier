@@ -9,7 +9,7 @@ agrees to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ```powershell
 .\install.bat                                         # or follow the README's setup steps
-.venv\Scripts\pip install -r requirements-dev.txt     # pyflakes and pylint
+.venv\Scripts\pip install -r requirements-dev.txt     # pyflakes, pylint and coverage
 ```
 
 ## Before you open a pull request
@@ -22,6 +22,13 @@ agrees to the [Code of Conduct](CODE_OF_CONDUCT.md).
 Both must pass — CI runs them on Windows with Python 3.11, 3.13, 3.14 and 3.15, and runs the student installer.
 To run them (and [gitleaks](https://github.com/gitleaks/gitleaks), if it is installed) before every commit,
 turn on the project's hook once: `git config core.hooksPath .githooks`.
+
+To see which lines the tests reach (branch coverage, per module):
+
+```powershell
+.venv\Scripts\python -m coverage run --branch --source=src/uninotifier tests	est_architecture.py
+.venv\Scripts\python -m coverage report --sort=cover
+```
 
 ## The rules the tests enforce
 
