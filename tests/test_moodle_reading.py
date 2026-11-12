@@ -948,3 +948,99 @@ def test_one_check_reads_a_whole_course_from_moodle():
             (scan.HttpContext.from_state_file, scan.Browser, items.capture_screens, config.FILE_PROBE_SECONDS,
              archive.ARCHIVE_ROOT, archive._ARCHIVE_ROOT_RESOLVED) = keep
             schedule.load_schedule()
+
+
+def test_each_notification_goes_out_in_the_clearest_shape():
+    """deliver() picks the shape of a notification: a file captioned with the whole message when it
+    fits (else the file with its header, then the text), one picture captioned likewise, several
+    pictures as an album followed by the text — and plain text when a file or picture could not be
+    sent, so the words always arrive. A forum post's attachments follow it as files (your mark found
+    in one is said in its caption) and leave no copy behind."""
+    from uninotifier.monitor import config, notify
+
+    out = []
+    keep = (notify.notifier.send_document, notify.notifier.send_png_file, notify.notifier.send_png_files,
+            notify.notifier.send_long_message, config.STUDENT_ID)
+    ok = {"document": True, "png": True}
+    try:
+        notify.notifier.send_document = lambda token, chat, path, caption, url=None, rows=None, reply=None: \
+            out.append(("document", Path(path).name, caption, rows)) or ok["document"]
+        notify.notifier.send_png_file = lambda token, chat, png, name, caption="", url=None, rows=None: \
+            out.append(("png", name, caption, rows)) or ok["png"]
+        notify.notifier.send_png_files = lambda token, chat, pngs, name: out.append(("album", len(pngs))) or True
+        notify.notifier.send_long_message = lambda token, chat, text, url=None, rows=None: \
+            out.append(("text", text, rows)) or True
+        rows = [[{"text": "x", "callback_data": "y"}]]
+        with tempfile.TemporaryDirectory() as tmp:
+            pdf = Path(tmp) / "Lecture 1.pdf"
+            pdf.write_bytes(b"%PDF")
+
+            assert notify.deliver("📁 *New File*", "short", "u", rows, document=pdf)
+            assert out == [("document", "Lecture 1.pdf", "📁 *New File*\n" + media.DIVIDER + "\nshort", rows)]
+            out.clear()
+            long_body = "word " * 400
+            assert notify.deliver("📁 *New File*", long_body, "u", rows, document=pdf)
+            assert out[0] == ("document", "Lecture 1.pdf", "📁 *New File*", None), "the file with its header"
+            assert out[1][0] == "text" and out[1][1].startswith("📝 *Description*") and out[1][2] == rows
+            out.clear()
+            ok["document"] = False                       # the file could not go: the words still do
+            assert notify.deliver("📁 *New File*", "short", "u", rows, document=pdf)
+            assert [o[0] for o in out] == ["document", "text"] and out[1][1].startswith("📁 *New File*")
+            out.clear()
+
+            assert notify.deliver("🏷️ *New Course Info*", "", "u", rows, shots=[b"PNG"], shot_name="a.png")
+            assert out == [("png", "a.png", "🏷️ *New Course Info*", rows)]
+            out.clear()
+            assert notify.deliver("🏷️ *New Course Info*", "", "u", rows, shots=[b"1", b"2"], shot_name="a.png")
+            assert out[0] == ("album", 2) and out[1][0] == "text", "an album cannot carry the buttons: the text does"
+            out.clear()
+            ok["png"] = False
+            assert notify.deliver("🏷️ *New Course Info*", "", "u", rows, shots=[b"PNG"])
+            assert [o[0] for o in out] == ["png", "text"]
+            out.clear()
+
+            # a forum post's attachments: each a file, your mark found in it said in its caption
+            config.STUDENT_ID = "209911111"
+            post = {"id": "77", "subject": "Quiz 1 marks", "url": "https://x/p77", "attachments": [("a", "b")],
+                    "html": "<p>Marks</p>", "author": "Dr. Invented", "time": 1_800_000_000, "is_reply": False,
+                    "_shots": [b"PNG"],
+                    "_files": [("Quiz 1.csv", "ID,Name,Mark (/10)\n209911111,Invented Student,9\n".encode()),
+                               ("Notes.txt", b"nothing about marks")]}
+            forum = {"name": "Announcements", "course": "20261-Big Data-AllSec-3-", "cmid": "5", "url": "https://x/f"}
+            keep_rem = notify.reminders.SOURCES_FILE
+            notify.reminders.SOURCES_FILE = Path(tmp) / "sources.json"
+            ok["png"] = ok["document"] = True
+            try:
+                assert notify.notify_forum_post(forum, post)
+            finally:
+                notify.reminders.SOURCES_FILE = keep_rem
+            assert out[0][0] == "png" and "Quiz 1 marks" in out[0][2]
+            files = [o for o in out if o[0] == "document"]
+            assert [f[1].endswith("Quiz 1.csv") for f in files] == [True, False], files
+            assert files[0][2].startswith("🎉 *Marks Detected:* *9/10*"), files[0][2]
+            assert not list(notify.paths.DATA.glob("_attachment_77_*")), "no copy of an attachment stays in data/"
+    finally:
+        (notify.notifier.send_document, notify.notifier.send_png_file, notify.notifier.send_png_files,
+         notify.notifier.send_long_message, config.STUDENT_ID) = keep
+
+    # downloading them: what Moodle sends, small enough for Telegram, and a failure costs only that file
+    class Response:
+        def __init__(self, ok, body):
+            self.ok, self._body = ok, body
+
+        def body(self):
+            return self._body
+
+    class Moodle:
+        def __init__(self):
+            self.request = self
+
+        def get(self, url, timeout=0):
+            if url == "boom":
+                raise OSError("connection reset")
+            return {"good": Response(True, b"data"), "gone": Response(False, b""),
+                    "huge": Response(True, b"x" * (notify.notifier.MAX_UPLOAD_BYTES + 1))}[url]
+
+    post = {"attachments": [("a.pdf", "good"), ("b.pdf", "gone"), ("c.pdf", "huge"), ("d.pdf", "boom")]}
+    notify.download_attachments(Moodle(), post)
+    assert post["_files"] == [("a.pdf", b"data")], post["_files"]
