@@ -15,6 +15,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 
 from uninotifier import envcheck, paths
 
@@ -184,6 +185,12 @@ def has_english_course() -> bool | None:
 def check_cambridge(r: Report) -> None:
     """Cambridge One is for the English course only: off unless its two settings are filled in."""
     from uninotifier import cambridge
+    closed = cambridge.closed_on() if cambridge.configured() else None
+    if closed is not None:
+        r.line(INFO, f"Cambridge One: off - your class stopped opening, so it was taken as ended on "
+                     f"{time.strftime('%Y-%m-%d', time.localtime(closed))} "
+                     f"(python -m uninotifier.cambridge --login watches it again)")
+        return
     if not cambridge.active():
         if not (envcheck.value(cambridge.ENV_URL) or envcheck.value(cambridge.ENV_UNTIL)):
             r.line(INFO, "Cambridge One: off (only for an English course that uses it - see .env.example, section 6)")

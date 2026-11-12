@@ -420,7 +420,7 @@ def main() -> None:
     threading.Thread(target=classtable.loop, args=(chat.BOT_TOKEN, chat.CHAT_ID, portal_flow._portal_lock),
                      name="classtable",
                      daemon=True).start()                                       # the timetable, from the portal
-    if cambridge.active():              # Cambridge One assignments, until CAMBRIDGE_UNTIL
+    if cambridge.configured():          # Cambridge One assignments, until CAMBRIDGE_UNTIL or the class ends
         threading.Thread(target=cambridge.loop, name="cambridge", daemon=True).start()
     log.info("Bot polling started")
     offset = load_offset()

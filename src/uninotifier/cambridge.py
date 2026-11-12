@@ -3,7 +3,8 @@ Cambridge One — the English course's assignments (temporary: for this semester
 
 A stand-alone module: nothing else in UniNotifier depends on it. To remove it when the
 semester ends, delete this file, its lines in bot/app.py and tests/, the CAMBRIDGE_* keys in
-.env and data/cambridge*. It also switches itself off after CAMBRIDGE_UNTIL (YYYY-MM-DD).
+.env and data/cambridge*. It also switches itself off after CAMBRIDGE_UNTIL (YYYY-MM-DD), and when
+the class stops opening while the account still signs in (the course is over): see "class ended".
 
   .env   CAMBRIDGE_ASSIGNMENTS_URL   the class's assignments page (it carries your class ids)
          CAMBRIDGE_UNTIL             the last day it runs
@@ -12,6 +13,7 @@ semester ends, delete this file, its lines in bot/app.py and tests/, the CAMBRID
          cambridge.json              the assignments already seen, reminders already sent
          cambridge_feed.json         the latest feed as Cambridge sent it (for checking the parser)
          cambridge_recon/            what --login recorded: the page's JSON answers + a screenshot
+         cambridge_class.json        since when the class has not opened; when it was taken as ended
 
 How it looks (measured 2026-10-20): the assignments page is built from ONE JSON answer,
 GET /class/apigateway/<org>/class/<class>/learner/assignments, which plain HTTP gets in ~0.3 s
@@ -36,6 +38,10 @@ for a day (a lockout is worse than waiting).
   24 h before the due   🚨 reminder — while any activity is not done (done = handed in once:
                         submittedOnce, or completedOnce for one with nothing to submit). Once
                         per due date.
+  class ended           🎓 once, then nothing more: Cambridge has refused the class (feed 404,
+                        or a valid session that never reaches the class's feed) for CLOSED_AFTER
+                        with no good read in between. No sign-in, no request after that (and no
+                        Cambridge tasks in the list) until --login, which turns it back on.
 The first run only learns what is there.
 
 An assignment as Cambridge sends it (seen 2026-10-21, tests/fixtures/cambridge_assignment.json):
@@ -81,6 +87,7 @@ STATE_FILE = paths.DATA / "cambridge_state.json"
 SEEN_FILE = paths.DATA / "cambridge.json"
 FEED_FILE = paths.DATA / "cambridge_feed.json"
 RECON_DIR = paths.DATA / "cambridge_recon"
+CLASS_FILE = paths.DATA / "cambridge_class.json"
 
 COURSE = "English Communication Skills"
 BUTTON_TEXT = "🔗 Open in Cambridge One ↗️"
@@ -91,6 +98,7 @@ RELOGIN_RETRY = 6 * 3600          # a session that could not be renewed is tried
 CREDENTIALS_RETRY = 24 * 3600     # ... but after Cambridge refused the e-mail / password: once a day, never in a loop
 REMIND_BEFORE = 24 * 3600
 GONE_AFTER = 2                     # answers in a row without an assignment before it counts as gone
+CLOSED_AFTER = 2 * 86400           # the class not opening this long (tried every RELOGIN_RETRY) = the course is over
 HTTP_TIMEOUT = (6, 20)
 BROWSER_TIMEOUT = 45_000           # ms: the page and its feed, in the hidden browser
 FIRST_LOOK_TIMEOUT = 15_000        # ms: the feed is already known to be refused, so a sign-in page shows up fast
@@ -134,6 +142,11 @@ class CredentialsRejected(NeedsLogin):
     """Cambridge One answered the saved e-mail and password with an error."""
 
 
+class ClassUnavailable(NeedsLogin):
+    """The account is signed in, but the class's assignments do not open: the course is over, or
+    the class was closed. Taken as ended only after CLOSED_AFTER of it (see class_unavailable)."""
+
+
 # ── settings ─────────────────────────────────────────────────────────────────────────────────
 
 
@@ -155,10 +168,29 @@ def credentials() -> tuple[str, str] | None:
     return (email, password) if email and password else None
 
 
-def active(today: date | None = None) -> bool:
-    """On while the page is set and CAMBRIDGE_UNTIL (required: it is a temporary watch) is not past."""
+def configured(today: date | None = None) -> bool:
+    """The page is set and CAMBRIDGE_UNTIL (required: it is a temporary watch) is not past."""
     end = until()
     return bool(assignments_url()) and end is not None and (today or date.today()) <= end
+
+
+def _class_record() -> dict:
+    try:
+        data = json.loads(CLASS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def closed_on() -> float | None:
+    """When the class was taken as ended (it stopped opening), else None."""
+    value = _class_record().get("closed")
+    return float(value) if isinstance(value, (int, float)) else None
+
+
+def active(today: date | None = None) -> bool:
+    """Watching: configured, and the class has not ended."""
+    return configured(today) and closed_on() is None
 
 
 def feed_url(page_url: str) -> str:
@@ -193,6 +225,8 @@ def fetch(http: requests.Session, page_url: str) -> dict:
                  headers={"Referer": page_url}, timeout=HTTP_TIMEOUT)
     if r.status_code in (401, 403):
         raise Expired(f"HTTP {r.status_code}")
+    if r.status_code == 404:
+        raise ClassUnavailable("Cambridge One has no such class (HTTP 404)")
     r.raise_for_status()
     data = r.json()
     if not isinstance(data, dict) or not isinstance(data.get("assignmentsData"), dict):
@@ -422,6 +456,10 @@ def _on_web(page) -> bool:
     return urlsplit(page.url).scheme in ("http", "https")
 
 
+def _on_sign_in(page) -> bool:
+    return urlsplit(page.url).path.startswith("/login")
+
+
 def _reach_feed(page, page_url: str, timeout: int) -> bool:
     """Opens the assignments page; True when its feed answers 200, i.e. the session is valid."""
     from playwright.sync_api import Error
@@ -491,6 +529,8 @@ def visit(shot: bool) -> tuple[bool, bytes | None]:
             if not _reach_feed(page, page_url, FIRST_LOOK_TIMEOUT if login else BROWSER_TIMEOUT):
                 if not _on_web(page):
                     raise requests.ConnectionError(f"Cambridge One did not answer ({_where(page)})")
+                if not _on_sign_in(page):             # the session is fine: it is the class that does not open
+                    raise ClassUnavailable(f"the class's assignments did not open (the browser is on {_where(page)})")
                 if not login:
                     log.info("Cambridge One: sent to the sign-in page (%s), and %s / %s are not in .env",
                              _where(page), ENV_EMAIL, ENV_PASSWORD)
@@ -498,8 +538,8 @@ def visit(shot: bool) -> tuple[bool, bytes | None]:
                 log.info("Cambridge One: the session has ended — signing in with the saved e-mail and password")
                 _sign_in(page, *login)
                 if not _reach_feed(page, page_url, BROWSER_TIMEOUT):
-                    raise NeedsLogin(f"signed in, but the assignments page did not load (the browser is on "
-                                     f"{_where(page)})")
+                    raise ClassUnavailable(f"signed in, but the class's assignments did not open (the browser "
+                                           f"is on {_where(page)})")
                 log.info("Cambridge One: signed in again")
             fileio.write_json_atomic(STATE_FILE, context.storage_state())
             if not shot:
@@ -679,6 +719,43 @@ def read_feed(w: Watcher, page_url: str, renew=None) -> dict:
             raise NeedsLogin("renewed, but still refused") from e
 
 
+def _write_class_record(record: dict) -> None:
+    if record:
+        fileio.write_json_atomic(CLASS_FILE, record)
+    else:
+        CLASS_FILE.unlink(missing_ok=True)
+
+
+def closed_message(since: float, now: float) -> str:
+    return "\n".join([
+        "🎓 *Class Ended — Cambridge One*", f"📘 *Course:* {escape_md(COURSE)}", "",
+        f"Your class has not opened on Cambridge One since {format_timestamp(since)}, though the account "
+        "still signs in: the course is over, or the class was closed. English assignments are no longer "
+        "watched, and the bot no longer signs in to Cambridge One.", "",
+        "If the class is still running, sign in once on the PC: python -m uninotifier.cambridge --login "
+        "— the watch starts again by itself.", "", _stamp(now)])
+
+
+def class_unavailable(now: float, page_url: str, reason: str) -> bool:
+    """The class did not open once more. True when that has lasted CLOSED_AFTER and the owner was
+    told: the class is then taken as ended (closed_on)."""
+    since = _class_record().get("unavailable_since")
+    if not isinstance(since, (int, float)):
+        since = now
+        _write_class_record({"unavailable_since": since})
+    log.info("Cambridge One: %s (since %s)", reason, format_timestamp(since))
+    if now - since < CLOSED_AFTER or not send(closed_message(since, now), "", page_url):
+        return False
+    _write_class_record({"unavailable_since": since, "closed": now})
+    log.info("Cambridge One: the class has ended — not watching any more (--login turns it back on)")
+    return True
+
+
+def watch_again() -> None:
+    """The class opened: whatever was recorded about it not opening no longer holds."""
+    _write_class_record({})
+
+
 def login_help(reason: str) -> str:
     """What the owner is told when the session could not be renewed."""
     by_hand = ("On the PC, run: python -m uninotifier.cambridge --login — sign in in the window that opens, "
@@ -694,11 +771,13 @@ def login_help(reason: str) -> str:
 def tick(w: Watcher, now: float | None = None, today: date | None = None) -> dict | None:
     """Called often; checks only when due. The counts of a check that ran, else None."""
     now = time.time() if now is None else now
-    if not active(today):
+    if not configured(today):
         if not w.ended:
             w.ended = True
             log.info("Cambridge One: not watching (%s not set, or past %s)", ENV_URL, ENV_UNTIL)
         return None
+    if closed_on() is not None:
+        return None                                # the class has ended: nothing until --login
     if now < w.next_check:
         return None
     w.next_check = now + CHECK_SECONDS
@@ -716,6 +795,10 @@ def tick(w: Watcher, now: float | None = None, today: date | None = None) -> dic
         return None
     try:
         feed = read_feed(w, page_url)
+    except ClassUnavailable as e:                  # signing in works: tried again later, quietly, until it counts as ended
+        w.blocked_at, w.blocked_mtime, w.http, w.retry_gap = now, _state_mtime(), None, RELOGIN_RETRY
+        class_unavailable(now, page_url, notifier.redact(str(e)))
+        return None
     except NeedsLogin as e:
         w.blocked_at, w.blocked_mtime, w.http = now, _state_mtime(), None
         w.retry_gap = CREDENTIALS_RETRY if isinstance(e, CredentialsRejected) else RELOGIN_RETRY
@@ -733,6 +816,8 @@ def tick(w: Watcher, now: float | None = None, today: date | None = None) -> dic
                             detail="English assignments are not being watched meanwhile; it keeps trying.")
         return None
     w.failures = 0
+    if "unavailable_since" in _class_record():
+        watch_again()                              # it opens: that was a blip, not the end
     failsafe.resolve("cambridge:login", "✅ Cambridge One is signed in again — English assignments are watched.",
                      wait=False)
     failsafe.resolve("cambridge:read", "✅ Cambridge One answers again — English assignments are watched.", wait=False)
@@ -740,7 +825,8 @@ def tick(w: Watcher, now: float | None = None, today: date | None = None) -> dic
 
 
 def loop() -> None:
-    """The bot's Cambridge One thread. Ends by itself after CAMBRIDGE_UNTIL."""
+    """The bot's Cambridge One thread. Ends by itself after CAMBRIDGE_UNTIL; while the class has
+    ended it only waits (one small file read a minute) for --login."""
     w = Watcher()
     while not w.ended:
         try:
@@ -854,6 +940,7 @@ def login() -> int:
                     saved_at = time.time()
                 if not signed_in:
                     signed_in = True
+                    watch_again()
                     print("Signed in — the session is saved (and kept fresh until you close the window).")
                 if not shot_taken and recorder.feed_seen:
                     page.wait_for_timeout(3000)        # the list renders after its feed (analytics never let the network go idle)
@@ -885,8 +972,11 @@ def login() -> int:
 def check_now() -> int:
     """--check: one check, printed."""
     notifier.setup_logging(paths.LOGS / "bot.log")
-    if not active():
+    if not configured():
         print(f"Not watching: set {ENV_URL} and {ENV_UNTIL} (YYYY-MM-DD, not past) in .env")
+        return 1
+    if closed_on() is not None:
+        print("Not watching: the class stopped opening, so it was taken as ended. Run --login to watch it again.")
         return 1
     w = Watcher()
     started = time.time()

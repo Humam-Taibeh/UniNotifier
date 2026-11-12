@@ -290,6 +290,9 @@ def test_cambridge_signs_in_by_itself():
             self.signed, self.typed, self.pressed, self.url = bool(scenario.get("valid")), [], [], "about:blank"
 
         def goto(self, url, **kwargs):
+            if self.signed and scenario.get("class_gone"):
+                self.url = "https://www.cambridgeone.org/dashboard/learner/dashboard"
+                return
             self.url = page_url if self.signed else "chrome-error://chromewebdata/" if scenario.get("offline") else login_url
 
         def expect_response(self, predicate, timeout=None):
@@ -300,7 +303,7 @@ def test_cambridge_signs_in_by_itself():
                     return self
 
                 def __exit__(self, kind, value, tb):
-                    if kind is None and not page.signed:
+                    if kind is None and (not page.signed or scenario.get("class_gone")):
                         raise Error("Page.expect_response: Timeout exceeded.")
                     return False
             return Waiting()
@@ -394,6 +397,14 @@ def test_cambridge_signs_in_by_itself():
                 assert secret not in str(failure) and email not in str(failure), failure
             offline = attempt(offline=True)
             assert isinstance(offline, requests.ConnectionError) and not typed_in(), "no answer is not a sign-in problem"
+            old_session()
+            closed = attempt(valid=True, class_gone=True)
+            assert isinstance(closed, cambridge.ClassUnavailable) and not typed_in(), \
+                "a valid session that does not reach the class: the class, not the sign-in"
+            closed = attempt(accepts=True, class_gone=True)
+            assert isinstance(closed, cambridge.ClassUnavailable) and pages[-1].pressed == ["Enter"], \
+                "signed in, and still the class does not open"
+            assert saved() == "old", "nothing is saved for a class that does not open"
             assert cambridge.screenshot() is None, "an alert still goes out without its picture"
 
             # the thread: refused credentials wait a day, a missing form 6 h; the alert says what to do
@@ -438,6 +449,124 @@ def test_cambridge_signs_in_by_itself():
         finally:
             (_playwright_api.sync_playwright, cambridge.STATE_FILE, cambridge.fetch, cambridge.SEEN_FILE,
              cambridge.FEED_FILE) = keep
+            for key, value in keep_env.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+
+def test_cambridge_stops_by_itself_when_the_class_ends():
+    """Cambridge One is a one-semester course: once its class stops opening, the watch ends by
+    itself, whatever .env still says. The class not opening (the feed answers 404, or a valid
+    session never reaches it) is quiet: tried again every RELOGIN_RETRY, and one good read in
+    between means it was a blip. Only CLOSED_AFTER of it (counted across bot restarts) is the end:
+    the owner is told once (🎓 Class Ended) and from then on nothing is signed in or asked, and
+    its tasks leave the list. --login opening the class turns it back on, with no restart."""
+    from uninotifier import cambridge, tasks
+
+    page = "https://www.cambridgeone.org/class/learner/org_test/class/c-1/assignments"
+
+    class Answer:
+        def __init__(self, status):
+            self.status_code = status
+
+    class Http:
+        def __init__(self, status):
+            self.status = status
+
+        def get(self, url, **kwargs):
+            return Answer(self.status)
+
+    try:
+        cambridge.fetch(Http(404), page)
+        raise AssertionError("a class Cambridge does not know is not a network error")
+    except cambridge.ClassUnavailable:
+        pass
+    try:
+        cambridge.fetch(Http(403), page)
+        raise AssertionError("403 is an ended session")
+    except cambridge.ClassUnavailable:
+        raise AssertionError("403 is an ended session, not a closed class")
+    except cambridge.Expired:
+        pass
+
+    sent: list[str] = []
+    online = [True]
+    reads: list[int] = []
+    answer: list = []
+
+    def long_message(token, chat, text, url=None, rows=None):
+        if online[0]:
+            sent.append(text)
+        return online[0]
+
+    def fake_fetch(http, url):
+        reads.append(1)
+        if isinstance(answer[0], Exception):
+            raise answer[0]
+        return answer[0]
+
+    good = {"classDetails": {}, "assignmentsData": {"entities": []}}
+    gone = cambridge.ClassUnavailable("Cambridge One has no such class (HTTP 404)")
+    keep_files = (cambridge.SEEN_FILE, cambridge.FEED_FILE, cambridge.STATE_FILE, cambridge.CLASS_FILE)
+    keep_calls = (notifier.send_long_message, cambridge.fetch)
+    keep_env = {k: os.environ.get(k) for k in (cambridge.ENV_URL, cambridge.ENV_UNTIL)}
+    with tempfile.TemporaryDirectory() as tmp:
+        cambridge.SEEN_FILE, cambridge.FEED_FILE = Path(tmp) / "cambridge.json", Path(tmp) / "cambridge_feed.json"
+        cambridge.STATE_FILE, cambridge.CLASS_FILE = Path(tmp) / "cambridge_state.json", Path(tmp) / "cambridge_class.json"
+        cambridge.STATE_FILE.write_text(json.dumps({"cookies": []}), encoding="utf-8")
+        notifier.send_long_message, cambridge.fetch = long_message, fake_fetch
+        _fresh_failsafe()
+        try:
+            os.environ[cambridge.ENV_URL], os.environ[cambridge.ENV_UNTIL] = page, "2027-01-31"
+            today, t = date(2026, 12, 1), 1_800_000_000.0
+            step = cambridge.RELOGIN_RETRY + cambridge.CHECK_SECONDS
+
+            w = cambridge.Watcher()
+            answer[:] = [gone]
+            assert cambridge.tick(w, t, today) is None and cambridge.active(today)
+            assert cambridge.tick(w, t + 60, today) is None and len(reads) == 1, "not asked again at once"
+            assert cambridge.tick(w, t + step, today) is None and len(reads) == 2, "asked again after a while"
+            answer[:] = [good]
+            assert cambridge.tick(w, t + 2 * step, today) is not None, "it opens again"
+            assert not cambridge.CLASS_FILE.exists(), "a blip, not the end: the count starts over"
+
+            start = t + 3 * step
+            answer[:] = [gone]
+            w = cambridge.Watcher()
+            now = start
+            while now - start < cambridge.CLOSED_AFTER:
+                assert cambridge.tick(w, now, today) is None and cambridge.closed_on() is None
+                now += step
+                if len(reads) == 6:
+                    w = cambridge.Watcher()             # the bot restarted: the count goes on
+            failsafe.wait_idle()
+            assert sent == [] and not any("sign in" in m for m in OUTBOX), (sent, OUTBOX)
+
+            online[0] = False
+            assert cambridge.tick(w, now, today) is None and cambridge.closed_on() is None, \
+                "not taken as ended until the owner was told"
+            online[0] = True
+            now += step
+            assert cambridge.tick(w, now, today) is None and cambridge.closed_on() == now
+            [told] = sent
+            assert "Class Ended" in told and "--login" in told, told
+            assert not cambridge.active(today) and cambridge.configured(today)
+
+            asked = len(reads)
+            for later in (now + step, now + 10 * step):
+                assert cambridge.tick(w, later, today) is None
+            assert len(reads) == asked and len(sent) == 1 and not w.ended, "nothing more is asked or told"
+            assert tasks._cambridge(now) == [], "its tasks leave the list"
+
+            cambridge.watch_again()                        # what --login does once it reaches the class
+            answer[:] = [good]
+            assert cambridge.active(today) and cambridge.tick(w, now + 11 * step, today) is not None, \
+                "watched again, without restarting the bot"
+        finally:
+            cambridge.SEEN_FILE, cambridge.FEED_FILE, cambridge.STATE_FILE, cambridge.CLASS_FILE = keep_files
+            notifier.send_long_message, cambridge.fetch = keep_calls
             for key, value in keep_env.items():
                 if value is None:
                     os.environ.pop(key, None)
