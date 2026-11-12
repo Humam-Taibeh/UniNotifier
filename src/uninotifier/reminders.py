@@ -99,6 +99,20 @@ def remove(reminder_id: int) -> dict | None:
     return found
 
 
+def update(reminder_id: int, note: str | None = None, due: float | None = None) -> dict | None:
+    """Change a reminder's text and/or time (it keeps its place, course and original post). A new time is a new
+    delivery (see _key), so it goes out at the new time even if the old one was close."""
+    state = load()
+    found = next((r for r in state["items"] if r["id"] == reminder_id), None)
+    if found:
+        if note is not None and note.strip():
+            found["note"] = note.strip()[:NOTE_LIMIT]
+        if due is not None:
+            found["due"] = due
+        save(state)
+    return found
+
+
 def snooze(reminder_id: int, now: float | None = None) -> dict | None:
     state = load()
     found = next((r for r in state["items"] if r["id"] == reminder_id), None)
@@ -197,6 +211,54 @@ def parse_time(text: str) -> tuple[int, int]:
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
         raise ValueError("That isn't a time of day — e.g. 18:45 or 6:45 PM.")
     return hour, minute
+
+
+_ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+_NUMERIC_DATE = re.compile(r"(\d{1,2})\s*[/\-.]\s*(\d{1,2})(?:\s*[/\-.]\s*(\d{2,4}))?")
+_NAMED_DATE = re.compile(r"(\d{1,2})\s*([a-z]{3,9})(?:\s+(\d{4}))?|([a-z]{3,9})\s*(\d{1,2})(?:\s*,?\s*(\d{4}))?")
+_DATE_HELP = "Send a date like 26/11, 26/11/2026 or 26 Nov."
+
+
+def _safe_date(year: int, month: int, day: int) -> date | None:
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
+def parse_date(text: str, today: date | None = None) -> date:
+    """'26/11', '26-11-2026', '26.11', '26 Nov', 'Nov 26', '26 November 2026' -> a date, day first
+    (Arabic digits too). Without a year it is the next such day: this year, or next year when this
+    year's has passed. Raises ValueError with what to send instead."""
+    today = today or date.today()
+    raw = (text or "").translate(_ARABIC_DIGITS).strip().lower()
+    day = month = year = None
+    numeric = _NUMERIC_DATE.fullmatch(raw)
+    named = _NAMED_DATE.fullmatch(raw)
+    if numeric:
+        day, month, year = int(numeric.group(1)), int(numeric.group(2)), numeric.group(3)
+    elif named:
+        first, word, y1, word2, second, y2 = named.groups()
+        name = word or word2
+        number = first or second
+        month = next((i + 1 for i, m in enumerate(daily.MONTHS) if name[:3] == m.lower()), None)
+        if month is None:
+            raise ValueError(f"I don't know the month “{name}”. {_DATE_HELP}")
+        day, year = int(number), y1 or y2
+    else:
+        raise ValueError(_DATE_HELP)
+    if year:
+        year = int(year)
+        year += 2000 if year < 100 else 0
+    try:
+        date(2024, month, day)                       # does the day exist at all (29 Feb does, in a leap year)
+        found = date(year, month, day) if year else next(
+            d for d in (_safe_date(y, month, day) for y in range(today.year, today.year + 5)) if d and d >= today)
+    except (ValueError, StopIteration):
+        raise ValueError(f"There is no such date. {_DATE_HELP}") from None
+    if found < today:
+        raise ValueError("That day has already passed — send a later date.")
+    return found
 
 
 def when_text(ts: float) -> str:

@@ -51,6 +51,7 @@ def view_when(draft: dict) -> tuple[str, list]:
 def view_days() -> tuple[str, list]:
     buttons = [{"text": label, "callback_data": f"rem:day:{day:%Y%m%d}"} for label, day in reminders.day_choices()]
     rows = [buttons[i:i + 3] for i in range(0, len(buttons), 3)]
+    rows.append([{"text": "✏️ Type a Date", "callback_data": "rem:typedate"}])
     return (f"🗓️ *Pick a day*\n\n📝 {escape_md(_reminder_draft.get('note', ''))}",
             rows + [REMINDER_CANCEL_ROW])
 
@@ -66,7 +67,14 @@ def view_hours(day: str) -> tuple[str, list]:
 
 
 def schedule_draft(due: datetime) -> tuple[str, list]:
-    """Save the drafted reminder for `due`; the confirmation screen."""
+    """Save the drafted reminder for `due`; the confirmation screen. A reminder being changed (the draft
+    carries its id) gets the new time and goes back to its own screen."""
+    if _reminder_draft.get("edit"):
+        item_id = _reminder_draft["edit"]
+        _reminder_draft.clear()
+        if reminders.update(item_id, due=due.timestamp()):
+            return view_reminder(item_id, "✅ *Time changed*")
+        return "That reminder is already gone.", [[{"text": "🔙 Tasks & Reminders", "callback_data": "tasks"}]]
     item = reminders.add(_reminder_draft["note"], due.timestamp(), _reminder_draft.get("course"),
                          _reminder_draft.get("url"), _reminder_draft.get("message_id"))
     _reminder_draft.clear()
@@ -78,10 +86,53 @@ def schedule_draft(due: datetime) -> tuple[str, list]:
 
 def view_manage_reminders() -> tuple[str, list]:
     mine = reminders.pending()
-    lines = ["🗑️ *Manage Reminders*", "", "Tap one to delete it." if mine else "No reminders left."]
-    rows = [[{"text": f"🗑️ {chat._short(r['note'], 30)} · {reminders.when_text(r['due'])}",
-              "callback_data": f"rem:del:{r['id']}"}] for r in mine]
+    lines = ["✏️ *Manage Reminders*", "", "Tap one to read it, change it or delete it." if mine else "No reminders left."]
+    rows = [[{"text": f"{chat._short(_first_line(r), 30)} · {reminders.when_text(r['due'])}",
+              "callback_data": f"rem:open:{r['id']}"}] for r in mine]
     return "\n".join(lines), rows + [[{"text": "🔙 Tasks & Reminders", "callback_data": "tasks"}]]
+
+
+def _first_line(reminder: dict) -> str:
+    return next((x.strip() for x in (reminder.get("note") or "").splitlines() if x.strip()), "Reminder")
+
+
+def view_reminder(reminder_id: int, header: str = "📝 *Reminder*") -> tuple[str, list]:
+    """One reminder in full, with what can be done to it: change its text, its day, its time, or delete it."""
+    item = reminders.get(reminder_id)
+    if not item:
+        return "That reminder is already gone.", [[{"text": "🔙 Manage Reminders", "callback_data": "rem:list"}]]
+    lines = [header, "", escape_md(item["note"])]
+    if item.get("course"):
+        lines.append(f"\n📘 *Course:* {escape_md(item['course'])}")
+    lines.append(f"\n🕐 {reminders.when_text(item['due'])} · in {chat.remaining_text(item['due'])}")
+    rows = [[{"text": "✏️ Edit Text", "callback_data": f"rem:et:{reminder_id}"}],
+            [{"text": "🗓️ Change Date", "callback_data": f"rem:ed:{reminder_id}"},
+             {"text": "🕐 Change Time", "callback_data": f"rem:eh:{reminder_id}"}]]
+    if item.get("message_id"):
+        rows.append([{"text": "🔗 View Original Post", "callback_data": f"rem:view:{reminder_id}"}])
+    rows += [[{"text": "🗑️ Delete", "callback_data": f"rem:del:{reminder_id}"}],
+             [{"text": "🔙 Manage Reminders", "callback_data": "rem:list"}]]
+    return "\n".join(lines), rows
+
+
+def view_confirm_delete(reminder_id: int) -> tuple[str, list]:
+    item = reminders.get(reminder_id)
+    if not item:
+        return view_reminder(reminder_id)
+    return (f"🗑️ *Delete this reminder?*\n\n{escape_md(item['note'])}\n\n🕐 {reminders.when_text(item['due'])}",
+            [[{"text": "🗑️ Yes, Delete", "callback_data": f"rem:yes:{reminder_id}"},
+              {"text": "🔙 Keep It", "callback_data": f"rem:open:{reminder_id}"}]])
+
+
+def _edit_draft(reminder_id: int) -> dict | None:
+    """Starts changing a reminder: the pickers work on a draft carrying its note, so they are the new
+    reminder's own pickers, and the draft's `edit` sends the result back to this reminder."""
+    item = reminders.get(reminder_id)
+    if not item:
+        return None
+    _reminder_draft.clear()
+    _reminder_draft.update(note=item["note"], course=item.get("course"), edit=reminder_id)
+    return item
 
 
 def start_reminder(source: dict | None = None, message_id: int | None = None) -> None:
@@ -106,6 +157,26 @@ def handle_reminder_text(text: str) -> None:
     if _reminder_wait == "note":
         _reminder_wait = None
         start_reminder({"note": text})
+        return
+    if _reminder_wait == "edit":
+        item_id = _reminder_draft.get("edit")
+        if not text.strip():
+            chat.send_view("⚠️ Send the new text.", [REMINDER_CANCEL_ROW])
+            return
+        _reminder_wait = None
+        _reminder_draft.clear()
+        chat.send_view(*view_reminder(item_id, "✅ *Text changed*") if reminders.update(item_id, note=text)
+                       else ("That reminder is already gone.", [chat.BACK_ROW]))
+        return
+    if _reminder_wait == "date":
+        try:
+            day = reminders.parse_date(text)
+        except ValueError as e:
+            chat.send_view(f"⚠️ {escape_md(str(e))}", [REMINDER_CANCEL_ROW])
+            return
+        _reminder_wait = None
+        _reminder_draft["day"] = f"{day:%Y%m%d}"
+        chat.send_view(*view_hours(_reminder_draft["day"]))
         return
     try:
         hour, minute = reminders.parse_time(text)
@@ -174,7 +245,27 @@ def handle_reminder_callback(cb: dict, action: str, message_id: int | None) -> N
             return
         answer()
         start_reminder(found, (cb.get("message") or {}).get("message_id"))
-    elif kind in ("q", "day", "hr", "type") and not _reminder_draft.get("note"):
+    elif kind == "open":
+        answer()
+        _reminder_draft.clear()
+        _reminder_wait = None
+        show(view_reminder(int(parts[1])))
+    elif kind in ("et", "ed", "eh"):
+        item = _edit_draft(int(parts[1]))
+        if not item:
+            answer("Already gone")
+            show(view_manage_reminders())
+            return
+        answer()
+        if kind == "ed":
+            show(view_days())
+        elif kind == "eh":
+            _reminder_draft["day"] = f"{datetime.fromtimestamp(item['due']):%Y%m%d}"
+            show(view_hours(_reminder_draft["day"]))
+        else:
+            _reminder_wait = "edit"
+            chat.send_view(f"✏️ *Edit Text*\n\nNow:\n{escape_md(item['note'])}\n\nSend the new text.", [REMINDER_CANCEL_ROW])
+    elif kind in ("q", "day", "hr", "type", "typedate") and not _reminder_draft.get("note"):
         answer("⌛ That reminder draft expired — start again.")
     elif kind == "q":
         answer()
@@ -199,17 +290,25 @@ def handle_reminder_callback(cb: dict, action: str, message_id: int | None) -> N
         answer()
         _reminder_draft["day"], _reminder_wait = parts[1], "time"
         chat.send_view("✏️ *Type a time* — e.g. `18:45` or `6:45 PM`", [REMINDER_CANCEL_ROW])
+    elif kind == "typedate":
+        answer()
+        _reminder_wait = "date"
+        chat.send_view("✏️ *Type a date* — e.g. `26/11`, `26/11/2026` or `26 Nov`", [REMINDER_CANCEL_ROW])
     elif kind == "cancel":
         answer("✖️ Cancelled")
+        editing = _reminder_draft.get("edit")
         _reminder_draft.clear()
         _reminder_wait = None
-        show(("✖️ *Reminder cancelled.*", [chat.BACK_ROW]))
+        show(view_reminder(editing) if editing else ("✖️ *Reminder cancelled.*", [chat.BACK_ROW]))
     elif kind == "list":
         answer()
         show(view_manage_reminders())
     elif kind == "view":
         show_original(int(parts[1]), answer)
-    elif kind == "del":
+    elif kind == "del":                                   # asks first: a tap never deletes
+        answer()
+        show(view_confirm_delete(int(parts[1])))
+    elif kind == "yes":
         removed = reminders.remove(int(parts[1]))
         answer("🗑️ Deleted" if removed else "Already gone")
         show(view_manage_reminders())

@@ -974,7 +974,8 @@ in `data/daily_sent/` makes sure it goes out once). A day the PC was off is not 
   that course's next *in-person* lecture — online sessions and activity slots are ignored; an
   online-only course uses your next class on campus) or **🗓️ Custom Date & Time**.
 * **➕ New Custom Reminder** (or `/remind`): type a short note, then pick a day (Today,
-  Tomorrow, Next Sunday, the rest of the week) and an hour — or type a time like `18:45`.
+  Tomorrow, Next Sunday, the rest of the week) or **✏️ Type a Date** (`26/11`, `26/11/2026`, `26 Nov`; without
+  a year it is the next such day) and an hour — or type a time like `18:45`.
 * At the exact minute the bot sends `⏰ Reminder` with **⏰ Snooze 1 h** and **✅ Done**
   (and 🌐 Open on Moodle when it came from a post). A reminder pinned from a message
   remembers that message: it is delivered as a **reply quoting it**, and in Upcoming Tasks
@@ -982,7 +983,8 @@ in `data/daily_sent/` makes sure it goes out once). A day the PC was off is not 
   to the announcement and its screenshot (private chats have no message links). If that
   message was deleted, the Moodle link is offered instead. The scheduled monitor sends due reminders
   too when the bot is down; a claim file makes sure each goes out once.
-* 🗑️ Manage Reminders deletes them. State: `reminders.json` (bot), `reminder_sources.json`
+* ✏️ Manage Reminders: tap a reminder to read it whole, then **✏️ Edit Text**, **🗓️ Change Date**, **🕐 Change Time**
+  or **🗑️ Delete** (which asks first — a tap never deletes). State: `reminders.json` (bot), `reminder_sources.json`
   (what each 📌 refers to, written by the monitor) — both git-ignored.
 
 `/help` answers with a link to the README: the guide is the project's page (this file and the

@@ -621,9 +621,48 @@ def test_tasks_and_reminders_planner():
             assert answers[-1][1] == "That reminder has no original post."
 
             cb("rem:list")
-            assert edits[-1][0].startswith("🗑️ *Manage Reminders*") and len(edits[-1][1]) == 4
+            assert edits[-1][0].startswith("✏️ *Manage Reminders*") and len(edits[-1][1]) == 4
+            assert all(row[0]["callback_data"].startswith("rem:open:") for row in edits[-1][1][:3]), "a tap opens, never deletes"
             first = reminders.pending()[0]["id"]
+            cb(f"rem:open:{first}")
+            screen, buttons = edits[-1]
+            from uninotifier.notifier import escape_md
+            assert screen.startswith("📝 *Reminder*") and escape_md(reminders.get(first)["note"]) in screen, "the reminder, whole"
+            offered = {b.get("callback_data") for row in buttons for b in row}
+            assert {f"rem:et:{first}", f"rem:ed:{first}", f"rem:eh:{first}", f"rem:del:{first}", "rem:list"} <= offered, offered
             cb(f"rem:del:{first}")
+            assert edits[-1][0].startswith("🗑️ *Delete this reminder?*") and len(reminders.pending()) == 3, "deleting asks first"
+            cb(f"rem:open:{first}")
+            assert len(reminders.pending()) == 3, "Keep It keeps it"
+
+            cb(f"rem:et:{first}")                                   # the text
+            assert bot._reminder_wait == "edit"
+            bot.handle_command("Bring the new notes")
+            assert views[-1][0].startswith("✅ *Text changed*") and bot._reminder_wait is None
+            assert reminders.get(first)["note"] == "Bring the new notes" and reminders.get(first)["message_id"] == 5
+
+            far = datetime.now() + timedelta(days=40)               # the day: typed, because no button reaches it
+            cb(f"rem:ed:{first}")
+            assert edits[-1][0].startswith("🗓️ *Pick a day*")
+            assert "rem:typedate" in {b["callback_data"] for row in edits[-1][1] for b in row}
+            cb("rem:typedate")
+            assert bot._reminder_wait == "date"
+            bot.handle_command("99/99")
+            assert views[-1][0].startswith("⚠️") and bot._reminder_wait == "date", "a bad date keeps the question"
+            bot.handle_command(f"{far.day}/{far.month}")
+            assert views[-1][0].startswith("🕐 *Pick a time") and bot._reminder_wait is None
+            cb(f"rem:hr:{far:%Y%m%d}:1800")
+            assert edits[-1][0].startswith("✅ *Time changed*")
+            assert datetime.fromtimestamp(reminders.get(first)["due"]).strftime("%Y%m%d %H:%M") == f"{far:%Y%m%d} 18:00"
+            assert len(reminders.pending()) == 3, "changed in place, not added"
+
+            cb(f"rem:eh:{first}")                                   # the time, then think better of it
+            assert edits[-1][0].startswith("🕐 *Pick a time")
+            cb("rem:cancel")
+            assert edits[-1][0].startswith("📝 *Reminder*"), "cancelling a change goes back to the reminder"
+
+            cb(f"rem:del:{first}")
+            cb(f"rem:yes:{first}")
             assert len(reminders.pending()) == 2 and len(edits[-1][1]) == 3
             # the reminder itself arrives as a reply to the original post
             state = reminders.load()
@@ -750,3 +789,26 @@ def test_a_full_reminders_screen_fits_in_one_telegram_message():
         assert text.count("📝") == 2 and "more" not in text
     finally:
         reminders.pending, tasks.open_tasks, chat.load_state = keep
+
+
+def test_a_reminder_date_can_be_typed():
+    """The day buttons reach only the coming week, so a date is also typed: day first (26/11, 26-11-2026,
+    26.11, 26 Nov, Nov 26, 26 November 2026, Arabic digits). Without a year it is the next such day —
+    this year, or next year once this year's has passed. A date that does not exist or has passed is
+    refused with what to send."""
+    from datetime import date
+    from uninotifier import reminders
+
+    today = date(2026, 11, 13)
+    for text in ("26/11", "26-11-2026", "26.11", "26 Nov", "Nov 26", "26 November 2026", "٢٦/١١", " 26 / 11 "):
+        assert reminders.parse_date(text, today) == date(2026, 11, 26), text
+    assert reminders.parse_date("13/11", today) == date(2026, 11, 13), "today is allowed"
+    assert reminders.parse_date("12/11", today) == date(2027, 11, 12), "this year's has passed: next year's"
+    assert reminders.parse_date("29/2", date(2027, 11, 1)) == date(2028, 2, 29)
+    for bad in ("", "tomorrow", "31/2", "32/1", "5/13", "26 Foo", "12/11/2026", "12/11/2025"):
+        try:
+            reminders.parse_date(bad, today)
+        except ValueError as e:
+            assert str(e), bad
+        else:
+            raise AssertionError(f"{bad!r} must be refused")

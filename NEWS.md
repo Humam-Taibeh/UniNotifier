@@ -5,6 +5,8 @@ does not have yet when it tells its owner that a new version is ready (newest fi
 `## YYYY-MM-DD — Title`, then the text). The full list of changes is in [CHANGELOG.md](CHANGELOG.md).
 
 ## 2026-11-12 — Steadier checks
+- Reminders can be changed: open one in Manage Reminders to edit its text, date or time — deleting asks first.
+- You can type any date for a reminder (like `26/11`); the buttons showed only the next week.
 - Your reminders are listed in full, with everything you saved in them — not just the first line.
 - You can use Moodle in Arabic or English: the bot always reads it in English, in its own session.
 - A task found less than an hour before its time gets one reminder, saying the minutes really left.

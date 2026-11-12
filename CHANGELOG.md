@@ -36,6 +36,8 @@ All notable changes to this project are documented here. The format follows
 - The portal-setup and verification-code messages say when the portal is really contacted, in full sentences.
 
 ### Added
+- Manage Reminders: a reminder opens to its full text with Edit Text, Change Date, Change Time and Delete
+  (Delete asks first). The day picker has ✏️ Type a Date, because the buttons reach only the coming week.
 - 🔒 Assignment Closed — Not Submitted and 🗑️ Assignment Removed: told once when an assignment you
   have not handed in stops accepting work, or is taken out of the course.
 - 🎓 Class Ended — Cambridge One: when the class has not opened for two days while the account still
