@@ -74,6 +74,18 @@ Hard rules (a mistake here costs a student a seat, and other students will use i
 - Nothing is registered without the owner's approval of that exact set.
 - Training and graduation project, military science: never suggested early.
 
+### 3b. A course the bot cannot check in for — said up front
+
+Today a student learns that auto check-in cannot work for a course only after a lecture was missed
+or when "Check In by Hand" arrives. The bot should say it early, once (again when the timetable
+changes): one message with every online course and its state — ✅ auto check-in possible, or ⚠️ not
+possible with the reason (the course has no attendance activity; the instructor marks attendance
+and gives no self-marking; no online sessions by the timetable) — and a button to the course's
+attendance page, which shows how many sessions the student attended. It is built from what the bot
+already reads. Some cases cannot be known before an instructor opens a session (a password or QR
+code); the message says so. This also covers a student whose setup differs from the owner's, at the
+start of a term or in the middle of one.
+
 ## 4. Later: the look of the bot
 
 The messages, buttons and menus work and are tested. A pass over their order, wording and
