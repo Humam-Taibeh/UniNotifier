@@ -315,7 +315,9 @@ From then on every check commits and pushes changes to `saved_items.json`, `gpa.
 **Cambridge One** (English courses) — set `CAMBRIDGE_ASSIGNMENTS_URL` and `CAMBRIDGE_UNTIL`, then
 sign in once with `.venv\Scripts\python -m uninotifier.cambridge --login`. Cambridge ends a session
 after about three days; add `CAMBRIDGE_EMAIL` and `CAMBRIDGE_PASSWORD` and the bot signs in again by
-itself, otherwise it asks you on Telegram to repeat `--login`.
+itself, otherwise it asks you on Telegram to repeat `--login`. It stops by itself after
+`CAMBRIDGE_UNTIL`, or earlier once your class no longer opens on Cambridge One for two days (the
+course is over): you are told once, and `--login` turns it back on.
 
 **Surviving Windows restarts (optional — you decide, nothing here runs by itself)**
 

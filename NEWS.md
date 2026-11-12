@@ -8,6 +8,8 @@ does not have yet when it tells its owner that a new version is ready (newest fi
 - A task found less than an hour before its time gets one reminder, saying the minutes really left.
 - A file whose message failed now arrives with the file the next time, not as "already sent".
 - A power cut while the Moodle sign-in was being saved no longer stops the checks until you fix it.
+- Cambridge One stops by itself when your English class no longer opens there (the course is over),
+  and tells you once — no need to remove anything from `.env`.
 
 ## 2026-11-12 — Assignments stay until you hand them in
 - An assignment leaves your task list only when it is submitted — not when Moodle marks it done because

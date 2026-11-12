@@ -31,6 +31,9 @@ All notable changes to this project are documented here. The format follows
 ### Added
 - 🔒 Assignment Closed — Not Submitted and 🗑️ Assignment Removed: told once when an assignment you
   have not handed in stops accepting work, or is taken out of the course.
+- 🎓 Class Ended — Cambridge One: when the class has not opened for two days while the account still
+  signs in (or Cambridge answers that there is no such class), the watch stops by itself and says so
+  once — no more sign-ins or *sign in again* alerts after the course is over. `--login` turns it back on.
 
 ### Changed
 - The test suite is one file per topic instead of a single 9,000-line file; it runs the same way.
