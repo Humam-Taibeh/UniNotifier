@@ -615,3 +615,170 @@ def test_schedule_files_never_hold_up_the_bot():
         worker() and worker().join(5)
     finally:
         bot.send_schedule_files = keep
+
+
+def test_update_now_in_the_chat():
+    """🆕 Updates from the chat: /update says where this copy stands; ⏰ Later puts it off; ⬇️ Update
+    Now installs and restarts — once at a time, and a refused or failed update says why and leaves
+    the bot running. The restart never happens when its task could not be arranged."""
+    from uninotifier import selfheal, updates
+    from uninotifier.bot import chat as chat_part, update_flow
+
+    screens, answers, edits, exits, restarts = [], [], [], [], []
+    keep = (updates.look, updates.is_clone, updates.apply, chat_part.send_view, chat_part.answer, chat_part.edit_view,
+            selfheal.start_after_exit, update_flow.os._exit, update_flow.RESTART_WAIT, update_flow.restart,
+            update_flow.threading.Thread)
+
+    class Inline:                                    # the update runs in line, so the test can read its outcome
+        def __init__(self, target, args=(), **kwargs):
+            self.target, self.args = target, args
+
+        def start(self):
+            self.target(*self.args)
+
+    try:
+        chat_part.send_view = lambda text, rows: screens.append((text, rows)) or {"message_id": 1}
+        chat_part.answer = lambda cb_id, text=None, alert=False: answers.append(text) or True
+        chat_part.edit_view = lambda message_id, text, rows: edits.append(text)
+        update_flow.threading.Thread = Inline
+
+        # /update: where this copy stands
+        updates.look, updates.is_clone = lambda root=None: None, lambda root=None: False
+        assert "downloaded as a ZIP" in update_flow.view_status()[0]
+        updates.is_clone = lambda root=None: True
+        assert "GitHub can't be reached" in update_flow.view_status()[0]
+        updates.look = lambda root=None: {"behind": 0}
+        assert update_flow.view_status()[0] == "✅ *You are on the newest version.*"
+        updates.look = lambda root=None: {"behind": 2, "sha": "abc", "news": [], "subjects": ["fix: invented change"]}
+        text, rows = update_flow.view_status()
+        assert "invented change" in text and rows[0][0]["callback_data"] == "update:now"
+
+        # ⏰ Later
+        update_flow.handle_callback({"id": "a"}, "update:later", 5)
+        assert "OK" in answers[-1] and edits[-1].startswith("⏰ *Update postponed*")
+
+        # ⬇️ Update Now, refused: the reason, the lock given back
+        def refuse(root=None):
+            raise updates.UpdateError("you changed project files yourself (`bot.py`)")
+        updates.apply = refuse
+        update_flow.handle_callback({"id": "b"}, "update:now", 6)
+        assert screens[-1][0] == "⚠️ *Not updated* — you changed project files yourself (`bot.py`)."
+        assert not update_flow._busy.locked(), "a refused update frees the button"
+
+        # ... a bug: told, logged, the bot keeps running
+        updates.apply = lambda root=None: 1 / 0
+        bugs, keep_bug = [], update_flow.failsafe.bug
+        update_flow.failsafe.bug = lambda area, headline, exc, detail="": bugs.append(area) or True
+        try:
+            update_flow.handle_callback({"id": "c"}, "update:now", 6)
+        finally:
+            update_flow.failsafe.bug = keep_bug
+        assert bugs == ["bot:update"] and "something went wrong" in screens[-1][0] and not update_flow._busy.locked()
+
+        # ... already up to date: no restart
+        update_flow.restart = lambda: restarts.append(1)
+        updates.apply = lambda root=None: "Already on the newest version."
+        update_flow.handle_callback({"id": "d"}, "update:now", 6)
+        assert screens[-1][0] == "✅ Already on the newest version." and restarts == []
+
+        # ... installed: said, then the restart
+        updates.apply = lambda root=None: "Updated to `abc1234`."
+        update_flow.handle_callback({"id": "e"}, "update:now", 6)
+        assert "restarts now" in screens[-1][0] and restarts == [1]
+
+        # a second press while one runs
+        update_flow._busy.acquire()
+        update_flow.handle_callback({"id": "f"}, "update:now", 6)
+        update_flow._busy.release()
+        assert answers[-1] == "⏳ Already updating…"
+
+        # restart(): never ends the bot unless its new start was arranged
+        update_flow.restart = keep[9]
+        update_flow.RESTART_WAIT = 0
+        update_flow.os._exit = lambda code: exits.append(code)
+        selfheal.start_after_exit = lambda: False
+        update_flow.restart()
+        assert exits == [] and "couldn't restart myself" in screens[-1][0]
+        selfheal.start_after_exit = lambda: True
+        update_flow.restart()
+        assert exits == [0]
+    finally:
+        (updates.look, updates.is_clone, updates.apply, chat_part.send_view, chat_part.answer, chat_part.edit_view,
+         selfheal.start_after_exit, update_flow.os._exit, update_flow.RESTART_WAIT, update_flow.restart,
+         update_flow.threading.Thread) = keep
+        if update_flow._busy.locked():
+            update_flow._busy.release()
+
+
+def test_a_manual_check_reports_what_it_found():
+    """/check runs the monitor as its own process and edits ONE message from "Checking…" into what it
+    found — or why it failed. A second /check while one runs does nothing; a check that crashes never
+    leaves "Checking the portal…" on screen."""
+    from uninotifier.bot import chat as chat_part, checks
+
+    screens, edits, started = [], [], []
+    keep = (chat_part.send_view, chat_part.edit_view, chat_part.load_last_run, checks.subprocess.run,
+            checks._read_timetable, checks.threading.Thread, checks.failsafe.bug)
+
+    class Inline:
+        def __init__(self, target, args=(), **kwargs):
+            self.target, self.args = target, args
+
+        def start(self):
+            self.target(*self.args)
+
+    class Done:
+        def __init__(self, code):
+            self.returncode = code
+
+    last = {}
+    try:
+        chat_part.send_view = lambda text, rows: screens.append(text) or {"message_id": 77}
+        chat_part.edit_view = lambda message_id, text, rows: edits.append((message_id, text))
+        chat_part.load_last_run = lambda: last
+        checks._read_timetable = lambda: None
+        checks.threading.Thread = Inline
+        checks.subprocess.run = lambda cmd, **kw: started.append(kw["env"]["UNINOTIFIER_MANUAL"]) or Done(0)
+
+        last.update(ok=True, courses=6, items=80, new_items=[{"type": "assign", "name": "HW_2", "course": "Big Data"}],
+                    new_courses=0, updated_files=1, new_posts=2, edited=0, pending=3, seconds=4.5)
+        assert checks.start_check(None)
+        assert screens == ["🔄 *Checking the portal…*\nThis may take a minute or more."] and started == ["1"]
+        assert edits[-1][0] == 77 and edits[-1][1].startswith("✅ *Check Complete*")
+        assert "HW\\_2 — Big Data" in edits[-1][1] and "⏱️ *Took:* 4.5 s" in edits[-1][1]
+
+        last.clear()
+        last.update(ok=True, new_items=[], new_courses=0)
+        checks.start_check(55)
+        assert edits[-2] == (55, "🔄 *Checking the portal…*\nThis may take a minute or more.") and "Nothing new" in edits[-1][1]
+
+        for code, run, said in ((3, {}, "Another check is already running"),
+                                (0, {"maintenance": "قيد الصيانة", "ok": True}, "under maintenance"),
+                                (1, {"ok": False}, "Check Failed")):
+            last.clear()
+            last.update(run)
+            checks.subprocess.run = lambda cmd, code=code, **kw: Done(code)
+            checks.start_check(9)
+            assert said in edits[-1][1], (code, edits[-1][1])
+
+        def too_long(cmd, **kw):
+            raise checks.subprocess.TimeoutExpired(cmd, 1)
+        checks.subprocess.run = too_long
+        last.clear()
+        checks.start_check(9)
+        assert "Check Failed" in edits[-1][1], "a check past its time limit failed"
+
+        bugs = []
+        checks.failsafe.bug = lambda area, headline, exc, detail="": bugs.append(area) or True
+        checks.subprocess.run = lambda cmd, **kw: 1 / 0
+        checks.start_check(9)
+        assert bugs == ["bot:check"] and edits[-1][1].startswith("❌ *Check Failed* — something went wrong")
+
+        checks._check_lock.acquire()
+        try:
+            assert checks.start_check(9) is False, "one check at a time"
+        finally:
+            checks._check_lock.release()
+    finally:
+        (chat_part.send_view, chat_part.edit_view, chat_part.load_last_run, checks.subprocess.run,
+         checks._read_timetable, checks.threading.Thread, checks.failsafe.bug) = keep
