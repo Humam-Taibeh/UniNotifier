@@ -128,8 +128,11 @@ class HttpContext:
     # --------------------------------------------------------------- Moodle
 
     def sesskey(self) -> str | None:
-        """The session's key, or None when the dashboard sends us to the login."""
-        resp = self.get(f"{BASE_URL}/my/", timeout=30000)
+        """The session's key, or None when the dashboard sends us to the login. The ?lang=en also
+        sets this session's language: every page the bot reads (dates, "Present", statuses) is
+        English whatever language the owner uses in their own browser — the bot has its own
+        session, and Moodle keeps the language in it (measured 2026-11-12: ar, then en, then none)."""
+        resp = self.get(f"{BASE_URL}/my/?lang=en", timeout=30000)
         match = SESSKEY_RE.search(resp.text()) if resp.ok else None
         return match.group(1) if match and "/login/" not in resp.url else None
 

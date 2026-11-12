@@ -229,6 +229,8 @@ def test_http_layer():
     from uninotifier.httpctx import HttpContext
 
     class Handler(http.server.BaseHTTPRequestHandler):
+        dashboard_asked: list[str] = []
+
         def log_message(self, *args):
             pass
 
@@ -242,7 +244,8 @@ def test_http_layer():
                 self.wfile.write(body)
 
         def do_GET(self):
-            if self.path == "/my/":
+            if self.path.split("?")[0] == "/my/":
+                Handler.dashboard_asked.append(self.path)
                 self._reply(body=b'<script>M.cfg = {"sesskey":"abc123XY"}</script>')
             elif self.path == "/redir":
                 self._reply(302, headers={"Location": "/file.bin"})
@@ -284,6 +287,8 @@ def test_http_layer():
         old_base, httpctx.BASE_URL = httpctx.BASE_URL, base
         try:
             assert http_ctx.sesskey() == "abc123XY"
+            assert Handler.dashboard_asked[-1] == "/my/?lang=en", \
+                "the bot reads Moodle in English whatever language the owner uses (the session keeps it; measured 2026-11-12)"
             assert HttpContext.from_cookie_list([]).sesskey() == "abc123XY"   # the fake portal needs no login
         finally:
             httpctx.BASE_URL = old_base

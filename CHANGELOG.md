@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- The bot reads Moodle in English whatever language you use there: dates and attendance choices were
+  only understood in English, so an Arabic Moodle would have made it miss lectures. It asks for English
+  in its own session (`?lang=en`); your own Moodle language is not touched.
 - An assignment leaves the task list only when it is handed in: Moodle's own *done* mark (which opening
   the page can set) no longer hides one that is still to do.
 - A course text that holds an HTML comment (text pasted from Word) no longer fails the course's read.
