@@ -812,3 +812,71 @@ def test_a_reminder_date_can_be_typed():
             assert str(e), bad
         else:
             raise AssertionError(f"{bad!r} must be refused")
+
+
+def test_reminder_buttons_and_edits_survive_a_reminder_that_is_gone():
+    """Snooze and Done on a delivered reminder, and every way a reminder can vanish while a screen
+    for it is open (deleted from another screen, already done): each answers plainly and returns to
+    something usable, none raises. An empty new text and a time that has passed keep the question."""
+    from datetime import timedelta
+    from uninotifier import reminders
+    bot = _package("uninotifier.bot")
+    from uninotifier.bot import reminder_flow
+
+    with tempfile.TemporaryDirectory() as tmp:
+        keep = (reminders.STATE_FILE, reminders.SOURCES_FILE, reminders.CLAIM_DIR, bot.send_view, bot.edit_view, bot.api)
+        reminders.STATE_FILE, reminders.SOURCES_FILE = Path(tmp) / "r.json", Path(tmp) / "s.json"
+        reminders.CLAIM_DIR = Path(tmp) / "sent"
+        views, edits, answers, calls = [], [], [], []
+        bot.send_view = lambda text, rows: views.append((text, rows)) or {"message_id": 1}
+        bot.edit_view = lambda mid, text, rows: edits.append((text, rows))
+        bot.api = lambda method, **data: calls.append((method, data)) or (answers.append(data.get("text")) if method == "answerCallbackQuery" else None)
+        press = iter(range(10 ** 6))
+        cb = lambda data: bot.handle_callback({"id": f"q{next(press)}", "data": data, "message": {"message_id": 7, "reply_markup": {"inline_keyboard": [[{"text": "x", "callback_data": "rem:z:1"}]]}}})
+        try:
+            soon = (datetime.now() + timedelta(days=2)).timestamp()
+            item = reminders.add("Bring the form", soon)
+            cb(f"rem:z:{item['id']}")
+            assert answers[-1].startswith("⏰ Snoozed until"), answers
+            assert reminders.get(item["id"])["due"] > time.time() + 3000, "snoozed an hour from now"
+            cb(f"rem:done:{item['id']}")
+            assert answers[-1] == "✅ Done" and reminders.get(item["id"]) is None
+            cb(f"rem:z:{item['id']}")
+            assert answers[-1] == "Already gone", "snoozing what is gone"
+            assert any(m == "editMessageReplyMarkup" for m, _ in calls), "the Snooze and Done buttons leave the message"
+
+            gone = reminders.add("Will vanish", soon)["id"]
+            for what in ("et", "ed", "eh"):                      # a change started on a reminder that is gone
+                views.clear(); edits.clear()
+                cb(f"rem:{what}:999")
+                assert answers[-1] == "Already gone" and edits[-1][0].startswith("✏️ *Manage Reminders*")
+            assert reminders.get(gone) is not None
+            cb(f"rem:open:{gone}")
+            reminders.remove(gone)
+            cb(f"rem:del:{gone}")                                # asked to delete what is already gone
+            assert edits[-1][0].startswith("That reminder is already gone"), edits[-1][0]
+            cb(f"rem:yes:{gone}")
+            assert answers[-1] == "Already gone"
+
+            again = reminders.add("Edit me", soon)["id"]
+            cb(f"rem:et:{again}")
+            reminder_flow.handle_reminder_text("   ")
+            assert views[-1][0].startswith("⚠️ Send the new text") and bot._reminder_wait == "edit", "blank text keeps the question"
+            reminders.remove(again)                              # it vanished while the new text was awaited
+            reminder_flow.handle_reminder_text("Too late")
+            assert views[-1][0].startswith("That reminder is already gone") and bot._reminder_wait is None
+
+            back = reminders.add("Time passes", soon)["id"]
+            cb(f"rem:eh:{back}")
+            yesterday = f"{datetime.now() - timedelta(days=1):%Y%m%d}"
+            reminder_flow._reminder_draft["day"], reminder_flow._reminder_wait = yesterday, "time"
+            reminder_flow.handle_reminder_text("6 pm")
+            assert views[-1][0].startswith("⚠️ That time has already passed") and bot._reminder_wait == "time"
+            reminder_flow._reminder_draft["edit"] = 999          # the reminder is gone when the new time arrives
+            reminder_flow._reminder_draft["day"] = f"{datetime.now() + timedelta(days=3):%Y%m%d}"
+            reminder_flow.handle_reminder_text("6 pm")
+            assert views[-1][0].startswith("That reminder is already gone")
+        finally:
+            (reminders.STATE_FILE, reminders.SOURCES_FILE, reminders.CLAIM_DIR, bot.send_view, bot.edit_view, bot.api) = keep
+            bot._reminder_draft.clear()
+            bot._reminder_wait = None
