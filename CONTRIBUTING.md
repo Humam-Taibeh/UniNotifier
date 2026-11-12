@@ -26,7 +26,7 @@ turn on the project's hook once: `git config core.hooksPath .githooks`.
 To see which lines the tests reach (branch coverage, per module):
 
 ```powershell
-.venv\Scripts\python -m coverage run --branch --source=src/uninotifier tests	est_architecture.py
+.venv\Scripts\python -m coverage run --branch --source=src/uninotifier tests\test_architecture.py
 .venv\Scripts\python -m coverage report --sort=cover
 ```
 
