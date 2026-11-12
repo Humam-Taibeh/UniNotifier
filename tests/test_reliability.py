@@ -1304,3 +1304,58 @@ def test_a_damaged_session_file_does_not_stop_the_browser():
     finally:
         scan.sync_playwright, scan.install_virtual_authenticator, state.SESSION_FILE, fileio.write_json_atomic = keep
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_a_failed_check_ends_with_the_right_alert_and_exit_code():
+    """How one check ends when reading Moodle fails: each cause counts as its own kind of failure
+    (alerts.record_failure decides when to tell), and the exit code tells the scheduler and /check
+    what happened. Maintenance is the portal's state, not a failure: exit 0, the picture with it."""
+    from uninotifier import maintenance, watchdog
+    from uninotifier.monitor import alerts, run, scan, state, timed
+    from uninotifier.zuj_auth import InvalidCredentialsError, MFARequiredError
+
+    recorded = []
+    keep = (scan.scan_with_retries, alerts.record_failure, alerts.check_bot, alerts.check_code, alerts.mfa_allowed,
+            timed.send_schedule_messages, state.DATA_FILE)
+    told_by_relay = MFARequiredError("verification not completed")
+    told_by_relay.notified = True
+    cases = [
+        (watchdog.LayoutChanged("the course list came back empty"), "layout", 1),
+        (MFARequiredError("a second factor is needed"), "mfa", 1),
+        (told_by_relay, "mfa", 1),
+        (maintenance.PortalUnavailable("e-learning portal", "down", phrase="Under Maintenance", png=b"PNG"), "maintenance", 0),
+        (maintenance.PortalUnavailable("e-learning portal", "the form never appeared"), "signin", 1),
+        (InvalidCredentialsError("Your password is incorrect"), "login", 1),
+        (ConnectionError("Connection reset by peer"), "network", 1),
+        (KeyError("courses"), "unexpected", 1),
+    ]
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            state.DATA_FILE = Path(tmp) / "saved_items.json"
+            alerts.record_failure = lambda saved, kind, text, notify=True, png=None: recorded.append((kind, notify, png, text))
+            alerts.check_bot = alerts.check_code = lambda saved: None
+            alerts.mfa_allowed = lambda saved: False
+            timed.send_schedule_messages = lambda saved: None
+            for error, kind, code in cases:
+                def fail(saved, notify_new, mfa_handler=None, error=error):
+                    raise error
+                scan.scan_with_retries = fail
+                try:
+                    run.run()
+                    raise AssertionError(f"{kind}: the check must end")
+                except SystemExit as e:
+                    assert e.code == code, (kind, e.code)
+                got_kind, notify, png, text = recorded[-1]
+                assert got_kind == kind, (type(error).__name__, got_kind)
+                if kind == "mfa":
+                    assert notify is (not getattr(error, "notified", False)), "told once: not again if the relay already did"
+                if kind == "maintenance":
+                    assert png == b"PNG" and "Under Maintenance" in text
+                if kind == "network":
+                    assert text.startswith("📡 *Cannot reach the portal*")
+                if kind == "login":
+                    assert "Your password is incorrect" in text
+            assert len(recorded) == len(cases)
+        finally:
+            (scan.scan_with_retries, alerts.record_failure, alerts.check_bot, alerts.check_code, alerts.mfa_allowed,
+             timed.send_schedule_messages, state.DATA_FILE) = keep
