@@ -113,7 +113,7 @@ _RESERVED_NAMES = re.compile(r"(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³]|co
 
 
 def safe_name(name: str, fallback: str = "item") -> str:
-    cleaned = _INVALID_CHARS.sub("_", name or "").strip(" .")[:120]
+    cleaned = _INVALID_CHARS.sub("_", name or "").strip(" .")[:120].rstrip(" .")    # cut, then tidy the cut
     if _RESERVED_NAMES.fullmatch(cleaned):
         cleaned = "_" + cleaned
     return cleaned or fallback

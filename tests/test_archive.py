@@ -604,3 +604,13 @@ def test_a_folder_download_that_fails_leaves_nothing_behind():
             assert folder.name == "Sheets" and [p.name for p in folder.iterdir()] == ["sheet 1.pdf"]
         finally:
             archive.ARCHIVE_ROOT, archive._ARCHIVE_ROOT_RESOLVED = keep
+
+
+def test_a_long_name_never_ends_in_a_space_or_a_dot():
+    """Windows drops a file name's trailing spaces and dots when it creates the file, so a name that
+    ends in one is not the name on the disk. A long title was cut at 120 characters after those were
+    removed, and the cut could end on one again."""
+    for title in ("a" * 119 + " lecture notes.pdf", "b" * 119 + ".final version", "c" * 118 + " . rest"):
+        name = archive.safe_name(title)
+        assert len(name) <= 120 and name == name.rstrip(" ."), repr(name[-5:])
+    assert archive.safe_name(" . ") == "item" and archive.safe_name("nul. ") == "_nul"
