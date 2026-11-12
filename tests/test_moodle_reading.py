@@ -1044,3 +1044,86 @@ def test_each_notification_goes_out_in_the_clearest_shape():
     post = {"attachments": [("a.pdf", "good"), ("b.pdf", "gone"), ("c.pdf", "huge"), ("d.pdf", "boom")]}
     notify.download_attachments(Moodle(), post)
     assert post["_files"] == [("a.pdf", b"data")], post["_files"]
+
+
+def test_the_readers_a_decision_hangs_on():
+    """The answers the check acts on, and what they are when Moodle does not answer plainly.
+    activity_exists() alone decides that an assignment was REMOVED (a notice, and the task leaves the
+    list): only a 404 says so — an error, a dropped connection or a redirect to the sign-in must
+    never read as "removed". The task readers give None (keep what was known) on an unreadable page,
+    and the forum reader re-asks the discussions a batch never reached (Moodle stops a batch at the
+    first failing call)."""
+    class Response:
+        def __init__(self, status, url="https://x/mod/assign/view.php?id=1", body=""):
+            self.status, self.ok, self.url, self._body = status, 200 <= status < 300, url, body
+
+        def text(self):
+            return self._body
+
+    class Site:
+        def __init__(self, answer):
+            self.request, self.answer = self, answer
+
+        def get(self, url, timeout=0):
+            if isinstance(self.answer, Exception):
+                raise self.answer
+            return self.answer
+
+    url = "https://x/mod/assign/view.php?id=1"
+    assert moodle.activity_exists(Site(Response(404)), url) is False
+    assert moodle.activity_exists(Site(Response(200)), url) is True
+    assert moodle.activity_exists(Site(Response(500)), url) is None, "a server error is not a removal"
+    assert moodle.activity_exists(Site(OSError("reset")), url) is None, "nor is a dropped connection"
+    try:
+        moodle.activity_exists(Site(Response(200, url="https://x/login/index.php")), url)
+        raise AssertionError("a sign-in page means the session ended")
+    except moodle.SessionExpiredError:
+        pass
+
+    submitted = ('<table class="submissionstatustable"><tr><td>Submission status</td>'
+                 '<td>Submitted for grading</td></tr></table>')
+    assert moodle.fetch_submission_state(Site(Response(200, body=submitted)), url) == {"submitted": True, "accepting": False}
+    assert moodle.fetch_submission_state(Site(Response(500)), url) is None
+    assert moodle.fetch_submission_state(Site(Response(200, body="<p>a page without the status block</p>")), url) is None
+    assert moodle.fetch_submission_state(Site(ValueError("odd")), url) is None, "an odd answer keeps what was known"
+
+    quiz = "https://x/mod/quiz/view.php?id=2"
+    taken = '<div class="quizreviewsummary"><table><tr><th>Grade</th><td>8.00 out of 10.00</td></tr></table></div>'
+    page = f'<div role="main">{taken}</div>'
+    assert moodle.fetch_task_page(Site(Response(200, url=quiz, body=page)), quiz) == (True, "8/10")
+    assert moodle.fetch_task_page(Site(Response(200, body=submitted)), url) == (None, None), "no mark yet"
+    assert moodle.fetch_task_page(Site(OSError("reset")), quiz) == (None, None)
+    assert moodle.fetch_quiz_attempted(Site(Response(200, url=quiz, body=page)), quiz) is True
+    assert moodle.fetch_quiz_attempted(Site(Response(200, url=quiz, body='<div class="quizinfo">Opens</div>')), quiz) is False
+    assert moodle.fetch_quiz_attempted(Site(OSError("reset")), quiz) is None
+
+    # the forum: three discussions, the batch stops at the second (Moodle's way): the third is asked again
+    batches = []
+
+    def ajax_batch(context, sesskey, calls):
+        ids = [args["discussionid"] for _, args in calls]
+        batches.append(ids)
+        out = []
+        for d in ids:
+            if d == 2 and len(batches) == 1:
+                out.append({"error": True, "exception": {"message": "no access"}})
+                break
+            out.append({"error": False, "data": {"posts": [{"id": d * 10, "discussionid": d, "subject": f"Topic {d}",
+                                                            "timecreated": 100 + d, "message": "", "urls": {}}]}})
+        return out
+
+    class Forum:
+        def __init__(self):
+            self.request = self
+
+        def get(self, url, timeout=0):
+            return Response(200, url=url, body="".join(f'<a href="discuss.php?d={d}">t</a>' for d in (1, 2, 3)))
+
+    keep = moodle.ajax_batch
+    try:
+        moodle.ajax_batch = ajax_batch
+        posts = moodle.fetch_forum_posts(Forum(), "KEY", "https://x/mod/forum/view.php?id=5")
+    finally:
+        moodle.ajax_batch = keep
+    assert batches == [[1, 2, 3], [3]], batches
+    assert [p["id"] for p in posts] == ["10", "30"], "the unreadable discussion is skipped, not the rest"
