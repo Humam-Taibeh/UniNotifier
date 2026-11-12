@@ -4,6 +4,11 @@ What is new, in plain words, for the people who use UniNotifier. The bot shows t
 does not have yet when it tells its owner that a new version is ready (newest first; one entry is
 `## YYYY-MM-DD — Title`, then the text). The full list of changes is in [CHANGELOG.md](CHANGELOG.md).
 
+## 2026-11-12 — Steadier checks
+- A task found less than an hour before its time gets one reminder, saying the minutes really left.
+- A file whose message failed now arrives with the file the next time, not as "already sent".
+- A power cut while the Moodle sign-in was being saved no longer stops the checks until you fix it.
+
 ## 2026-11-12 — Assignments stay until you hand them in
 - An assignment leaves your task list only when it is submitted — not when Moodle marks it done because
   you opened it.
