@@ -5,6 +5,8 @@ running on a student's own Windows PC. Fixes and improvements within that scope 
 for anything bigger, open a feature request first so we can agree on the shape. Everyone taking part
 agrees to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
+Where the project stands and what is planned next: [docs/ROADMAP.md](docs/ROADMAP.md).
+
 ## Set up
 
 ```powershell

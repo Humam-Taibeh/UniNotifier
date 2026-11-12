@@ -1,6 +1,7 @@
 # UniNotifier — reference
 
-How every part behaves, in depth. To install and run it, see the [README](../README.md).
+How every part behaves, in depth. To install and run it, see the [README](../README.md). What is finished, what is waiting and what
+comes next: [ROADMAP.md](ROADMAP.md).
 
 - [Authentication](#authentication) · [Silent operation](#silent-operation) · [Local archive](#local-archive)
 - [Deep check & smart handling](#deep-check--smart-handling) · [How it works](#how-it-works) · [Project layout](#project-layout)
