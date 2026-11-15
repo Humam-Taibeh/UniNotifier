@@ -166,7 +166,27 @@ def check_telegram(r: Report, send: bool) -> None:
             r.line(OK if sent.get("ok") else FAIL, "Test message sent" if sent.get("ok") else
                    f"Test message refused: {sent.get('description', '?')}")
     except requests.RequestException as e:
-        r.line(WARN, f"Couldn't reach Telegram ({e.__class__.__name__}) - check the internet connection")
+        if internet_works():
+            r.line(FAIL, "Your internet works, but this network blocks Telegram - nothing can reach your phone",
+                   "some providers and routers block Telegram's address: try another network (a phone hotspot) "
+                   "to be sure, or turn on a VPN such as Cloudflare WARP (1.1.1.1) on this PC. Nothing is lost "
+                   "meanwhile: what could not be sent goes out once Telegram is reachable")
+        else:
+            r.line(WARN, f"Couldn't reach Telegram ({e.__class__.__name__}) - check the internet connection")
+
+
+NEUTRAL_SITE = "https://elearning.zuj.edu.jo/"      # what the bot reads anyway: no other address is contacted
+
+
+def internet_works() -> bool:
+    """Whether this PC reaches the university's own site. Asked only once Telegram failed: when the
+    site answers and Telegram does not, it is the network that holds Telegram back, not the internet."""
+    import requests
+    try:
+        requests.head(NEUTRAL_SITE, timeout=10, allow_redirects=False)
+        return True
+    except requests.RequestException:
+        return False
 
 
 def check_state(r: Report) -> None:

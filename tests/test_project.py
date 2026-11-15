@@ -432,6 +432,30 @@ def test_doctor_says_what_to_fix():
             paths.SCHEDULE_FILE = keep_schedule
             shutil.rmtree(tmp, ignore_errors=True)
         assert all(ord(ch) < 128 for line in text.splitlines() if line.startswith("[") for ch in line[:6])
+
+        # Telegram not reached: a network that blocks Telegram is told apart from no internet at all
+        import requests
+        keep_net = (requests.get, requests.head)
+
+        def no_telegram(url, **kw):
+            raise requests.ConnectionError("cut")
+        try:
+            requests.get = no_telegram
+            requests.head = lambda url, **kw: object()                       # the university's site answers
+            report = doctor.Report()
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                _with_env({"TELEGRAM_BOT_TOKEN": "123456789:AAAAAAAAAA", "TELEGRAM_CHAT_ID": "1"},
+                          lambda: doctor.check_telegram(report, send=False))
+            assert report.failed == 1 and "this network blocks Telegram" in out.getvalue(), out.getvalue()
+            assert "VPN" in out.getvalue() and "Nothing is lost" in out.getvalue()
+            requests.head = no_telegram                                      # nothing answers: the internet is down
+            report = doctor.Report()
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                _with_env({"TELEGRAM_BOT_TOKEN": "123456789:AAAAAAAAAA", "TELEGRAM_CHAT_ID": "1"},
+                          lambda: doctor.check_telegram(report, send=False))
+            assert report.failed == 0 and "check the internet connection" in out.getvalue(), out.getvalue()
+        finally:
+            requests.get, requests.head = keep_net
     finally:
         doctor.check_browser, doctor.check_tasks = keep
 

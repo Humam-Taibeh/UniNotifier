@@ -268,7 +268,8 @@ def converse(console: Console, offline: bool = False, saved=envcheck.value) -> d
             break
         if state == "unreachable":
             console.say("   [WARN] Telegram cannot be reached from this PC right now - the token is saved as typed;")
-            console.say("          the doctor checks it later.")
+            console.say("          the doctor checks it later. If your internet works, this network may block")
+            console.say("          Telegram: try a phone hotspot, or a VPN such as Cloudflare WARP (1.1.1.1).")
             break
         console.say("   Telegram does not know this token. Copy it again from @BotFather (/mybots - API Token).")
     values["TELEGRAM_BOT_TOKEN"] = token
