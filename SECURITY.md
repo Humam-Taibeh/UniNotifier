@@ -3,6 +3,26 @@
 UniNotifier holds a student's university password, a Telegram bot token and live sign-in
 sessions. A flaw in how it handles them matters, so please report one **privately**.
 
+## What is kept, where, and who sees it
+
+Everything stays on **your own PC**, in your own Windows account. There is no UniNotifier server:
+nothing you type or that the bot reads is sent to the developer or to anyone else.
+
+| What | Where | Who can open it |
+|---|---|---|
+| Your passwords and the bot's token | `.env` in the project folder | Only your Windows account (the setup limits the file to it); never in Git |
+| Your sign-in sessions (Moodle, the portal) | `data\` | Only your Windows account (your user folder); never in Git, never in the backup |
+| What the bot found: tasks, grades, your timetable and its picture | `data\` | The same; never in Git |
+| The course files it downloads | `ARCHIVE_ROOT` (`Documents\University` by default) | Your Windows account |
+| The optional backup | your own **private** GitHub repository | You. Only `saved_items.json`, `gpa.json` and `reminders.json`: never a session, a cookie or a password |
+
+What leaves the PC, and to whom: the sign-ins go to the university's own sites (Moodle, Microsoft,
+the portal), and the messages to **your** Telegram bot, which answers only your own Telegram Id.
+The optional health check (`HEALTHCHECK_URL`) receives only a short status — how many courses and
+items a check read and how long it took, that the portal is under maintenance, or an exit code —
+never a name, a mark or a message. Update Now downloads new code only from the address you cloned, and refuses one without encryption
+(`http://`, `git://`).
+
 ## Reporting a vulnerability
 
 **Don't open a public issue.** Use GitHub's private reporting instead:
