@@ -27,7 +27,6 @@ with both running. reminders.json is written only by the bot.
 
 import json
 import logging
-import os
 import re
 import time
 from datetime import date, datetime, timedelta
@@ -308,16 +307,15 @@ def delivered(item: dict) -> bool:
 
 
 def _claim(item: dict) -> bool:
-    CLAIM_DIR.mkdir(exist_ok=True)
-    try:
-        os.close(os.open(CLAIM_DIR / f"{_key(item)}.sent", os.O_CREAT | os.O_EXCL | os.O_WRONLY))
-        return True
-    except FileExistsError:
-        return False
+    return daily.claim_in(CLAIM_DIR, _key(item), pending=True)       # confirmed once it is out
+
+
+def _confirm(item: dict) -> None:
+    daily.confirm_in(CLAIM_DIR, _key(item))
 
 
 def _release(item: dict) -> None:
-    (CLAIM_DIR / f"{_key(item)}.sent").unlink(missing_ok=True)
+    daily.release_in(CLAIM_DIR, _key(item))
 
 
 def message(item: dict) -> tuple[str, list]:
@@ -346,6 +344,7 @@ def send_due(token: str, chat_id: str, now: float | None = None) -> int:
             failsafe.bug("reminders", "A reminder could not be sent", e, "It is tried again on the next tick.")
             ok = False
         if ok:
+            _confirm(item)
             sent += 1
             log.info("Sent reminder %s", item["id"])
         else:

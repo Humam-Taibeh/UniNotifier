@@ -374,13 +374,14 @@ def no_check_in_message(activity: dict, row: dict) -> str:
 
 
 def report_recorded(token: str, chat_id: str, activity: dict, row: dict, key: str, by_me: bool = False) -> bool:
-    if not daily.claim(f"{key}-done"):
+    if not daily.claim(f"{key}-done", pending=True):
         return False
     text = recorded_message(activity, row, by_me)
     png = screenshot(page_url(activity), f"{row['date']} {row['time']}")
     if png:
         text += "\n📸 Your row on Moodle's attendance page is attached."
     if _send(token, chat_id, text, [[{"text": OPEN_BUTTON, "url": activity["url"]}]], png, activity):
+        daily.confirm(f"{key}-done")
         log.info("Check-in: %s is recorded (%s) — sent", key, row["status"])
         return True
     daily.release(f"{key}-done")              # the next look sends it
@@ -389,12 +390,13 @@ def report_recorded(token: str, chat_id: str, activity: dict, row: dict, key: st
 
 def report_failure(token: str, chat_id: str, activity: dict, row: dict | None, key: str, reason: str,
                    shot_url: str | None = None) -> bool:
-    if not daily.claim(f"{key}-alerted"):
+    if not daily.claim(f"{key}-alerted", pending=True):
         return False
     want = f"{row['date']} {row['time']}" if row and not shot_url else None
     png = screenshot(shot_url or page_url(activity), want) if row else None
     text = failed_message(activity, row, reason, bool(png))
     if _send(token, chat_id, text, [[{"text": MANUAL_BUTTON, "url": activity["url"]}]], png, activity):
+        daily.confirm(f"{key}-alerted")
         log.warning("Check-in: %s failed (%s) — told you to check in by hand", key, reason)
         return True
     daily.release(f"{key}-alerted")
@@ -436,7 +438,7 @@ def _trouble(token: str, chat_id: str, watch: Watch, activity: dict, key: str, r
 def attempt(token: str, chat_id: str, watch: Watch, http, activity: dict, row: dict, key: str,
             now: float) -> None:
     """Check-in is open: submit it once, then read the page to see what Moodle recorded."""
-    if not daily.claim(f"{key}-try"):
+    if not daily.claim(f"{key}-try", pending=True):     # released below; a process killed mid-try leaves it to the next
         return                                  # the other process is on it right now
     try:
         outcome = activities.check_in(http, row, dry_run=False)
@@ -503,9 +505,11 @@ def wrap_up(token: str, chat_id: str, watch: Watch, activity: dict, start: datet
         if not daily.claimed(f"{key}-alerted"):
             report_failure(token, chat_id, activity, row, key, "check-in closed before I could finish it")
         daily.claim(f"{key}-done")
-    elif daily.claim(f"{key}-done"):
-        if not _send(token, chat_id, no_check_in_message(activity, row),
-                     [[{"text": OPEN_BUTTON, "url": activity["url"]}]], None, activity, silent=True):
+    elif daily.claim(f"{key}-done", pending=True):
+        if _send(token, chat_id, no_check_in_message(activity, row),
+                 [[{"text": OPEN_BUTTON, "url": activity["url"]}]], None, activity, silent=True):
+            daily.confirm(f"{key}-done")
+        else:
             daily.release(f"{key}-done")
 
 
@@ -587,12 +591,13 @@ def tell_readiness(token: str, chat_id: str, cache: dict, sched: dict, now: date
     if before is not None and [tuple(t) for t in before] == told:
         return False
     key = "checkin-readiness-" + hashlib.sha1(json.dumps(told, ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
-    if not daily.claim(key):                   # the bot and a fallback run: one message
+    if not daily.claim(key, pending=True):     # the bot and a fallback run: one message
         return False
     text, rows = readiness_message(states)
     if not notifier.send_message(token, chat_id, text, rows=rows):
         daily.release(key)
         return False
+    daily.confirm(key)
     fileio.write_json_atomic(TOLD_FILE, {"told": told, "at": now.timestamp()})
     log.info("Check-in: told which online courses can be checked in (%d)", len(states))
     return True

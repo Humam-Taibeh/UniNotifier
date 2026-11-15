@@ -196,10 +196,11 @@ def send_digest(token: str, chat_id: str, state: dict, now: datetime | None = No
     if message is None:
         return False
     key = f"tasks-{now.date()}"
-    if not daily.claim(key):
+    if not daily.claim(key, pending=True):
         return False
     text, rows = message
     if notifier.send_message(token, chat_id, text, rows=rows):
+        daily.confirm(key)
         log.info("Sent the open-tasks digest")
         return True
     daily.release(key)          # the next tick tries again

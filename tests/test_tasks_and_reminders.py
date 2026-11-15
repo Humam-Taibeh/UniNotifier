@@ -458,7 +458,7 @@ def test_claims_are_exclusive_and_old_ones_are_forgotten():
             assert daily.claim("k") and not daily.claim("k") and daily.claimed("k")
             daily.release("k")
             assert not daily.claimed("k") and daily.claim("k"), "given back: the next one may try again"
-            old, fresh = daily._marker("old"), daily._marker("fresh")
+            old, fresh = daily.marker(daily.CLAIM_DIR, "old"), daily.marker(daily.CLAIM_DIR, "fresh")
             old.write_text("")
             fresh.write_text("")
             week_and_a_bit = time.time() - (daily.KEEP_DAYS * 86400 + 60)
@@ -466,6 +466,28 @@ def test_claims_are_exclusive_and_old_ones_are_forgotten():
             daily.prune()
             assert not old.exists() and fresh.exists() and daily.claimed("k")
             daily.prune()                                   # nothing to do: still fine
+
+            # a claim taken before a send, by a process killed before the send was confirmed (the bot
+            # restarted mid-send): abandoned — the next caller takes it over and the message goes out
+            import subprocess
+            import sys
+            gone = subprocess.Popen([sys.executable, "-c", "pass"])
+            gone.wait()
+            send = daily.marker(daily.CLAIM_DIR, "send")
+            send.write_text(json.dumps({"pid": gone.pid, "at": time.time()}), encoding="utf-8")
+            assert daily.abandoned(send) and daily.claim("send", pending=True), "taken over from a dead process"
+            assert not daily.claim("send", pending=True), "...by one caller: this process is alive"
+            assert not list(daily.CLAIM_DIR.glob("*.abandoned")), "nothing left behind"
+            daily.confirm("send")
+            assert send.read_text(encoding="utf-8") == "" and not daily.abandoned(send)
+            assert not daily.claim("send", pending=True), "a confirmed send is never taken over"
+            # a pending claim far older than any send takes is abandoned even if its pid was reused
+            send.write_text(json.dumps({"pid": os.getpid(), "at": time.time() - daily.PENDING_LIMIT - 60}),
+                            encoding="utf-8")
+            assert daily.claim("send", pending=True)
+            # the claims of an older version (empty files) and a permanent claim are never taken over
+            assert daily.claim("forever") and not daily.abandoned(daily.marker(daily.CLAIM_DIR, "forever"))
+            assert not daily.claim("forever", pending=True)
         finally:
             daily.CLAIM_DIR = keep
         daily.CLAIM_DIR = Path(tmp) / "never_made"

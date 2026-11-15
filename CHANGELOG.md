@@ -23,6 +23,11 @@ All notable changes to this project are documented here. The format follows
 - `SECURITY.md` says what is kept, where, and who can see it.
 
 ### Fixed
+- A message whose sender was stopped half-way (the bot restarted, an update, a power cut) is no longer
+  held back for up to a week: a claim taken before a send records its process and is confirmed once the
+  message is out; one left by a process that is gone is taken over and the message goes out on the next
+  tick. Lecture alerts, reminders, the noon digest and the check-in messages use it, through one shared
+  claim code (`daily.claim_in`) instead of three copies.
 - When Telegram cannot be reached but the internet works, the doctor now says the network blocks
   Telegram (some providers and routers do) and what to do — a hotspot to be sure, a VPN to fix it —
   instead of "check the internet connection" followed by "All set."

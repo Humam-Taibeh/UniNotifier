@@ -98,7 +98,6 @@ consistency is wanted later; it changes no behaviour, so it comes after registra
 ## 5. Left on purpose (known, small)
 
 Found in the last audit and judged not worth the risk of changing without a real case:
-- Claim-file code exists three times (daily, lectures, reminders).
 - Data file paths are declared in several modules.
 - The meeting re-read loop has no guard on how often it runs.
 - Session dates in `checkin`/`activities` are parsed in English only — safe because of the English

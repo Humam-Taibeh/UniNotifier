@@ -17,7 +17,6 @@ tick. Needs no portal access.
 
 import json
 import logging
-import os
 import re
 import time
 from datetime import datetime
@@ -25,6 +24,7 @@ from pathlib import Path
 
 from uninotifier import archive
 from uninotifier import checkin
+from uninotifier import daily
 from uninotifier import failsafe
 from uninotifier import lecturelinks
 from uninotifier import media
@@ -44,19 +44,17 @@ def _marker(key: str) -> Path:
     return CLAIM_DIR / (re.sub(r"[^\w.-]+", "_", key) + ".sent")
 
 
-def claim(key: str) -> bool:
-    """True for exactly one caller per key."""
-    CLAIM_DIR.mkdir(exist_ok=True)
-    try:
-        os.close(os.open(_marker(key), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
-        return True
-    except FileExistsError:
-        return False
+def claim(key: str, pending: bool = False) -> bool:
+    """True for exactly one caller per key (daily.py's claims, in this folder; pending: confirm it once sent)."""
+    return daily.claim_in(CLAIM_DIR, _marker(key).stem, pending)
+
+
+def confirm(key: str) -> None:
+    daily.confirm_in(CLAIM_DIR, _marker(key).stem)
 
 
 def release(key: str) -> None:
-    _marker(key).unlink(missing_ok=True)
-
+    daily.release_in(CLAIM_DIR, _marker(key).stem)
 
 def prune() -> None:
     cutoff = time.time() - CLAIM_KEEP_SECONDS
@@ -114,7 +112,7 @@ def send_due(token: str, chat_id: str, now: datetime | None = None) -> int:
     many went out."""
     sent = 0
     for key, kind, text, course in schedule.due_messages(schedule.load_schedule(), now or datetime.now()):
-        if not claim(key):
+        if not claim(key, pending=True):
             continue
         try:
             ok = (send_with_link(token, chat_id, text, course, check_in=True) if kind == "start"
@@ -124,6 +122,7 @@ def send_due(token: str, chat_id: str, now: datetime | None = None) -> int:
             failsafe.bug("lectures", "A lecture alert could not be sent", e)
             ok = False
         if ok:
+            confirm(key)
             sent += 1
             log.info("Sent lecture message: %s", key)
         else:

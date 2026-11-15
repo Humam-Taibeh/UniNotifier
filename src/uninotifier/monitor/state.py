@@ -9,6 +9,7 @@ import os
 import time
 
 from uninotifier import failsafe, fileio, notifier, paths
+from uninotifier.daily import pid_alive  # noqa: F401 - shared; monitor.pid_alive stays
 from uninotifier.monitor import config
 
 log = logging.getLogger("uninotifier")
@@ -31,24 +32,6 @@ STATE_KEYS = ("courses", "content", "deadlines", "files", "alerts", "schedule_se
 
 
 SUMMARY: dict = {"ok": False}
-
-
-def pid_alive(pid: int) -> bool:
-    if os.name == "nt":       # os.kill(pid, 0) would *terminate* the process on Windows
-        import ctypes
-        kernel32 = ctypes.windll.kernel32
-        handle = kernel32.OpenProcess(0x1000, False, pid)   # PROCESS_QUERY_LIMITED_INFORMATION
-        if not handle:
-            return False
-        code = ctypes.c_ulong()
-        ok = kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
-        kernel32.CloseHandle(handle)
-        return bool(ok) and code.value == 259                # STILL_ACTIVE
-    try:
-        os.kill(pid, 0)
-        return True
-    except OSError:
-        return False
 
 
 def lock_holder_gone() -> bool:
