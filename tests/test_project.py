@@ -160,6 +160,8 @@ def test_the_setup_asks_five_things_and_writes_the_settings_file():
 
         def ask(self, prompt, secret=False):
             self.asked.append((prompt, secret))
+            if not self.answers:
+                raise EOFError                  # what input() raises when the window is closed half-way
             return self.answers.pop(0)
 
     nothing = lambda name: ""                                   # noqa: E731 — no .env yet
@@ -286,6 +288,24 @@ def test_the_setup_asks_five_things_and_writes_the_settings_file():
             raise setup.requests.ConnectionError("no route")
         setup.requests.get = down
         assert keep[1]("t") == ("unreachable", "") and keep[2]("t") is None and keep[3]("t", "555") == "unreachable"
+
+        # --- python -m uninotifier.setup --demo: the whole conversation with made-up answers — Telegram played
+        # by the setup itself, nothing contacted (requests.get still raises "no route" here), nothing written
+        paths.ENV_FILE = tmp / "demo" / ".env"
+        setup.telegram_bot, setup.telegram_people, setup.telegram_hello = keep[1], keep[2], keep[3]
+        console = Script(["fake@std-zuj.edu.jo", "fake password", "123456789:FAKEFAKEFAKE",
+                          "", "",                                           # Enter after Start; "is that you?" -> yes
+                          "209900001", "fake portal", "y"])
+        assert setup.main(["--demo"], console) == 0 and console.answers == []
+        said = "\n".join(console.said)
+        assert not paths.ENV_FILE.exists() and not paths.ENV_FILE.parent.exists(), "a try-out writes nothing"
+        assert "[ OK ] Your bot: @your_uni_bot" in said and "Look at Telegram" in said and "nothing was written" in said
+        assert "ZUJ_USERNAME=fake@std-zuj.edu.jo" in said and "ZUJ_PASSWORD=<13 characters, hidden>" in said
+        assert "AUTO_CHECK_IN=true" in said and "TELEGRAM_CHAT_ID=123456789" in said
+        assert "fake password" not in said and "FAKEFAKEFAKE" not in said and "fake portal" not in said, \
+            "a password or token is never shown again"
+        assert (setup.telegram_bot, setup.telegram_people, setup.telegram_hello) == keep[1:4], "Telegram is real again after"
+        assert setup.main(["--demo"], Script([])) == 0, "stopped half-way (no more answers): nothing changed, no error"
 
         # --- python -m uninotifier.setup --answers FILE: an automated install; a wrong answer changes nothing
         paths.ENV_FILE = tmp / "auto" / ".env"

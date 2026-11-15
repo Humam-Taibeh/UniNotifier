@@ -5,6 +5,9 @@ The first-time setup as a short conversation in the console — no file to edit.
   python -m uninotifier.setup --offline        ask and write; check nothing over the network
   python -m uninotifier.setup --answers FILE   take the answers from a JSON file {"NAME": "value"}
                                                (automated installs; nothing is asked)
+  python -m uninotifier.setup --demo           try it with made-up answers: the same questions, Telegram
+                                               played by the setup itself, nothing contacted, nothing
+                                               written — at the end it shows what WOULD be in .env
 
 install.bat runs it for a new student. It asks for five things:
 
@@ -295,8 +298,52 @@ def from_answers(answers: dict) -> dict[str, str]:
     return values
 
 
+class Demo:
+    """--demo: Telegram as the setup would find it, played here — any token of the right shape is
+    'your bot', and the Start you are asked to press is 'seen' — so the whole conversation can be
+    tried with made-up answers. Nothing leaves the PC."""
+    BOT = "your_uni_bot"
+
+    def __enter__(self):
+        global telegram_bot, telegram_people, telegram_hello
+        self.kept = (telegram_bot, telegram_people, telegram_hello)
+        telegram_bot = lambda token: ("ok", self.BOT)                               # noqa: E731
+        telegram_people = lambda token: [{"id": "123456789", "name": "You (a made-up account)"}]  # noqa: E731
+        telegram_hello = lambda token, chat: "ok"                                   # noqa: E731
+        return self
+
+    def __exit__(self, *exc):
+        global telegram_bot, telegram_people, telegram_hello
+        telegram_bot, telegram_people, telegram_hello = self.kept
+        return False
+
+
+def preview(values: dict[str, str]) -> list[str]:
+    """What .env would hold, a password or a token shown only as its length."""
+    hidden = ("ZUJ_PASSWORD", "PORTAL_PASSWORD", "TELEGRAM_BOT_TOKEN")
+    return [f"   {name}=" + (f"<{len(value)} characters, hidden>" if name in hidden and value else value)
+            for name, value in values.items()]
+
+
 def main(argv: list[str], console: Console | None = None) -> int:
     console = console or Console()
+    if "--demo" in argv:
+        console.say("TRY-OUT - answer with anything made up. Nothing is checked online, nothing is saved,")
+        console.say("and your real settings are not touched.")
+        console.say("")
+        try:
+            with Demo():
+                values = converse(console, saved=lambda name: "")
+        except (KeyboardInterrupt, EOFError):
+            console.say("\nStopped. This was only a try-out: nothing was changed.")
+            return 0
+        console.say("")
+        console.say("This is what a real setup would write to .env:")
+        for line in preview(values):
+            console.say(line)
+        console.say("")
+        console.say("[ OK ] Try-out finished - nothing was written. For real: .venv\\Scripts\\python -m uninotifier.setup")
+        return 0
     try:
         if "--answers" in argv:
             source = argv[argv.index("--answers") + 1:][:1]

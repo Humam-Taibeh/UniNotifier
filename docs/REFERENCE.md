@@ -916,7 +916,9 @@ written in single quotes. The file is then read back with the reader the program
 did not come back exactly (a `${...}` in a password) it is put back as it was and you are told. Last,
 the file is limited to your own Windows account (`icacls`). Run it again at any time: Enter keeps what
 is saved. `--offline` checks nothing over the network; `--answers file.json` takes the answers from a
-file, for automated installs. After the doctor, `install.ps1` offers to finish — the Moodle sign-in,
+file, for automated installs; `--demo` is a try-out with made-up answers — the same questions, Telegram
+played by the setup itself, nothing contacted and nothing written — that ends by showing what `.env`
+would hold (passwords and the token only as their length). After the doctor, `install.ps1` offers to finish — the Moodle sign-in,
 the first check and the scheduled tasks — so a new student's whole installation is one double-click
 and a few answers.
 
