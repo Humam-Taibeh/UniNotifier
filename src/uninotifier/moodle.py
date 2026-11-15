@@ -22,6 +22,7 @@ import html
 import json
 import logging
 import re
+from datetime import datetime
 
 from lxml import html as lxml_html
 from playwright.sync_api import TimeoutError as PWTimeoutError
@@ -274,17 +275,49 @@ def update_deadlines(saved_deadlines: dict, events: list) -> dict:
     return deadlines
 
 
-EVENT_SUFFIXES = (" is due", " opens", " closes", " مستحق", " يفتح", " يغلق")
+_MARKS = "[ً-ْٰ]*"      # Arabic vowel marks: the calendar writes "يُفتح", not "يفتح"
+EVENT_SUFFIX_RE = re.compile(
+    r"\s+(?:is due|opens|closes|" + "|".join(_MARKS.join(word) for word in ("مستحق", "يفتح", "يغلق")) + r")\s*$",
+    re.I)
 
 
 def _event_title(name: str | None) -> str:
     """The calendar names an event after its activity plus what happens
-    ("Quiz 4 closes"); the activity's own name reads better in a list."""
-    name = (name or "").strip()
-    for suffix in EVENT_SUFFIXES:
-        if name.endswith(suffix):
-            return name[: -len(suffix)].strip()
-    return name
+    ("Quiz 4 closes", "اختبار 1 يُفتح"); the activity's own name reads better in a list."""
+    return EVENT_SUFFIX_RE.sub("", (name or "").strip()).strip()
+
+
+_QUIZ_TIME_RE = re.compile(
+    r"(Opens|Closes):\s*(?:[A-Za-z]+,\s*)?(\d{1,2})\s+([A-Za-z]+)\s+(\d{4}),?\s+(\d{1,2}):(\d{2})\s*([AaPp][Mm])?")
+
+
+def quiz_page_times(html: str) -> tuple[float | None, float | None]:
+    """(opens, closes) as a quiz page prints them — "Opens: Monday, 16 November 2026, 8:00 PM"
+    (in the portal's own time zone, which is this PC's) — each None when not printed or not readable.
+    The calendar can lag behind a quiz that was only just published; the page never does."""
+    text = re.sub(r"\s+", " ", lxml_html.fromstring(html).text_content())
+    found = {}
+    for label, day, month, year, hour, minute, half in _QUIZ_TIME_RE.findall(text):
+        try:
+            clock = f"{hour}:{minute} {half.upper()}" if half else f"{hour}:{minute}"
+            when = datetime.strptime(f"{day} {month} {year} {clock}",
+                                     "%d %B %Y %I:%M %p" if half else "%d %B %Y %H:%M")
+        except ValueError:
+            continue
+        found.setdefault(label, when.timestamp())
+    return found.get("Opens"), found.get("Closes")
+
+
+def fetch_quiz_times(context, quiz_url: str) -> tuple[float | None, float | None]:
+    """quiz_page_times of the quiz's page; (None, None) when it could not be read."""
+    try:
+        html = fetch_html(context, quiz_url)
+        return quiz_page_times(html) if html else (None, None)
+    except SessionExpiredError:
+        raise
+    except Exception:
+        log.exception("Quiz dates could not be read from %s", quiz_url)
+        return None, None
 
 
 def quiz_times(deadline: dict) -> tuple[float | None, float | None]:

@@ -4,6 +4,11 @@ What is new, in plain words, for the people who use UniNotifier. The bot shows t
 does not have yet when it tells its owner that a new version is ready (newest first; one entry is
 `## YYYY-MM-DD — Title`, then the text). The full list of changes is in [CHANGELOG.md](CHANGELOG.md).
 
+## 2026-11-15 — A new quiz comes with its times
+- A quiz found the minute it is published now comes with its opening and closing times, read from the
+  quiz's own page — before, it could show "No due date set" until the next check.
+- An Arabic quiz no longer carries the calendar's word "يُفتح" after its name.
+
 ## 2026-11-13 — Reminders you can change
 - The buttons are always at the bottom of the chat, also after 🔗 View Original Post, with 🔙 Main Menu under it.
 - Reminders can be changed: open one in Manage Reminders to edit its text, date or time — deleting asks first.

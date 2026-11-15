@@ -162,6 +162,25 @@ def test_quizzes_keep_their_opening_and_closing_times():
                     '<tr><th>Grade</th><td>2.00 out of 5.00</td></tr></table><table class="quizreviewsummary">'
                     '<tr><th>Grade</th><td>4.00 out of 5.00</td></tr></table></div>')
     assert moodle.task_grade(two_attempts) == "4/5", "without the final-grade line: the best attempt"
+
+    # a quiz the calendar does not list yet is dated from its own page ("Opens: Monday, 16 November 2026, 8:00 PM")
+    page = ('<div role="main"><div class="quizinfo"><p><strong>Opens:</strong> Monday, 16 November 2026, 8:00 PM</p>'
+            '<p><strong>Closes:</strong> Monday, 16 November 2026, 9:00 PM</p><p>Attempts allowed: 1</p></div></div>')
+    opens, closes = moodle.quiz_page_times(page)
+    assert closes - opens == 3600 and time.localtime(opens)[:5] == (2026, 11, 16, 20, 0), (opens, closes)
+    assert moodle.quiz_page_times('<div class="quizinfo">Attempts allowed: 1</div>') == (None, None)
+    assert moodle._event_title("اختبار 1 يُفتح") == "اختبار 1" and moodle._event_title("Quiz 4 closes") == "Quiz 4"
+    assert moodle._event_title("اختبار 1 يُغلق") == "اختبار 1" and moodle._event_title("Opens soon") == "Opens soon"
+    soon = time.time() + 86400
+    keep = moodle.fetch_quiz_times
+    moodle.fetch_quiz_times = lambda http, u: (soon, soon + 3600)
+    try:
+        dateless = {"quiz-7": {"name": "Q", "type": "quiz", "course": "c", "url": "https://x/mod/quiz/view.php?id=7"}}
+        dated, undated = {}, {"quiz-7": False}
+        scan.quiz_dates_from_pages(list(dateless.items()), None, dated, undated, {"quiz-7": False}, time.time())
+    finally:
+        moodle.fetch_quiz_times = keep
+    assert dated["quiz-7"]["opens"] == soon and dated["quiz-7"]["event"] == "open" and not undated, dated
     graded = ('<div role="main"><table class="generaltable"><tr><th>Grading status</th><td>Graded</td></tr></table>'
               '<table class="generaltable"><tr><th>Grade</th><td>80.00 / 100.00</td></tr></table></div>')
     ungraded = '<div role="main"><table class="generaltable"><tr><th>Grading status</th><td>Not graded</td></tr></table></div>'

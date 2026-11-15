@@ -176,7 +176,28 @@ def check_submissions(http, content: dict, deadlines: dict, saved: dict) -> dict
             undated[key] = status
         done = ("pending", "submitted") if item["type"] == "assign" else ("not attempted", "attempted")
         log.info("  %s %s: %s", "assignment" if item["type"] == "assign" else "quiz", item["name"], done[status])
+    quiz_dates_from_pages([(k, i) for k, i in wanted if i["type"] == "quiz" and k not in deadlines],
+                          http, deadlines, undated, submissions, now)
     return submissions
+
+
+def quiz_dates_from_pages(quizzes: list, http, deadlines: dict, undated: dict, submissions: dict,
+                          now: float) -> None:
+    """A quiz the calendar does not list (yet — it can lag behind a quiz published a minute ago) is
+    dated from what its own page says, so it is announced with its times and reminded like any
+    other. The calendar's entry replaces this one on a later check; its reminder flags carry over."""
+    for (key, item), times, error in pmap(lambda q: moodle.fetch_quiz_times(http, q[1]["url"]), quizzes):
+        if isinstance(error, moodle.SessionExpiredError):
+            raise error
+        opens, closes = times if error is None else (None, None)
+        if (closes or opens or 0) <= now:
+            continue
+        log.info("  quiz %s: dates read from its page", item["name"])
+        deadlines[key] = {"name": item["name"], "course": item.get("course", ""), "url": item["url"],
+                          "type": "quiz", "timestamp": opens or closes, "opens": opens, "closes": closes,
+                          "event": "open" if opens else "close", "reminded_24h": False,
+                          "reminded_1h": False, "submitted": bool(submissions.get(key) or undated.get(key))}
+        undated.pop(key, None)
 
 
 JUST_CLOSED_SECONDS = 2 * 86400     # an assignment found closed this long after its date closed "now": worth telling

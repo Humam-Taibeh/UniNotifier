@@ -7,6 +7,11 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- A quiz published a minute before a check was announced, and listed, with "No due date set": Moodle's
+  calendar did not list it yet. A quiz the calendar does not list is now dated from its own page
+  (`Opens:` / `Closes:`), so it comes with its times and gets its reminders from the first message.
+- The calendar's Arabic event words are taken off a task's name also when they carry vowel marks
+  ("اختبار 1 يُفتح" was kept whole).
 - 🔗 View Original Post buttons say which reminder they are for — `(1)`, `(2)`, as the list numbers
   them — instead of a cut-off title, and follow the list when a reminder is done.
 - 🔗 View Original Post no longer leaves the menu above its reply: the reply is the bottom screen, takes the
