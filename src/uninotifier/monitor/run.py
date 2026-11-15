@@ -9,6 +9,7 @@ import sys
 import time
 
 from uninotifier import paths
+from uninotifier import autoschedule
 from uninotifier import checkin
 from uninotifier import daily
 from uninotifier import envcheck
@@ -245,6 +246,12 @@ def run(announce: bool = False) -> None:
     })
     state.save_data(saved)
     state.backup_state()
+    try:
+        autoschedule.refresh()        # the bot's own timetable: the courses just read give it their names
+    except Exception as e:
+        log.exception("Building the timetable failed")
+        failsafe.bug("monitor:timetable", "Your timetable could not be built from the portal's table", e,
+                     "Lecture alerts and the drawn timetable use the last one that was built.")
     try:
         tasks.send_digest(config.BOT_TOKEN, config.CHAT_ID, saved)    # the noon digest, if the bot missed it
     except Exception as e:

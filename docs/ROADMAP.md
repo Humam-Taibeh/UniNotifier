@@ -10,7 +10,11 @@ is kept in order. The details of every feature are in [REFERENCE.md](REFERENCE.m
 Finished and in daily use: Moodle monitoring (new items, edits, deadlines, forum posts, grades),
 the local archive, task list and reminders, lecture alerts and automatic attendance check-in, GPA and
 "grade needed" tools, the portal look-ups (transcript, balance, timetable, finals), the guest
-look-up, the Registration Plan (phase 1), self-healing, failure alerts and state backup.
+look-up, the Registration Plan (phase 1), self-healing, failure alerts and state backup. Since
+2026-11-15 the timetable needs no `schedule.json`: it is read from the portal for every student
+(`autoschedule.py`) and drawn as a picture and a PDF (`timetable_image.py`); and the cumulative
+average the bot computes is proved against the portal's own figure on every record
+(`gradebook.agreement`).
 
 The suite (`tests/test_architecture.py`, one file per topic in `tests/`) runs offline and must stay
 green; CI runs it on Windows with Python 3.11, 3.13, 3.14 and 3.15 and runs the student installer.
@@ -25,8 +29,13 @@ Decisions already taken — do not reopen them without the owner:
 - The bot reads Moodle in English, always, from its own session (`?lang=en`), whatever language the
   owner uses; it must never change the owner's account language.
 - The bot speaks English; everything a student sees from the bot is English.
-- Campus days are Sunday to Wednesday (`reminders.CAMPUS_DAYS`). Lectures on other days are ignored
-  on purpose until it is confirmed that they exist (see section 2).
+- Campus days are Sunday to Wednesday (`reminders.CAMPUS_DAYS`) for the automatic check-in and the
+  lecture alerts. The timetable itself (the built schedule, the drawn picture, the course list) shows
+  every day the portal lists, a Saturday lab included.
+- The university's logo is not shipped with the project; a student's own `assets\logo.png` is used
+  in the drawn timetable when it is there.
+- A `schedule.json` and timetable files written by the student always win over what the bot builds
+  and draws.
 
 ## 2. To confirm with the university (before relying on them)
 

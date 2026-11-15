@@ -251,19 +251,21 @@ order). Each session's day is decided by, in order:
    person, nothing blended) and by its Teams meeting.
 
 **The portal's timetable.** The portal's home page lists every section you take with its
-meetings in those codes. While `auto_check_in` is on and `PORTAL_USERNAME` /
-`PORTAL_PASSWORD` are in `.env`, the bot reads that table by itself — as soon as there is none
-(a new student, a new semester) — and keeps it in `data/class_table.json`, so nothing needs to
-be typed in for it. Once is enough: it is not read again until you send `/check` (the way to
+meetings in those codes. For every student whose `PORTAL_USERNAME` / `PORTAL_PASSWORD` are in
+`.env` — automatic check-in on or off — the bot reads that table by itself, as soon as there is
+none (a new student, a new semester), and keeps it in `data/class_table.json`, so nothing needs
+to be typed in for it. Once is enough: it is not read again until you send `/check` (the way to
 tell the bot that your courses changed) or the table is 120 days old (a past semester's). It
 tells you what it found — the online lectures, and how many days are in person or activities —
-on the first look and whenever the timetable changed.
+on the first look and whenever the timetable changed, with the drawn timetable under the
+message (see *Class schedule* below).
 
-Only the university days count — Sunday to Wednesday (`reminders.CAMPUS_DAYS`). A student's
+The table keeps every day the portal lists, a Saturday lab included: the timetable shows them.
+For the check-in only the university days count — Sunday to Wednesday (`reminders.CAMPUS_DAYS`). A student's
 courses are split over them: Sunday + Tuesday, Monday + Wednesday, or all four, each course on
 two of those days with its own mode on each (a blended course: in person one day and an
 activity the other, in either order), or on one day only. Thursday to Saturday (a Saturday
-lab) are left out. A row with a code the bot does not know — an unknown day or mode letter,
+lab) are never checked in. A row with a code the bot does not know — an unknown day or mode letter,
 no codes at all — is never dropped silently: the message names its course and says the
 check-in uses the codes in Moodle and `schedule.json` for those days. It signs in with your own portal session (never while
 a command of yours is using the portal), sets the table to 15 rows a page so one look reads
@@ -342,6 +344,30 @@ claim file guarantees each goes out once):
 `Online` slots get alerts (`remind_modes`), 60 minutes ahead
 (`lecture_reminder_minutes`); automatic check-in is switched on with `auto_check_in`
 (see above). These work even when the portal check fails.
+
+**No `schedule.json` is needed** (`autoschedule.py`). When there is none, the schedule in force is
+the one the bot builds itself, `data/schedule.auto.json`, from two things it already reads: the
+portal's timetable above (each section's code, Arabic name, section, room, and every day's time
+and mode) and Moodle's course list, whose `idnumber` is the portal's course code (`0420115`, or
+`0420115_12` for one section — measured on the live site) and whose name,
+`20261-Big Data-AllSec-3`, carries the name students know, the semester and the credit hours.
+The two are joined by the course code, never by comparing names; a course Moodle does not list
+keeps the portal's Arabic name. It is built again after every read of the timetable and at the
+end of every check, and rewritten only when it changes. A `schedule.json` you wrote always wins;
+`doctor` says which of the two is in force. With neither, and no portal login, you are told what
+to do; with the login set, nothing is reported — the timetable is on its way.
+
+**The drawn timetable** (`timetable_image.py`). 📅 Weekly Timetable sends your own files from
+`assets\` when you keep any; otherwise the timetable drawn from the schedule in force — a PNG at
+twice the size and a one-page PDF in `data\timetable\`: one column per day that has a class
+(the week starting on Saturday), one row per start–end pair (so a lab with its own hours has its
+own row), a break row for a gap of an hour or more, and a card per class with both names, the
+section, the mode and the room; the header counts the courses and, when every course's are
+known, the credit hours. It is drawn by the Chromium Playwright installed, from a page with no
+script and the network refused, every text escaped; and drawn again only when the schedule
+changes (`data\timetable\drawn.json` remembers what the files were made from). The university's
+logo is not part of the project: put a `logo.png` of your own in `assets\` and it appears in the
+header. `python -m uninotifier.timetable_image --preview` draws it now and opens it.
 
 ### Online lecture links
 
@@ -827,6 +853,8 @@ UniNotifier/
 │   ├── tasks.py              every open task: the Upcoming Tasks list and the noon digest
 │   ├── checkin.py            automatic attendance check-in for the online lectures
 │   ├── classtable.py         your weekly timetable, read from the portal (which days are online)
+│   ├── autoschedule.py       the schedule built from it and Moodle's course list, when there is no schedule.json
+│   ├── timetable_image.py    the weekly timetable drawn as a picture and a PDF
 │   ├── gpa.py, gpa_ui.py, gradebook.py, transcript.py, portal.py, portal_pages.py, finals.py, guest.py   grades, GPA, the portal (portal_pages: its pages read, no browser)
 │   ├── updates.py            a new version of the project: the daily look, NEWS.md, Update Now
 │   ├── degreeplan.py, registration.py                                  the study plan, and what to register next term
@@ -948,7 +976,7 @@ courses — above a four-row menu:
 
 There is no manual-check button: the 15-minute schedule and the status line cover it
 (`/check` still works when typed — the Microsoft-verification alert relies on it).
-📅 Weekly Timetable sends just the PDF and the PNG preview.
+📅 Weekly Timetable sends just the PDF and the PNG preview — your own from `assets\`, or the drawn ones.
 
 ### Upcoming Tasks & Reminders
 

@@ -45,6 +45,18 @@ All notable changes to this project are documented here. The format follows
 - The portal-setup and verification-code messages say when the portal is really contacted, in full sentences.
 
 ### Added
+- **No `schedule.json` is needed any more.** With the portal login in `.env`, the bot reads the weekly
+  timetable from the registration portal for every student (not only with automatic check-in on) and
+  builds its own schedule from it and Moodle's course list, joined by the course code
+  (`autoschedule.py`, `data/schedule.auto.json`): the course names, sections, rooms, modes, the
+  semester and the credit hours. A `schedule.json` written by hand still wins.
+- **The weekly timetable is drawn by the bot** (`timetable_image.py`): a picture and a one-page PDF
+  made from the schedule in force — a column per day, a row per time, a card per class, breaks, the
+  courses and credit hours in the header. 📅 Weekly Timetable sends them when `assets\` holds no
+  timetable of your own, and the *Timetable read from the portal* message carries the picture. A
+  `logo.png` of your own in `assets\` appears in its header; the project ships no logo.
+- The portal's timetable keeps every day it lists: a Saturday lab is shown in the timetable (the
+  check-in still counts Sunday to Wednesday only).
 - Manage Reminders: a reminder opens to its full text with Edit Text, Change Date, Change Time and Delete
   (Delete asks first). The day picker has ✏️ Type a Date, because the buttons reach only the coming week.
 - 🔒 Assignment Closed — Not Submitted and 🗑️ Assignment Removed: told once when an assignment you

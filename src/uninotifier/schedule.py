@@ -51,6 +51,7 @@ def parse_codes(text: str) -> list[dict]:
 
 
 LAST_GOOD_FILE = paths.DATA / "schedule.last_good.json"     # the newest copy that passed validate()
+AUTO_FILE = paths.DATA / "schedule.auto.json"               # built from the portal (autoschedule.py): used when there is no schedule.json
 
 KNOWN_KEYS = {"semester", "lecture_reminder_minutes", "remind_modes", "link_modes",
               "portal_aliases", "course_codes", "teachers", "days", "finals", "degree_hours",
@@ -152,22 +153,53 @@ def _last_good_from_disk() -> dict | None:
     return data if not validate(data) else None
 
 
+def _auto_text() -> str | None:
+    """The timetable the bot built from the portal (autoschedule.py), as text — None when there is
+    none, or it would not pass validate() (then it is as if it were not there)."""
+    try:
+        text = AUTO_FILE.read_text(encoding="utf-8")
+        return text if not validate(json.loads(text)) else None
+    except (OSError, ValueError):
+        return None
+
+
+def _portal_will_build() -> bool:
+    """The portal login is in .env: the bot reads the timetable there by itself (classtable.py)."""
+    from uninotifier import envcheck
+    return bool(envcheck.value("PORTAL_USERNAME") and envcheck.value("PORTAL_PASSWORD"))
+
+
 def load_schedule() -> dict:
-    """The schedule in force. A file that is missing, is not valid JSON or fails
+    """The schedule in force: your own schedule.json — or, when there is none, the timetable the
+    bot built from the portal (AUTO_FILE). A schedule.json that is not valid JSON or fails
     validate() does NOT switch the reminders off: the last good copy stays in force
     and you are told on Telegram what to fix (once per version of the broken file —
     and again when it is valid). Only with no earlier copy at all is the schedule
-    empty. Reading is by content, so an edit takes effect on the next call."""
+    empty. With no schedule.json and nothing built yet you are told what to do — unless the
+    portal login is set, when the bot is about to read the timetable itself. Reading is by
+    content, so an edit takes effect on the next call."""
     global _good, _broken
-    path = str(SCHEDULE_FILE)
+    path, text, failure = str(SCHEDULE_FILE), None, None
     try:
         text = SCHEDULE_FILE.read_text(encoding="utf-8-sig")     # Notepad may save it with a BOM
     except OSError as e:
+        failure = e
+        if isinstance(e, FileNotFoundError):
+            text = _auto_text()                           # no schedule.json: the bot's own, from the portal
+            if text is not None:
+                path = str(AUTO_FILE)
+    if text is None:
         if _read["path"] == path and _read["text"] is None and _read["data"] is not None:
             return copy.deepcopy(_read["data"])           # still missing: already reported
-        text, problems = None, [f"there is no {SCHEDULE_FILE.name} yet — copy {paths.SCHEDULE_EXAMPLE.name} to "
-                                f"{SCHEDULE_FILE.name} and put your own timetable in it"
-                                if isinstance(e, FileNotFoundError) else f"the file cannot be read ({type(e).__name__})"]
+        if isinstance(failure, FileNotFoundError) and _portal_will_build() and not (_good or _last_good_from_disk()):
+            _read.update(path=path, text=None, data={"days": {}})     # nothing to fix: it is on its way
+            _arabic_to_english.cache_clear()
+            log.info("No %s yet — the timetable will be read from the portal", SCHEDULE_FILE.name)
+            return {"days": {}}
+        problems = [f"there is no {SCHEDULE_FILE.name} yet — put PORTAL_USERNAME and PORTAL_PASSWORD in .env and the "
+                    f"bot reads your timetable from the portal by itself, or copy {paths.SCHEDULE_EXAMPLE.name} to "
+                    f"{SCHEDULE_FILE.name} and put your own timetable in it"
+                    if isinstance(failure, FileNotFoundError) else f"the file cannot be read ({type(failure).__name__})"]
     else:
         if _read["path"] == path and _read["text"] == text:
             return copy.deepcopy(_read["data"])
@@ -187,7 +219,9 @@ def load_schedule() -> dict:
             log.warning("Could not keep a copy of the good schedule.json")
         if _broken:
             _broken = False
-            failsafe.resolve("schedule", "✅ *schedule.json is valid again* — lecture reminders use it now.", wait=False)
+            failsafe.resolve("schedule", "✅ *Your timetable was read from the portal* — lecture reminders use it now."
+                             if path == str(AUTO_FILE) else
+                             "✅ *schedule.json is valid again* — lecture reminders use it now.", wait=False)
         return copy.deepcopy(data)
 
     fallback = _good or _last_good_from_disk()

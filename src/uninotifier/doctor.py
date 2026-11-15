@@ -69,8 +69,22 @@ def check_schedule(r: Report) -> None:
     from uninotifier import schedule
     name = paths.SCHEDULE_FILE.name
     if not paths.SCHEDULE_FILE.is_file():
-        r.line(FAIL, f"No timetable ({name})",
-               f"copy {paths.SCHEDULE_EXAMPLE.name} to {name} and enter your own classes")
+        # no timetable written by hand: the bot's own, read from the portal (autoschedule.py)
+        try:
+            built = json.loads(schedule.AUTO_FILE.read_text(encoding="utf-8"))
+            lectures = sum(len(v) for v in (built.get("days") or {}).values())
+        except (OSError, ValueError, AttributeError):
+            built, lectures = None, 0
+        if built and lectures and not schedule.validate(built):
+            r.line(OK, f"Timetable: read from the portal - {built.get('semester') or '(no semester name)'}, "
+                       f"{lectures} weekly classes")
+        elif schedule._portal_will_build():
+            r.line(INFO, "Timetable: the bot reads it from the portal by itself, a few minutes after it starts "
+                         "(send /check to read it at once)")
+        else:
+            r.line(FAIL, "No timetable",
+                   "put PORTAL_USERNAME and PORTAL_PASSWORD in .env (the bot then reads your timetable from "
+                   f"the portal), or copy {paths.SCHEDULE_EXAMPLE.name} to {name} and enter your own classes")
         return
     try:
         data = json.loads(paths.SCHEDULE_FILE.read_text(encoding="utf-8-sig"))    # Notepad may add a BOM

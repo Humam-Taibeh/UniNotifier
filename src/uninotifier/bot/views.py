@@ -241,15 +241,25 @@ def start_schedule_files() -> bool:
 
 @chat.with_action("upload_document")
 def send_schedule_files() -> None:
-    """The timetable as one album: a PDF to keep and an image to glance at."""
+    """The timetable as one album: a PDF to keep and an image to glance at. Your own files in
+    assets/ when you keep any; otherwise the timetable the bot draws from the schedule in force
+    (timetable_image.py) — drawn on the first press and again whenever the schedule changed."""
     items = [(path, caption) for path, caption in (
         (SCHEDULE_PDF, "📎 High-Resolution PDF"),
         (SCHEDULE_IMAGE, "🖼️ Quick PNG Preview")) if path.is_file()]
+    if not items:
+        from uninotifier import autoschedule, timetable_image
+        current = schedule.load_schedule()
+        drawn = timetable_image.ensure(current, autoschedule.hours_for(current))
+        if drawn:
+            items = [(drawn[1], "📎 High-Resolution PDF"), (drawn[0], "🖼️ Quick PNG Preview")]
     if items:
         if len(items) == 1 or not notifier.send_document_group(chat.BOT_TOKEN, chat.CHAT_ID, items):
             for path, caption in items:  # album failed: fall back to single sends
                 notifier.send_document(chat.BOT_TOKEN, chat.CHAT_ID, path, caption)
         chat.reanchor()                  # the files landed below the menu: it goes back to the bottom
     else:
-        chat.send_view("⚠️ No timetable files yet. Put your timetable in the project's `assets` folder as "
-                       f"`{SCHEDULE_PDF.name}` and/or `{SCHEDULE_IMAGE.name}`.", [chat.BACK_ROW])
+        chat.send_view("⚠️ No timetable yet. With `PORTAL_USERNAME` and `PORTAL_PASSWORD` in `.env` I read it from "
+                       "the portal and draw it for you (send /check to read it now). Or put your own in the "
+                       f"project's `assets` folder as `{SCHEDULE_PDF.name}` and/or `{SCHEDULE_IMAGE.name}`.",
+                       [chat.BACK_ROW])

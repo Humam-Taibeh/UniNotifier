@@ -4,6 +4,14 @@ What is new, in plain words, for the people who use UniNotifier. The bot shows t
 does not have yet when it tells its owner that a new version is ready (newest first; one entry is
 `## YYYY-MM-DD — Title`, then the text). The full list of changes is in [CHANGELOG.md](CHANGELOG.md).
 
+## 2026-11-15 — Your timetable, read and drawn for you
+- With `PORTAL_USERNAME` and `PORTAL_PASSWORD` in `.env`, the bot reads your weekly timetable from the
+  portal by itself — no `schedule.json` to write. One you wrote yourself still wins.
+- 📅 Weekly Timetable now sends a timetable the bot draws (a picture and a PDF) when you keep none of
+  your own in `assets\`. A Saturday lab is in it too.
+- Your cumulative average is checked against the portal's own figure every time the transcript is
+  read; if the two ever disagree, the portal's figure is shown and the message says so.
+
 ## 2026-11-15 — A new quiz comes with its times
 - A quiz found the minute it is published now comes with its opening and closing times, read from the
   quiz's own page — before, it could show "No due date set" until the next check.

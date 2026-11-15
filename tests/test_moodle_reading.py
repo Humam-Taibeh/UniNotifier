@@ -851,7 +851,8 @@ def test_one_check_reads_a_whole_course_from_moodle():
                 self.methods.append(method)
                 if method == "core_course_get_enrolled_courses_by_timeline_classification":
                     answers.append({"error": False, "data": {"courses": [
-                        {"id": 8801, "fullname": "20261-Big Data-AllSec-3-", "viewurl": f"{base}/course/view.php?id=8801"}]}})
+                        {"id": 8801, "fullname": "20261-Big Data-AllSec-3-", "viewurl": f"{base}/course/view.php?id=8801",
+                         "idnumber": "0900321_4", "shortname": "0900321_4"}]}})
                 elif method == "core_calendar_get_action_events_by_timesort":
                     answers.append({"error": False, "data": {"events": [
                         {"modulename": "assign", "eventtype": "due", "timesort": due, "name": "Homework 1 is due",
@@ -922,6 +923,7 @@ def test_one_check_reads_a_whole_course_from_moodle():
             first = scan.run_scan(saved, notify_new=False)
             assert first["browser_used"] is False and started == [], "a routine check needs no browser"
             assert set(first["content"]) == {"8801-501", "8801-502", "8801-503", "8801-504"}, set(first["content"])
+            assert first["courses"]["8801"]["code"] == "0900321_4", "Moodle's idnumber: the portal's course code and section"
             label = first["content"]["8801-501"]
             assert label["name"] == "Welcome to the course" and label["text"] == "Welcome to the course" and label["hash"]
             assert first["deadlines"]["assign-503"]["name"] == "Homework 1"

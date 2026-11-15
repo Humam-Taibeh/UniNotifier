@@ -4,26 +4,31 @@ Your weekly timetable as the registration portal writes it, read by the bot by i
 The portal's home page lists every section you take with its meetings in ZUJ's codes:
 "[ 19:00_20:30 ] ن (ن) ر (ك)" is the time, then each day's letter with that day's mode
 (schedule.parse_codes). The bot keeps that table in data/class_table.json, so it knows
-which days are online lectures — for any student, without a schedule.json.
+which days are online lectures — for any student, without a schedule.json. The same table is
+what the bot's own schedule (autoschedule.py) and the drawn timetable (timetable_image.py)
+are made from.
 
-When   only while "auto_check_in" is true in schedule.json — switching it on is what lets
-       the bot sign in to the portal for you — and PORTAL_USERNAME / PORTAL_PASSWORD are in
-       .env. ONCE: as soon as there is no table (a new student, or the first look of a new
-       semester, when the old table is STALE_AFTER old), not again until you run /check — the
-       way to tell the bot that your courses changed. After a failed look it waits RETRY_AFTER.
+When   for every student whose PORTAL_USERNAME / PORTAL_PASSWORD are in .env — putting them
+       there is what lets the bot sign in to the portal for you. ONCE: as soon as there is no
+       table (a new student, or the first look of a new semester, when the old table is
+       STALE_AFTER old), not again until you run /check — the way to tell the bot that your
+       courses changed. After a failed look it waits RETRY_AFTER.
        It never starts while a command of yours is using the portal.
 Tells  what it found, on the first look and whenever the timetable changed: the online
-       lectures, and how many days are in person or activities — so you can see it understood.
+       lectures, and how many days are in person or activities — so you can see it understood —
+       with the drawn timetable under it, unless you keep a timetable of your own in assets/.
 How    the owner's own portal session (portal.fetch_many, the page's rows-per-page set to 15 so
        one look reads every row). If the portal asks for a verification code nobody can
        answer — it never did, in 26 measured sign-ins — you are told once (failsafe) and the
        check-in falls back to the codes in Moodle and schedule.json.
 Use    mode_at(start): the mode of the class that day and time, whatever its course — a
        lecture is never two courses at once, so the day and the time are enough.
-Days   the university days only (reminders.CAMPUS_DAYS: Sunday to Wednesday): a student's
-       courses are split over them — Sun + Tue, Mon + Wed, or all four, each course on two of
-       them with its own mode on each (a blended course: in person one day, an activity the
-       other, in either order). Thursday to Saturday (a Saturday lab) never count.
+Days   the table keeps every day the portal lists — a Saturday lab is part of your week and
+       is shown in the timetable. mode_at(), which decides the check-in, counts the university
+       days only (reminders.CAMPUS_DAYS: Sunday to Wednesday): a student's courses are split
+       over them — Sun + Tue, Mon + Wed, or all four, each course on two of them with its own
+       mode on each (a blended course: in person one day, an activity the other, in either
+       order). Thursday to Saturday never count there.
 Reads  every "(x)" in a row's time must be understood: a row with a code the bot does not
        know is not silently dropped — it is listed in the message and in data/class_table.json.
 """
@@ -46,13 +51,11 @@ TICK = 600                          # seconds between the bot thread's looks
 
 
 def slots_from_rows(rows: list[dict]) -> list[dict]:
-    """The portal's rows (portal_pages.timetable_rows) as one slot per day:
-    {"day", "start", "end", "mode", "code", "course_ar", "section", "activity", "room"}."""
+    """The portal's rows (portal_pages.timetable_rows) as one slot per day, every day the portal
+    lists: {"day", "start", "end", "mode", "code", "course_ar", "section", "activity", "room"}."""
     slots = []
     for row in rows:
         for slot in schedule.parse_codes(row.get("time", "")):
-            if slot["day"] not in CAMPUS_DAYS:
-                continue
             slots.append({**slot, "code": row.get("code", ""), "course_ar": row.get("name", ""),
                           "section": row.get("section", ""), "activity": row.get("activity", ""),
                           "room": row.get("room", "")})
@@ -105,6 +108,12 @@ def mode_at(start: datetime, now: float | None = None) -> str | None:
 # ------------------------------------------------------------------ reading
 
 def wanted() -> bool:
+    """Every student whose portal login is in .env."""
+    from uninotifier import portal
+    return portal.credentials() is not None
+
+
+def checks_in() -> bool:
     return schedule.load_schedule().get("auto_check_in") is True
 
 
@@ -150,40 +159,72 @@ def refresh(now: float | None = None) -> bool:
             log.info("Timetable: read %d class day(s) from the portal%s", len(slots),
                      f", {len(unclear)} row(s) not understood" if unclear else "")
             fileio.write_json_atomic(CACHE_FILE, cache)
+            build_schedule()
             return True
         log.warning("Timetable: the portal's home page showed no timetable")
     fileio.write_json_atomic(CACHE_FILE, cache)
     return False
 
 
-def summary(slots: list[dict], first: bool, unclear: list[dict] | None = None) -> str:
-    """What the bot understood, for the chat."""
+def build_schedule() -> None:
+    """The bot's own schedule, built again from the table just kept (autoschedule.py). A failure
+    here is reported and costs only that: the table itself is safe."""
+    try:
+        from uninotifier import autoschedule
+        autoschedule.refresh()
+    except Exception as e:
+        log.exception("Building the timetable from the portal's table failed")
+        failsafe.bug("classtable:schedule", "Your timetable could not be built from the portal's table", e,
+                     "Lecture alerts and the drawn timetable use the last one that was built.")
+
+
+def summary(slots: list[dict], first: bool, unclear: list[dict] | None = None, check_in: bool = True) -> str:
+    """What the bot understood, for the chat. `check_in`: automatic check-in is on, so the
+    message says what the bot does with each kind of day."""
     online = sorted((s for s in slots if s["mode"] == "Online"),
                     key=lambda s: (schedule.DAY_KEYS.index(s["day"]), s["start"]))
     lines = ["🗓️ *Timetable read from the portal*" if first else "🗓️ *Your timetable on the portal changed*", ""]
     if online:
-        lines.append("💻 *Online lectures* (I check you in to these):")
+        lines.append("💻 *Online lectures*" + (" (I check you in to these):" if check_in else ":"))
         lines += [f"• {schedule.DAY_ABBR[s['day']]} · {notifier.hhmm12(s['start'])} – {notifier.hhmm12(s['end'])}"
                   for s in online]
     else:
-        lines.append("💻 No online lectures — there is nothing for me to check in to.")
+        lines.append("💻 No online lectures" + (" — there is nothing for me to check in to." if check_in else "."))
     campus = sum(s["mode"] in ("In-Person", "Blended") for s in slots)
     activity = sum(s["mode"] == "Activity" for s in slots)
-    lines += ["", f"🏫 {campus} in-person day(s) · 🧩 {activity} activity day(s) — I leave those alone."]
+    lines += ["", f"🏫 {campus} in-person day(s) · 🧩 {activity} activity day(s)"
+                  + (" — I leave those alone." if check_in else "")]
     if unclear:
         lines += ["", f"⚠️ I could not read {len(unclear)} row(s) of the timetable (course "
-                      f"{', '.join(r['code'] or '?' for r in unclear)}): for those days the check-in "
-                      "uses the codes in Moodle and your schedule.json."]
+                      f"{', '.join(r['code'] or '?' for r in unclear)})"
+                      + (": for those days the check-in uses the codes in Moodle and your schedule.json."
+                         if check_in else " — they are not in your timetable; look at them on the portal.")]
     lines.append("Courses changed? Send /check and I read it again.")
     return "\n".join(lines)
+
+
+def send_picture(token: str, chat_id: str) -> bool:
+    """The drawn timetable, under the message that says what was read — only when the drawn files
+    are the ones the bot sends (you keep no timetable of your own in assets/). Never fails the read."""
+    if paths.SCHEDULE_PDF.is_file() or paths.SCHEDULE_IMAGE.is_file():
+        return False
+    try:
+        from uninotifier import autoschedule, timetable_image
+        current = schedule.load_schedule()
+        files = timetable_image.ensure(current, autoschedule.hours_for(current))
+        return bool(files) and notifier.send_document(token, chat_id, files[0], "🗓️ Your weekly timetable")
+    except Exception as e:
+        log.exception("Drawing the timetable failed")
+        failsafe.bug("classtable:picture", "Your timetable could not be drawn", e,
+                     "The Weekly Timetable button tries again when you press it.")
+        return False
 
 
 def update(token: str, chat_id: str, lock=None, now: float | None = None, force: bool = False) -> bool:
     """Read the portal's timetable when it is due — or whenever `force` (a manual /check) — and
     tell what it found when it is new or changed. True when it was read."""
-    from uninotifier import portal
     now = time.time() if now is None else now
-    if not wanted() or portal.credentials() is None or not (force or due(now)):
+    if not wanted() or not (force or due(now)):
         return False
     if lock is not None and not lock.acquire(blocking=False):
         return False                  # a command of yours is using the portal: the next look
@@ -194,7 +235,8 @@ def update(token: str, chat_id: str, lock=None, now: float | None = None, force:
         after = load()
         if (after["slots"], after.get("unreadable")) != (before.get("slots"), before.get("unreadable")):
             notifier.send_message(token, chat_id, summary(after["slots"], first=not before.get("slots"),
-                                                          unclear=after.get("unreadable")))
+                                                          unclear=after.get("unreadable"), check_in=checks_in()))
+            send_picture(token, chat_id)
         return True
     finally:
         if lock is not None:

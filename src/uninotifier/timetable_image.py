@@ -18,20 +18,29 @@ The university's logo is not part of the project. A student who wants it puts th
 """
 
 import base64
+import hashlib
 import html
+import json
+import logging
 import sys
+import threading
 from datetime import date
 from pathlib import Path
 
-from uninotifier import paths
+from uninotifier import fileio, paths
+
+log = logging.getLogger("uninotifier")
 
 UNIVERSITY = "Al-Zaytoonah University of Jordan"
 OUT_DIR = paths.DATA / "timetable"
 PNG_FILE = OUT_DIR / "Weekly_Schedule.png"
 PDF_FILE = OUT_DIR / "Weekly_Academic_Schedule.pdf"
+SIGNATURE_FILE = OUT_DIR / "drawn.json"         # what the files on disk were drawn from (signature())
 LOGO_FILE = paths.ASSETS / "logo.png"
+DESIGN = 1                                      # raise it when the look changes: every picture is drawn again
+_drawing = threading.Lock()
 
-WEEK = ("sun", "mon", "tue", "wed", "thu", "fri", "sat")
+WEEK = ("sat", "sun", "mon", "tue", "wed", "thu", "fri")      # the week as it runs here: a Saturday lab comes first
 DAY_NAMES = {"sun": "Sunday", "mon": "Monday", "tue": "Tuesday", "wed": "Wednesday",
              "thu": "Thursday", "fri": "Friday", "sat": "Saturday"}
 MODES = {"In-Person": ("inperson", "وجاهي"), "Online": ("online", "إلكتروني"),
@@ -180,6 +189,8 @@ def _card(lec: dict) -> str:
     mode = lec.get("mode", "In-Person")
     css, _ = MODES.get(mode, MODES["In-Person"])
     place = lec.get("place") or DEFAULT_PLACE.get(mode, "")
+    if (lec.get("label") or "").strip().lower() == "lab":
+        place = f"Lab · {place}" if place else "Lab"
     section = str(lec.get("section") or "").strip()
     parts = [f'<div class="en">{_e(lec.get("course"))}</div>']
     if lec.get("course_ar") and lec["course_ar"] != lec.get("course"):
@@ -285,14 +296,41 @@ def draw(schedule: dict, hours: dict | None = None, png: Path | None = PNG_FILE,
     render(page_html, png, pdf, width=page_width(len(layout(schedule)["days"])))
 
 
+def signature(schedule: dict, hours: dict | None, logo: bytes | None) -> str:
+    """What the picture depends on, as one short text: it is drawn again only when this changes."""
+    shown = {"design": DESIGN, "semester": schedule.get("semester"), "days": schedule.get("days"),
+             "hours": sorted((hours or {}).items()), "logo": hashlib.sha1(logo).hexdigest() if logo else None}
+    return hashlib.sha1(json.dumps(shown, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def ensure(schedule: dict, hours: dict | None = None) -> tuple[Path, Path] | None:
+    """(the picture, the PDF) of `schedule`, drawn now if it was never drawn or the schedule
+    changed since — otherwise the files already there (their "Issued" date is the day they were
+    drawn). None when the schedule has no class. One drawing at a time."""
+    if not layout(schedule)["days"]:
+        return None
+    logo = logo_bytes()
+    mark = signature(schedule, hours, logo)
+    with _drawing:
+        try:
+            kept = json.loads(SIGNATURE_FILE.read_text(encoding="utf-8")).get("signature")
+        except (OSError, ValueError, AttributeError):
+            kept = None
+        if kept != mark or not (PNG_FILE.is_file() and PDF_FILE.is_file()):
+            render(build_html(schedule, hours, logo=logo), PNG_FILE, PDF_FILE,
+                   width=page_width(len(layout(schedule)["days"])))
+            fileio.write_json_atomic(SIGNATURE_FILE, {"signature": mark})
+            log.info("Timetable drawn: %s", PNG_FILE.name)
+    return PNG_FILE, PDF_FILE
+
+
 if __name__ == "__main__":      # python -m uninotifier.timetable_image --preview
     import os
 
-    from uninotifier import schedule as schedule_module
+    from uninotifier import autoschedule, schedule as schedule_module
     current = schedule_module.load_schedule()
-    if not layout(current)["days"]:
+    if ensure(current, autoschedule.hours_for(current)) is None:
         sys.exit("There is no timetable to draw yet.")
-    draw(current)
     print(f"Drawn: {PNG_FILE}\n       {PDF_FILE}")
     if "--preview" in sys.argv and hasattr(os, "startfile"):
         os.startfile(PNG_FILE)      # opens it in your picture viewer; nothing is sent anywhere

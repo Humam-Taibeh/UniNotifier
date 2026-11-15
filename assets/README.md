@@ -1,12 +1,16 @@
 # Your timetable pictures (optional)
 
-Put your official weekly timetable here, and the bot's **📅 Weekly Timetable** button
-sends it to you:
+You do not need to put anything here. With the portal login in `.env`, the bot reads your
+timetable from the registration portal and **draws it itself**: that is what the
+**📅 Weekly Timetable** button sends.
 
-| File name (exactly)              | What it is                          |
-|----------------------------------|-------------------------------------|
-| `Weekly_Academic_Schedule.pdf`   | the timetable as a PDF, to keep     |
-| `Weekly_Schedule.png`            | a picture of it, to glance at       |
+Put a file here only to change that:
 
-Either one is enough. Everything in this folder except this README is git-ignored,
-so your timetable never ends up in the repository.
+| File name (exactly)              | What it does                                                        |
+|----------------------------------|---------------------------------------------------------------------|
+| `Weekly_Academic_Schedule.pdf`   | a timetable PDF of your own — sent instead of the drawn one          |
+| `Weekly_Schedule.png`            | a timetable picture of your own — sent instead of the drawn one      |
+| `logo.png`                       | a logo for the header of the drawn timetable (the project ships none) |
+
+Either timetable file is enough. Everything in this folder except this README is git-ignored,
+so nothing of yours ends up in the repository.

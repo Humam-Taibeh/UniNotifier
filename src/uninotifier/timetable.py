@@ -23,7 +23,7 @@ WEEK = ("sun", "mon", "tue", "wed", "thu", "fri", "sat")
 CAMPUS_DAYS = ("sun", "mon", "tue", "wed", "thu")
 BRANCH, LAST = "├", "└"
 REMOTE_MODES = ("Activity", "Online")      # self-study and remote: no room
-ROOM_WORD = re.compile(r"room\s*([A-Za-z0-9\-]+)", re.I)
+ROOM_WORD = re.compile(r"room\s*([\w\-]+)", re.I)     # a room may carry a letter of its own, also an Arabic one: م9135
 NB = "\u00a0"                      # indentation that survives: Telegram may trim ordinary leading spaces
 
 
@@ -73,15 +73,15 @@ def _kind(lec: dict) -> str:
 def room(place: str | None) -> str:
     """A place as 'Room <number>' — nothing else, so a location line is always short and never wraps on a
     phone: 'Building 5, Room 2147' -> 'Room 2147', 'Engineering College, Room 32123' -> 'Room 32123',
-    'Room 60-2104' -> 'Room 2104' (a numeric block prefix goes; a lettered room like 'A-12' is kept as it is).
-    A place that names no room is left as written."""
+    'Room 60-2104' -> 'Room 2104', 'Room 60-م9104' -> 'Room م9104' (a numeric block prefix goes; a lettered
+    room like 'A-12' is kept as it is). A place that names no room is left as written."""
     if not place or not place.strip():
         return ""
     found = ROOM_WORD.search(place)
     if not found:
         return place.strip()
     token = found.group(1)
-    block = re.fullmatch(r"\d{1,3}-(\d+)", token)
+    block = re.fullmatch(r"\d{1,3}-([^\W\d_]?\d+)", token)
     return f"Room {block.group(1) if block else token}"
 
 

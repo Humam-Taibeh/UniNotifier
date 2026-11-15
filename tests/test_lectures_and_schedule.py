@@ -30,12 +30,12 @@ def test_the_timetable_picture_is_built_from_the_schedule():
         return {"start": start, "end": end, "course": course, "course_ar": "مادة تجريبية", "section": "2",
                 "mode": mode, **extra}
     week = {"semester": "First Semester 2026/2027", "days": {
-        "sat": [lec("08:00", "11:00", "Physics Lab", place="Lab 12")],
+        "sat": [lec("08:00", "11:00", "Physics Lab", place="Room 12", label="Lab")],
         "sun": [lec("09:30", "11:00", "Calculus (1)", place="Room 9101"), lec("14:00", "15:30", "Statistics", "Blended")],
         "tue": [lec("09:30", "11:00", "Calculus (1)", "Activity"), lec("09:30", "11:00", "Clash <b>Course</b>", "Online")],
         "wed": []}}
     plan = timetable_image.layout(week)
-    assert plan["days"] == ["sun", "tue", "sat"], "the days that have a class, in week order"
+    assert plan["days"] == ["sat", "sun", "tue"], "the days that have a class, the week starting on Saturday"
     rows = plan["rows"]
     assert [(r.get("start"), r.get("end"), r.get("break")) for r in rows] == [
         ("08:00", "11:00", None), ("09:30", "11:00", None), (None, None, ("11:00", "14:00")),
@@ -49,8 +49,8 @@ def test_the_timetable_picture_is_built_from_the_schedule():
     assert timetable_image.summary_line(week) == "4 Courses" and timetable_image.summary_line(week, hours).endswith("10 Credit Hours")
 
     page = timetable_image.build_html(week, hours, issued=date(2026, 11, 5))
-    for text in ("4 Courses · 10 Credit Hours · Sun–Sat", "Issued Nov 5, 2026", "First Semester 2026/2027",
-                 "Saturday", "SEC 02", "Room 9101", "Lab 12", "Remote / Teams", "Asynchronous / Self-study",
+    for text in ("4 Courses · 10 Credit Hours · Sat–Tue", "Issued Nov 5, 2026", "First Semester 2026/2027",
+                 "Saturday", "SEC 02", "Room 9101", "Lab · Room 12", "Remote / Teams", "Asynchronous / Self-study",
                  "Break / Transition", "وجاهي", "مدمج", "مادة تجريبية", "Clash &lt;b&gt;Course&lt;/b&gt;"):
         assert text in page, text
     assert "<b>Course" not in page, "a course's name is text, never markup"
@@ -62,6 +62,130 @@ def test_the_timetable_picture_is_built_from_the_schedule():
     empty = timetable_image.build_html({"days": {}})
     assert "No classes in this timetable yet." in empty and "Legend" not in empty
     assert timetable_image.page_width(1) == timetable_image.page_width(3) < timetable_image.page_width(6)
+
+
+def test_a_student_without_a_schedule_file_gets_the_timetable_from_the_portal():
+    """autoschedule: the portal's table and Moodle's course list, joined by the course code, give a
+    schedule of schedule.json's own shape. It is in force only when there is no schedule.json; the
+    Weekly Timetable button then sends the timetable drawn from it; a file of your own always wins."""
+    from uninotifier import autoschedule, classtable, portal_pages, timetable
+    from uninotifier.bot import views
+
+    slots = classtable.slots_from_rows(portal_pages.timetable_rows(_portal_home(PORTAL_ROWS)))
+    courses = {"8801": {"name": "20261-Calculus(1)-AllSec-3-F", "url": "u", "code": "0900111"},
+               "8802": {"name": "20261-Web Design-Sec2-3", "url": "u", "code": "0900222_2"},
+               "8803": {"name": "20261-مادة إلكترونية-ش3-2-ك", "url": "u", "code": "0900333_3"},
+               "8809": {"name": "20261-مادة وجاهية-AllSec-3", "url": "u"}}      # no code: a name alone joins nothing
+    assert autoschedule.course_code("0900222_2") == "0900222" and autoschedule.course_code(None) == ""
+    assert autoschedule.hours_of("20261-Calculus(1)-AllSec-3-F") == 3 and autoschedule.hours_of("20261-x-ش3-2-ك") == 2
+    assert autoschedule.hours_of("Calculus") is None and autoschedule.display_name("20261-Calculus(1)-AllSec-3-F") == "Calculus (1)"
+    assert autoschedule.semester_name(["20262-A-AllSec-3", "20262-B-Sec1-3", "20261-C-AllSec-3"]) == "Second Semester 2026/2027"
+    assert autoschedule.semester_name(["20263-A-AllSec-3"]) == "Summer Semester 2026/2027" and autoschedule.semester_name([]) is None
+
+    built = autoschedule.build(slots, courses)
+    assert schedule.validate(built) == [], schedule.validate(built)
+    assert built["semester"] == "First Semester 2026/2027" and built["remind_modes"] == ["Online"]
+    assert built["course_codes"] == {"0900111": "Calculus (1)", "0900222": "Web Design", "0900333": "مادة إلكترونية",
+                                     "0900444": "مادة وجاهية"}, "a course Moodle does not list keeps the portal's name"
+    assert list(built["days"]) == ["sun", "mon", "tue", "wed", "sat"]
+    first, second = built["days"]["sun"]
+    assert first == {"start": "09:30", "end": "11:00", "course": "Calculus (1)", "course_ar": "مادة وجاهية",
+                     "section": "01", "mode": "In-Person", "label": "In-Person Lecture", "place": "Room 101"}
+    assert (second["course"], second["mode"], second["place"]) == ("Web Design", "Blended", "Room 202")
+    assert "place" not in built["days"]["tue"][1] and built["days"]["tue"][1]["mode"] == "Activity", "no room on an activity day"
+    assert built["days"]["wed"][0]["mode"] == "Online" and "place" not in built["days"]["wed"][0]
+    lab = built["days"]["sat"][0]
+    assert (lab["label"], lab["place"], lab["start"], lab["end"]) == ("Lab", "Room 60", "16:00", "18:00")
+    assert all(timetable.room(lec["place"]) == lec["place"] for day in built["days"].values() for lec in day if "place" in lec)
+    assert autoschedule.build([], courses) is None and autoschedule.build([{"day": "sun"}], courses) is None
+
+    tmp = Path(tempfile.mkdtemp(prefix="uninotifier-auto-"))
+    keep = (autoschedule.TABLE_FILE, autoschedule.STATE_FILE, schedule.AUTO_FILE, schedule.SCHEDULE_FILE, schedule.LAST_GOOD_FILE,
+            schedule._good, schedule._broken, dict(schedule._read), schedule._portal_will_build, schedule.failsafe.report,
+            timetable_image.render, timetable_image.OUT_DIR, timetable_image.PNG_FILE, timetable_image.PDF_FILE,
+            timetable_image.SIGNATURE_FILE, timetable_image.LOGO_FILE, views.SCHEDULE_PDF, views.SCHEDULE_IMAGE,
+            notifier.send_document_group, views.chat.reanchor, views.chat.send_view, notifier.send_document,
+            schedule.failsafe.resolve)
+    autoschedule.TABLE_FILE, autoschedule.STATE_FILE = tmp / "class_table.json", tmp / "saved_items.json"
+    schedule.AUTO_FILE, schedule.SCHEDULE_FILE, schedule.LAST_GOOD_FILE = tmp / "auto.json", tmp / "schedule.json", tmp / "good.json"
+    schedule._good, schedule._broken = None, False
+    schedule._read.update(path=None, text=None, data=None)
+    reports, drawn, sent, views_sent = [], [], [], []
+    schedule.failsafe.report = lambda kind, headline, **kw: reports.append(kw.get("detail", "")) or True
+
+    def fake_render(page_html, png, pdf, width=None):
+        drawn.append(page_html)
+        png.parent.mkdir(parents=True, exist_ok=True)
+        png.write_bytes(b"png")
+        pdf.write_bytes(b"pdf")
+    timetable_image.render = fake_render
+    timetable_image.OUT_DIR = tmp / "timetable"
+    timetable_image.PNG_FILE, timetable_image.PDF_FILE = tmp / "timetable" / "t.png", tmp / "timetable" / "t.pdf"
+    timetable_image.SIGNATURE_FILE, timetable_image.LOGO_FILE = tmp / "timetable" / "drawn.json", tmp / "no-logo.png"
+    views.SCHEDULE_PDF, views.SCHEDULE_IMAGE = tmp / "mine.pdf", tmp / "mine.png"
+    notifier.send_document_group = lambda token, chat, items: sent.append([(p.name, c) for p, c in items]) or True
+    notifier.send_document = lambda token, chat, path, caption, **kw: sent.append([(path.name, caption)]) or True
+    schedule.failsafe.resolve = lambda *a, **kw: True
+    views.chat.reanchor = lambda: None
+    views.chat.send_view = lambda text, rows=None, **kw: views_sent.append(text)
+    try:
+        # nothing read yet, the portal login set: an empty schedule, and nothing to fix is reported
+        schedule._portal_will_build = lambda: True
+        assert schedule.load_schedule() == {"days": {}} and reports == []
+        views.send_schedule_files()
+        assert sent == [] and "PORTAL_USERNAME" in views_sent[-1] and "/check" in views_sent[-1], views_sent
+        # no login either: told what to do — the portal login first, the file by hand second
+        schedule._portal_will_build = lambda: False
+        schedule._read.update(path=None, text=None, data=None)
+        assert schedule.load_schedule() == {"days": {}} and len(reports) == 1 and "PORTAL_USERNAME" in reports[0]
+
+        autoschedule.TABLE_FILE.write_text(json.dumps({"read": 1.0, "slots": slots}), encoding="utf-8")
+        autoschedule.STATE_FILE.write_text(json.dumps({"courses": courses}), encoding="utf-8")
+        assert autoschedule.refresh() and not autoschedule.refresh(), "kept once; rewritten only when it changes"
+        assert schedule.load_schedule() == built, "in force without a schedule.json"
+        assert autoschedule.hours_for(built) == {"Calculus (1)": 3.0, "Web Design": 3.0, "مادة إلكترونية": 2.0}
+
+        # the Weekly Timetable button: the drawn files, drawn once
+        views.send_schedule_files()
+        views.send_schedule_files()
+        assert sent[-1] == [("t.pdf", "📎 High-Resolution PDF"), ("t.png", "🖼️ Quick PNG Preview")] and len(sent) == 2
+        assert len(drawn) == 1 and "Calculus (1)" in drawn[0] and "Lab · Room 60" in drawn[0], "not drawn again when nothing changed"
+        assert "3 Courses" not in drawn[0] and "4 Courses" in drawn[0] and "Credit Hours" not in drawn[0], \
+            "the lab's course has no hours on Moodle: the total is not shown rather than wrong"
+        # the timetable changed on the portal: built again, drawn again
+        autoschedule.TABLE_FILE.write_text(json.dumps({"read": 2.0, "slots": slots[:6]}), encoding="utf-8")
+        assert autoschedule.refresh() and "sat" not in schedule.load_schedule()["days"]
+        views.send_schedule_files()
+        assert len(drawn) == 2 and "Saturday" not in drawn[1] and "3 Courses · 8 Credit Hours" in drawn[1]
+
+        # the message that says what was read carries the drawn timetable — not when you keep one of your own
+        keep_paths = (paths.SCHEDULE_PDF, paths.SCHEDULE_IMAGE)
+        paths.SCHEDULE_PDF, paths.SCHEDULE_IMAGE = views.SCHEDULE_PDF, views.SCHEDULE_IMAGE
+        try:
+            assert classtable.send_picture("t", "c") and sent[-1] == [("t.png", "🗓️ Your weekly timetable")]
+            views.SCHEDULE_PDF.write_bytes(b"my own pdf")
+            assert not classtable.send_picture("t", "c") and len(drawn) == 2
+            views.SCHEDULE_PDF.unlink()
+        finally:
+            paths.SCHEDULE_PDF, paths.SCHEDULE_IMAGE = keep_paths
+
+        # a schedule.json of your own always wins, and so do timetable files of your own
+        own = {"semester": "Mine", "days": {"sun": [dict(first, course="My Own Course")]}}
+        schedule.SCHEDULE_FILE.write_text(json.dumps(own), encoding="utf-8")
+        assert schedule.load_schedule() == own
+        views.SCHEDULE_IMAGE.write_bytes(b"my own picture")
+        views.send_schedule_files()
+        assert sent[-1] == [("mine.png", "🖼️ Quick PNG Preview")], sent[-1]
+        assert len(drawn) == 2, "your own file is sent: nothing is drawn"
+    finally:
+        (autoschedule.TABLE_FILE, autoschedule.STATE_FILE, schedule.AUTO_FILE, schedule.SCHEDULE_FILE, schedule.LAST_GOOD_FILE,
+         schedule._good, schedule._broken) = keep[:7]
+        schedule._read.update(keep[7])
+        (schedule._portal_will_build, schedule.failsafe.report, timetable_image.render, timetable_image.OUT_DIR,
+         timetable_image.PNG_FILE, timetable_image.PDF_FILE, timetable_image.SIGNATURE_FILE, timetable_image.LOGO_FILE,
+         views.SCHEDULE_PDF, views.SCHEDULE_IMAGE, notifier.send_document_group, views.chat.reanchor,
+         views.chat.send_view, notifier.send_document, schedule.failsafe.resolve) = keep[8:]
+        schedule._arabic_to_english.cache_clear()
 
 
 def test_schedule():
@@ -241,8 +365,9 @@ def test_portal_timetable():
                                                           '<td colspan="6">No records found.</td></tr></tbody>')) == []
     assert [s["mode"] for s in schedule.parse_codes(rows[1]["time"])] == ["Blended", "Activity"], "م is the in-person day"
     slots = classtable.slots_from_rows(rows)
-    assert len(slots) == 6, "the Saturday lab is left out: Sunday to Wednesday are the university days"
+    assert len(slots) == 7, "every day the portal lists is kept: the Saturday lab is part of the week"
     assert slots[5]["course_ar"] == "مادة إلكترونية" and slots[5]["day"] == "wed" and slots[5]["mode"] == "Online"
+    assert slots[6]["day"] == "sat" and slots[6]["activity"] == "عملي" and slots[6]["room"] == "60"
 
     def at(day, hh, mm):
         return datetime(2026, 11, day, hh, mm)       # 1 Nov 2026 is a Sunday
@@ -270,13 +395,14 @@ def test_portal_timetable():
             now = 1_800_000_000.0
             assert classtable.mode_at(at(4, 19, 0), now) is None and not classtable.known(now), "no table yet"
 
-            # switched off, or no login: the portal is never opened
-            sched["auto_check_in"] = False
-            assert not classtable.update("t", "c", now=now) and calls == []
-            sched["auto_check_in"] = True
+            # no portal login: the portal is never opened. With one, every student's timetable is
+            # read — automatic check-in on or off (the schedule and the drawn timetable need it too)
             portal.credentials = lambda: None
-            assert not classtable.update("t", "c", now=now, force=True) and calls == []
+            assert not classtable.wanted() and not classtable.update("t", "c", now=now, force=True) and calls == []
             portal.credentials = lambda: ("student", "secret")
+            sched["auto_check_in"] = False
+            assert classtable.wanted() and not classtable.checks_in()
+            sched["auto_check_in"] = True
             lock = threading.Lock()
             lock.acquire()
             assert not classtable.update("t", "c", lock, now) and calls == [], "a command of yours is using the portal"
@@ -284,7 +410,7 @@ def test_portal_timetable():
 
             # no table yet: read at once, with nobody to type a verification code — and told what it found
             assert classtable.update("t", "c", lock, now) and calls == [(["home"], None)] and not lock.locked()
-            assert classtable.known(now) and len(classtable.load()["slots"]) == 6
+            assert classtable.known(now) and len(classtable.load()["slots"]) == 7
             assert classtable.mode_at(at(4, 19, 5), now) == "Online" and classtable.mode_at(at(2, 19, 0), now) == "Activity"
             assert classtable.mode_at(at(1, 12, 30), now) == "Blended" and classtable.mode_at(at(3, 12, 30), now) == "Activity"
             assert classtable.mode_at(at(1, 9, 30), now) == "In-Person" and classtable.mode_at(at(7, 16, 0), now) is None, \
@@ -293,7 +419,11 @@ def test_portal_timetable():
             assert classtable.mode_at(at(4, 19, 40), now) is None, "too far from the start of a class"
             assert len(told) == 1 and told[0].startswith("🗓️ *Timetable read from the portal*"), told
             assert "• Wed · 7:00 PM – 8:30 PM" in told[0] and "Mon" not in told[0] and "/check" in told[0], told[0]
-            assert "🏫 3 in-person day(s) · 🧩 2 activity day(s)" in told[0] and _legacy_markdown_ok(told[0]), told[0]
+            assert "🏫 4 in-person day(s) · 🧩 2 activity day(s) — I leave those alone." in told[0], told[0]
+            assert "(I check you in to these)" in told[0] and _legacy_markdown_ok(told[0]), told[0]
+            plain = classtable.summary(classtable.load()["slots"], first=True, check_in=False)
+            assert "💻 *Online lectures*:" in plain and "check you in" not in plain and "leave those alone" not in plain, plain
+            assert "💻 No online lectures." in classtable.summary([], first=True, check_in=False)
 
             # once is enough: not weeks later; /check reads it again — and says nothing when nothing changed
             assert not classtable.update("t", "c", now=now + 70 * 86400) and len(calls) == 1
@@ -329,7 +459,7 @@ def test_portal_timetable():
             assert len(calls) == 6 and not classtable.update("t", "c", now=odd + classtable.TICK) and len(calls) == 6
             answers["home"] = [{"home": portal.Result(section="home", found=True, data={"timetable": []})}]
             assert not classtable.update("t", "c", now=odd + classtable.RETRY_AFTER) and len(calls) == 7
-            assert len(classtable.load()["slots"]) == 6, "a home page without a timetable keeps the old one"
+            assert len(classtable.load()["slots"]) == 7, "a home page without a timetable keeps the old one"
             answers["home"] = [{"home": portal.Result(section="home", found=True, data={"timetable": rows})}]
             assert classtable.update("t", "c", now=odd + 2 * classtable.RETRY_AFTER) and classtable.known(odd + 2 * classtable.RETRY_AFTER)
 
@@ -448,7 +578,8 @@ def test_week_logic():
                row("Y", "[ 10:00_11:30 ]"),                      # no codes at all
                row("Z", "[ 10:00_11:30 ] ح ث (ك)")]              # one mode for two days: not the portal's way
     slots = classtable.slots_from_rows(rows + unclear)
-    assert {s["code"] for s in slots} == set("ABCDEFGHIJKN"), "Thursday, Saturday and the unreadable rows are not slots"
+    assert {s["code"] for s in slots} == set("ABCDEFGHIJKLMN"), \
+        "every readable row is kept, Thursday and Saturday too (the timetable shows them); the unreadable ones are not slots"
     assert classtable.unreadable(rows) == [] and [r["code"] for r in classtable.unreadable(rows + unclear)] == ["X", "Y", "Z"]
 
     #            day of Nov 2026 (1 = Sunday), time -> the mode that day
@@ -626,7 +757,9 @@ def test_rooms_are_always_short():
     for raw, short in (("Building 5, Room 2147", "Room 2147"), ("Building 5, Room 2135", "Room 2135"),
                        ("Engineering College, Room 32123", "Room 32123"), ("Room 60-2104", "Room 2104"),
                        ("Room 449", "Room 449"), ("room 2147", "Room 2147"), ("Faculty of IT Room 12-345", "Room 345"),
-                       ("Room A-12", "Room A-12"), ("Hall 3", "Hall 3"), ("  ", ""), (None, ""), ("", "")):
+                       ("Room A-12", "Room A-12"), ("Hall 3", "Hall 3"), ("  ", ""), (None, ""), ("", ""),
+                       # the portal's own room texts: a letter of the room's own stays, the block prefix goes
+                       ("Room 60-م9104", "Room م9104"), ("Room م9135", "Room م9135"), ("Room 60", "Room 60")):
         assert timetable.room(raw) == short, (raw, timetable.room(raw))
 
     def lec(mode, place):

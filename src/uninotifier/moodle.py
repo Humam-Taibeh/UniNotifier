@@ -109,6 +109,11 @@ def fetch_courses(context, sesskey: str) -> dict:
             "name": c["fullname"],
             "url": c.get("viewurl") or f"{BASE_URL}/course/view.php?id={c['id']}",
         }
+        # the portal's course code ("0420115", or "0420115_12" for one section): what joins a
+        # Moodle course to its row of the portal's timetable (autoschedule.py)
+        code = str(c.get("idnumber") or c.get("shortname") or "").strip()
+        if re.fullmatch(r"\d{5,}(?:_\w+)?", code):
+            courses[str(c["id"])]["code"] = code
     log.info("Found %d enrolled course(s)", len(courses))
     return courses
 

@@ -39,6 +39,7 @@ subscription, and nothing about you ever leaves your PC except the messages it s
 |---|---|
 | 📚 **Everything on Moodle, as it happens** | Files, folders, links, pages, labels, quizzes, assignments, forum posts and announcements, Teams lectures and attendance — each as a sharp screenshot of the item itself, or the file itself (up to 45 MB), in a short message. An edit says what changed (*Was* / *Now*); re-uploaded files are reported too. |
 | 🗂️ **A tidy archive** | Every file lands in `<Course>\01_Lectures`, `02_Assignments` or `03_Exams`, never twice; an instructor's new version takes its place and the old one moves to `_Old_Versions`. |
+| 📅 **Your timetable, read and drawn for you** | With the portal login in `.env`, the bot reads your weekly timetable from the registration portal by itself — every day, time, section, room and mode — builds its lecture alerts from it, and draws it as a picture and a PDF for the 📅 Weekly Timetable button. No file to write; a `schedule.json` or a timetable picture of your own still wins. |
 | ⏰ **Deadlines & lectures** | Assignment and quiz reminders 24 h and 1 h ahead (stopped by your submission), and every day at noon a list of every open task — Cambridge One too — with a loud 🚨 on the last day; online-lecture alerts an hour before and at the start, with 🎥 Join Meeting and ✍️ Check In — and, if you switch it on, automatic attendance check-in with a screenshot as proof (or a 🚨 to do it by hand). |
 | 📌 **Your own reminders** | "Add to Reminders" under any notification, or a typed note — delivered at the exact minute. |
 | 🎉 **Your marks, found for you** | The mark of a quiz or assignment the moment Moodle shows it, with a picture of the page; and your row in any marks file an instructor uploads (Excel, Word, PDF, text) — found by the `STUDENT_ID` in your `.env`. A marks file it could not read says so. |
@@ -111,8 +112,8 @@ marks are made up. In Telegram they look the same, in your own theme, with tappa
 - **`bot.py` — the assistant.** Always on: answers your taps and commands, sends lecture and
   reminder alerts on the minute, takes a ~1 KB look at Moodle every 2 minutes (and starts a check at
   once when something is new), reads the registration portal when you ask — answering
-  instantly from the last copy and refreshing it behind ("stale-while-revalidate") — plus, if you
-  turn on automatic check-in, one look at your timetable there, and, if you turn it on,
+  instantly from the last copy and refreshing it behind ("stale-while-revalidate") — plus one
+  look at your timetable there each semester, and, if you turn it on,
   watches Cambridge One.
 - **Telegram** is the only thing that leaves your PC: your bot, talking only to you.
 
@@ -190,6 +191,12 @@ Everything else is optional and explained right there in the file; an empty valu
 Course files go to `Documents\University` unless you set another folder in `ARCHIVE_ROOT`
 (`%USERPROFILE%` works there).
 
+**Your timetable needs no file** when `PORTAL_USERNAME` and `PORTAL_PASSWORD` are filled in: a few
+minutes after it starts, the bot reads your timetable from the registration portal by itself, tells
+you what it found, and draws it for the 📅 Weekly Timetable button (send `/check` whenever your
+courses change). Then skip the next two lines. Without the portal login — or to write the timetable
+your own way — make a `schedule.json`; one you wrote always wins over the portal's:
+
 ```powershell
 copy schedule.example.json schedule.json
 notepad schedule.json
@@ -197,8 +204,9 @@ notepad schedule.json
 
 Replace the example classes with your own week: for each class its day, start and end
 time (24-hour), English and Arabic course name, section, and mode (`In-Person`, `Online` or
-`Activity`). Online classes get lecture alerts. Optionally put your official timetable in
-`assets\` as `Weekly_Academic_Schedule.pdf` / `Weekly_Schedule.png` (see [assets/README.md](assets/README.md)).
+`Activity`). Online classes get lecture alerts. Optionally put a timetable picture of your own in
+`assets\` as `Weekly_Academic_Schedule.pdf` / `Weekly_Schedule.png` — it is sent instead of the drawn
+one (see [assets/README.md](assets/README.md)).
 
 Now let the doctor check everything:
 
@@ -278,8 +286,8 @@ The bot answers only you (`ADMIN_USER_ID`); anyone else who finds it gets no rep
 | Path | What | In Git? |
 |---|---|---|
 | `.env` | your settings and passwords (from `.env.example`) | **never** |
-| `schedule.json` | your timetable (from `schedule.example.json`) | **never** |
-| `assets\` | your timetable PDF / PNG (optional) | **never** |
+| `schedule.json` | a timetable you wrote yourself (from `schedule.example.json`) — optional: without it the bot reads the portal's | **never** |
+| `assets\` | a timetable PDF / PNG of your own, or a `logo.png` for the drawn one (optional) | **never** |
 | `data\` | everything the program writes: tracker state, Moodle / portal sessions, caches | **never** |
 | `data\logs\` | `monitor.log`, `bot.log` — the first place to look | **never** |
 | `ARCHIVE_ROOT` (default `Documents\University`) | your course files, per course | outside the project |
@@ -295,8 +303,9 @@ project folder: run `scripts\setup_tasks.ps1` again afterwards so the tasks poin
 
 ## Optional extras
 
-**Registration portal** — set `PORTAL_USERNAME` / `PORTAL_PASSWORD` for Transcript, Balance and
-Finals Watch. The portal is only contacted when you ask (or while Finals Watch is on).
+**Registration portal** — set `PORTAL_USERNAME` / `PORTAL_PASSWORD` for your timetable, Transcript,
+Balance and Finals Watch. The portal is contacted when you ask, once a semester for your timetable
+(and again on `/check`), and while Finals Watch is on — never in between.
 
 **Health monitoring** — a free [healthchecks.io](https://healthchecks.io) account tells you when your
 PC is off or the program stopped. Create two checks and put their ping URLs in `HEALTHCHECK_URL`
