@@ -259,12 +259,48 @@ def tone(text: str) -> str:
     return next((colour for colour, marks in TONES if first.startswith(marks)), DEFAULT_TONE)
 
 
+PIECE_LINES = 6           # Slack folds a frame taller than about ten lines under "Show more": stay well under
+
+
+def _lines(block: dict) -> int:
+    """About how many lines a block takes in Slack (a line wraps at about 70 characters)."""
+    def wrapped(text: str) -> int:
+        return sum(1 + len(part) // 70 for part in text.split("\n"))
+    if block.get("type") == "section" and block.get("fields"):
+        rows = [block["fields"][i:i + 2] for i in range(0, len(block["fields"]), 2)]
+        return sum(max(wrapped(f["text"]) for f in row) for row in rows)
+    if block.get("type") == "section":
+        return wrapped(block["text"]["text"])
+    if block.get("type") == "context":
+        return sum(wrapped(e.get("text", "")) for e in block.get("elements", []))
+    return 1
+
+
+def pieces(blocks: list[dict]) -> list[list[dict]]:
+    """The frame's blocks in short pieces — each well under the height Slack folds — joining small
+    neighbours, so a message is one, two or three pieces and nothing is ever hidden."""
+    out, piece, height = [], [], 0
+    for block in blocks:
+        if block.get("type") == "divider":
+            continue                                   # the gap between pieces already separates
+        lines = _lines(block)
+        if piece and height + lines > PIECE_LINES:
+            out.append(piece)
+            piece, height = [], 0
+        piece.append(block)
+        height += lines
+    if piece:
+        out.append(piece)
+    return out
+
+
 def framed(card: list[dict], colour: str) -> dict:
     """The card as Slack shows it: its first block (the title) on top, the rest inside a frame with a
     coloured edge — each message stands on its own, its colour saying what it is."""
     data = {"blocks": json.dumps(card[:1], ensure_ascii=False)}
     if card[1:]:
-        data["attachments"] = json.dumps([{"color": colour, "blocks": card[1:]}], ensure_ascii=False)
+        data["attachments"] = json.dumps([{"color": colour, "blocks": piece} for piece in pieces(card[1:])],
+                                         ensure_ascii=False)
     return data
 
 

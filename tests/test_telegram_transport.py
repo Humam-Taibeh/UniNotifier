@@ -869,8 +869,10 @@ def test_messages_go_to_slack_when_chosen():
             # ...and it goes as a card: the title a header on top, the rest in a frame whose colour says
             # what the message is — the label lines side by side, notes small, the links at the bottom
             def card_of(sent):
-                frame = json.loads(sent.get("attachments") or "[{}]")[0]
-                return json.loads(sent["blocks"]) + frame.get("blocks", []), frame.get("color")
+                frames = json.loads(sent.get("attachments") or "[]")
+                assert len({f["color"] for f in frames}) <= 1, "one colour for the whole frame"
+                return (json.loads(sent["blocks"]) + [b for f in frames for b in f["blocks"]],
+                        frames[0]["color"] if frames else None)
 
             card, colour = card_of(data)
             assert card[0] == {"type": "header", "text": {"type": "plain_text", "text": "📢 New post", "emoji": True}}
@@ -883,6 +885,13 @@ def test_messages_go_to_slack_when_chosen():
             assert colour == "#e0a020", "time-bound: gold"
             assert [slack.tone(t) for t in ("🚨 *Check In by Hand*", "🎉 *Marks Detected*", "✅ done", "")] == [
                 "#d93f3f", "#3b6fd8", slack.DEFAULT_TONE, slack.DEFAULT_TONE]
+            # the frame comes in short pieces — Slack folds a tall one under "Show more", hiding its links
+            six = {"type": "section", "fields": [{"type": "mrkdwn", "text": f"*L{i}*\nv"} for i in range(6)]}
+            line = {"type": "section", "text": {"type": "mrkdwn", "text": "one line"}}
+            note = {"type": "context", "elements": [{"type": "mrkdwn", "text": "_a note_"}]}
+            assert slack.pieces([six, line, line, note, {"type": "divider"}, note]) == [[six], [line, line, note, note]]
+            assert all(sum(slack._lines(b) for b in p) <= slack.PIECE_LINES or len(p) == 1
+                       for p in slack.pieces([six, six, line] * 4))
             assert [b["type"] for b in card] == ["header", "section", "section", "section", "context"], card
             assert card[1]["fields"] == [{"type": "mrkdwn", "text": "*📘 Course*\nBig Data"},
                                          {"type": "mrkdwn", "text": "*📋 Type*\nQuiz"}]
