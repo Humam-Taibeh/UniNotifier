@@ -20,7 +20,7 @@ from uninotifier.notifier import escape_md, hhmm12
 from uninotifier.schedule import DAY_ABBR, MODE_EMOJI
 
 WEEK = ("sun", "mon", "tue", "wed", "thu", "fri", "sat")
-CAMPUS_DAYS = ("sun", "mon", "tue", "wed", "thu")
+GROUPED_DAYS = ("sun", "mon", "tue", "wed", "thu")   # the course list groups these; NOT the check-in days (reminders.CAMPUS_DAYS)
 BRANCH, LAST = "├", "└"
 REMOTE_MODES = ("Activity", "Online")      # self-study and remote: no room
 ROOM_WORD = re.compile(r"room\s*([\w\-]+)", re.I)     # a room may carry a letter of its own, also an Arabic one: م9135
@@ -35,14 +35,14 @@ IND = pad(4)                       # what a course's lines are indented by in th
 
 
 def _split(slots: list[tuple[str, dict]]) -> tuple[list[tuple[str, dict]], list[tuple[str, dict]]]:
-    main = [s for s in slots if s[0] in CAMPUS_DAYS]
-    return main, [s for s in slots if s[0] not in CAMPUS_DAYS]
+    main = [s for s in slots if s[0] in GROUPED_DAYS]
+    return main, [s for s in slots if s[0] not in GROUPED_DAYS]
 
 
 def pattern(slots: list[tuple[str, dict]]) -> tuple[str, ...]:
     """The campus days a course meets on, in week order: ("sun", "tue")."""
     main, _ = _split(slots)
-    return tuple(day for day in CAMPUS_DAYS if any(d == day for d, _ in main))
+    return tuple(day for day in GROUPED_DAYS if any(d == day for d, _ in main))
 
 
 def order_key(slots: list[tuple[str, dict]]) -> tuple:
@@ -122,7 +122,7 @@ def describe(slots: list[tuple[str, dict]]) -> list[str]:
     per_day: dict[str, list[dict]] = {}
     for day, lec in main:
         per_day.setdefault(day, []).append(lec)
-    days = [d for d in CAMPUS_DAYS if d in per_day]
+    days = [d for d in GROUPED_DAYS if d in per_day]
     lines: list[str] = []
     one_a_day = bool(days) and all(len(per_day[d]) == 1 for d in days)
     if one_a_day and len({(per_day[d][0]["start"], per_day[d][0]["end"]) for d in days}) == 1:
