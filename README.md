@@ -130,8 +130,10 @@ folder, type `powershell` in the address bar and press Enter.
 > **Use `git clone`, not Download ZIP:** only a cloned copy is told about new versions and fixes in the
 > chat and can install them with one tap (see [Updating](#updating-pausing-uninstalling)). A ZIP copy
 > works, but it never hears about an update and has to be replaced by hand each time.
-> It does the rest of steps 2 and 3 and most of step 5 for you (`.venv`, the packages, Chromium, your
-> `.env` and `schedule.json` opened in Notepad) and ends with the doctor. Then continue with step 6.
+> It does the rest of steps 2 and 3 for you (`.venv`, the packages, Chromium), then **asks you five
+> short questions and writes your settings itself** — no file to edit; it even finds your Telegram Id
+> when you press Start in your bot — runs the doctor, and offers to finish step 6 too: the Moodle
+> sign-in, the first check and the scheduled tasks.
 
 ### 1. Prerequisites
 
@@ -306,6 +308,11 @@ project folder: run `scripts\setup_tasks.ps1` again afterwards so the tasks poin
 **Registration portal** — set `PORTAL_USERNAME` / `PORTAL_PASSWORD` for your timetable, Transcript,
 Balance and Finals Watch. The portal is contacted when you ask, once a semester for your timetable
 (and again on `/check`), and while Finals Watch is on — never in between.
+
+**Automatic attendance check-in** — `AUTO_CHECK_IN=true` in `.env` (the setup asks you): the bot checks
+you in to every *online* lecture as soon as the instructor opens attendance and sends a screenshot as
+proof, or tells you to do it by hand when it cannot. Never an in-person or activity day. It needs the
+portal login above, which is how it knows which days are online.
 
 **Health monitoring** — a free [healthchecks.io](https://healthchecks.io) account tells you when your
 PC is off or the program stopped. Create two checks and put their ping URLs in `HEALTHCHECK_URL`

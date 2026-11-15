@@ -49,6 +49,8 @@ VARIABLES = (
     Var("ARCHIVE_ROOT", (), "the folder for downloaded course files (default: Documents\\University)"),
     Var("PORTAL_USERNAME", (), "the registration portal (portal.zuj.edu.jo) user name"),
     Var("PORTAL_PASSWORD", (), "the registration portal password"),
+    Var("AUTO_CHECK_IN", (), "true = the bot checks you in to your online lectures by itself",
+        r"(?i)true|false", "true or false"),
     Var("HEALTHCHECK_URL", (), "a ping URL from healthchecks.io", r"https?://\S+", "a web address"),
     Var("BOT_HEALTHCHECK_URL", (), "a second ping URL from healthchecks.io", r"https?://\S+", "a web address"),
     Var("BOT_POLL_TIMEOUT", (), "seconds of each Telegram long poll (5-50)", r"\d+", "a number"),

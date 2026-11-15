@@ -55,6 +55,16 @@ All notable changes to this project are documented here. The format follows
   courses and credit hours in the header. 📅 Weekly Timetable sends them when `assets\` holds no
   timetable of your own, and the *Timetable read from the portal* message carries the picture. A
   `logo.png` of your own in `assets\` appears in its header; the project ships no logo.
+- **A setup that asks instead of a file to edit** (`python -m uninotifier.setup`, run by `install.bat`):
+  five short questions in the console — the university e-mail and password, the bot's token (checked
+  with Telegram at once), who you are on Telegram (found from the Start you press in your bot: no Id to
+  look up), the optional portal login and automatic check-in. It writes `.env` itself, keeps every
+  explanation and everything an existing `.env` holds, proves that every value reads back exactly, and
+  limits the file to your Windows account. The installer no longer opens Notepad or writes a
+  `schedule.json`, and after the doctor it offers to finish: the Moodle sign-in, the first check and
+  the scheduled tasks.
+- `AUTO_CHECK_IN=true` in `.env` switches automatic attendance check-in on — the place for it when
+  there is no `schedule.json`. A `schedule.json` that sets `auto_check_in` is still obeyed.
 - The portal's timetable keeps every day it lists: a Saturday lab is shown in the timetable (the
   check-in still counts Sunday to Wednesday only).
 - Manage Reminders: a reminder opens to its full text with Edit Text, Change Date, Change Time and Delete

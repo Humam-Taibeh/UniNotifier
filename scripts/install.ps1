@@ -9,18 +9,20 @@
     2. creates the project's private Python environment (.venv) - or reuses it
     3. installs the exact package versions from requirements.txt, then UniNotifier itself
     4. downloads the headless Chromium browser used to sign in to Moodle
-    5. creates .env and schedule.json from the examples (never overwrites yours)
-       and opens the new ones in Notepad for you to fill in
+    5. asks you five short questions and writes your settings (.env) itself - no file
+       to edit (python -m uninotifier.setup); settings already filled in are kept
     6. runs the doctor, which checks everything and says what is left to do
+    7. offers to finish: sign in to Moodle, make the first check, and switch on the two
+       scheduled tasks - or prints those three commands for later
 
+  Your timetable needs no file: the bot reads it from the registration portal.
   Safe to run again at any time: nothing you filled in is ever replaced.
-  Next steps (sign in, first check, scheduled tasks) are printed at the end.
 
 .PARAMETER Python
   Use this python.exe to create the environment instead of searching for one.
 
 .PARAMETER NoEditor
-  Don't open Notepad (for automated runs).
+  Ask nothing (for automated runs): .env is made from .env.example, to be filled in later.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts\install.ps1
@@ -114,31 +116,25 @@ Run 'Installing Chromium' $VenvPython @('-m', 'playwright', 'install', 'chromium
 Ok 'Chromium installed'
 
 # -- 5. your settings --------------------------------------------------------------------------
-Step 'Your settings files'
-$created = @()
-foreach ($pair in @(@('.env.example', '.env'), @('schedule.example.json', 'schedule.json'))) {
-    $target = Join-Path $Root $pair[1]
-    if (Test-Path $target) {
-        Ok "$($pair[1]) already exists - kept as it is"
+Step 'Your settings'
+$EnvFile = Join-Path $Root '.env'
+if ($NoEditor) {
+    # an automated run: nothing is asked, the file is made from the example to be filled in later
+    if (Test-Path $EnvFile) {
+        Ok '.env already exists - kept as it is'
     } else {
-        Copy-Item (Join-Path $Root $pair[0]) $target
-        Ok "$($pair[1]) created from $($pair[0])"
-        $created += $target
+        Copy-Item (Join-Path $Root '.env.example') $EnvFile
+        Ok '.env created from .env.example'
     }
-}
-if ($created -and -not $NoEditor) {
-    # Windows 11's Notepad opens a file as a tab of a window that may already be open, and the
-    # process started here can end at once - so wait for Enter, not for Notepad.
-    foreach ($file in $created) {
-        $name = Split-Path -Leaf $file
+} else {
+    # everything the program needs is already there? then nothing is asked again
+    & $VenvPython -c "import sys; from uninotifier import envcheck; sys.exit(1 if envcheck.problems() else 0)"
+    if ($LASTEXITCODE -eq 0) {
+        Ok '.env is already filled in - kept as it is (change it with: .venv\Scripts\python -m uninotifier.setup)'
+    } else {
         Write-Host ''
-        if ($name -eq '.env') {
-            Write-Host 'Notepad now opens .env: fill in your Moodle login and your Telegram bot (README, steps 4 and 5).' -ForegroundColor Yellow
-        } else {
-            Write-Host 'Notepad now opens schedule.json: replace the example classes with your own week.' -ForegroundColor Yellow
-        }
-        Start-Process notepad.exe -ArgumentList "`"$file`""
-        Read-Host "Save it (Ctrl+S), then press Enter here to continue" | Out-Null
+        & $VenvPython -m uninotifier.setup
+        if ($LASTEXITCODE -ne 0) { Fail 'The setup was not finished' 'double-click install.bat again to go on - nothing is lost' }
     }
 }
 
@@ -148,12 +144,39 @@ Write-Host ''
 & $VenvPython -m uninotifier.doctor
 $healthy = $LASTEXITCODE -eq 0
 
+# -- 7. finish: sign in, the first check, the scheduled tasks -----------------------------------
+if ($healthy -and -not $NoEditor) {
+    Write-Host ''
+    $go = Read-Host 'Sign in to Moodle and switch UniNotifier on now? [Y/n]'
+    if ($go -notmatch '^\s*[nN]') {
+        Step 'Signing in to Moodle (a browser window opens - approve Microsoft on your phone if it asks)'
+        & $VenvPython -m uninotifier.tools.login_refresh
+        if ($LASTEXITCODE -ne 0) {
+            Fail 'The Moodle sign-in did not finish' ('check your e-mail and password (.venv\Scripts\python -m uninotifier.setup), ' +
+                 'then double-click install.bat again')
+        }
+        Step 'The first check: it records what is on Moodle now, quietly (a minute or two)'
+        & $VenvPython (Join-Path $Root 'monitor.py')
+        if ($LASTEXITCODE -ne 0) { Fail 'The first check did not finish' 'look at data\logs\monitor.log, then double-click install.bat again' }
+        Step 'Switching it on (two Windows scheduled tasks - no administrator rights needed)'
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'setup_tasks.ps1') -SkipCheck
+        if ($LASTEXITCODE -ne 0) { Fail 'The scheduled tasks could not be registered' 'run it by hand: powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1' }
+        Write-Host ''
+        Write-Host '===================================================================================' -ForegroundColor Green
+        Write-Host 'UniNotifier is running. Open your bot in Telegram and send /start.' -ForegroundColor Green
+        Write-Host 'Your timetable arrives by itself a few minutes from now, read from the portal.' -ForegroundColor Green
+        Write-Host '===================================================================================' -ForegroundColor Green
+        exit 0
+    }
+}
+
 Write-Host ''
 Write-Host '==================================================================================='
 if ($healthy) {
     Write-Host 'Installed. Three commands are left (README, step 6):' -ForegroundColor Green
 } else {
-    Write-Host 'Installed - fix the [FAIL] lines above (usually .env), then check again with:' -ForegroundColor Yellow
+    Write-Host 'Installed - fix the [FAIL] lines above, then check again with:' -ForegroundColor Yellow
+    Write-Host '  .venv\Scripts\python -m uninotifier.setup      answer the questions again'
     Write-Host '  .venv\Scripts\python -m uninotifier.doctor'
     Write-Host ''
     Write-Host 'After that, three commands are left (README, step 6):'

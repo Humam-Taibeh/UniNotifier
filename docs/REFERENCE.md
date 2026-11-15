@@ -220,8 +220,9 @@ Two activity types ZUJ uses for online teaching are read from their own pages
 
 ### Automatic check-in
 
-With `"auto_check_in": true` in `schedule.json` (off by default), `checkin.py` checks you
-in to every session that is an **online lecture** — live on Teams. Never an in-person day
+With `AUTO_CHECK_IN=true` in `.env` — or `"auto_check_in": true` in a `schedule.json` of your own,
+which is obeyed either way when it says so (`schedule.auto_check_in`) — `checkin.py` checks you
+in to every session that is an **online lecture** — live on Teams. It is off by default; the setup asks. Never an in-person day
 (your instructor marks you there) nor an activity day (no class at all).
 
 ZUJ writes a section's meetings in codes: `[ 19:00_20:30 ] ن (ن) ر (ك)` is the time, then
@@ -853,6 +854,7 @@ UniNotifier/
 │   ├── tasks.py              every open task: the Upcoming Tasks list and the noon digest
 │   ├── checkin.py            automatic attendance check-in for the online lectures
 │   ├── classtable.py         your weekly timetable, read from the portal (which days are online)
+│   ├── setup.py              the first-time setup: five questions in the console, .env written and proved
 │   ├── autoschedule.py       the schedule built from it and Moodle's course list, when there is no schedule.json
 │   ├── timetable_image.py    the weekly timetable drawn as a picture and a PDF
 │   ├── gpa.py, gpa_ui.py, gradebook.py, transcript.py, portal.py, portal_pages.py, finals.py, guest.py   grades, GPA, the portal (portal_pages: its pages read, no browser)
@@ -899,7 +901,24 @@ Telegram; the bot needs Telegram), what a valid value looks like, and where it c
 launchers call `envcheck.require()` first: a missing value — or one still copied from `.env.example` —
 ends the run with exit code 2 and a plain list of what to fix, written to `data/logs/` and, when the
 Telegram settings themselves are fine, sent to you (once per 6 hours, through `failsafe.py`). A missing
-`schedule.json` is reported the same way, with the instruction to copy `schedule.example.json`.
+`schedule.json` is reported the same way only when the portal login is missing too — with it, the bot
+reads the timetable itself (see *Class schedule*).
+
+**The setup** (`setup.py`, `python -m uninotifier.setup`; `install.bat` runs it for a new student) fills
+`.env` in as a conversation, so nobody edits a file: the university e-mail and its password, the bot's
+token — checked with Telegram at once, the bot's name shown — then *who you are on Telegram*, found by
+itself from the Start you press in your bot (`getUpdates`; typed by hand only when Telegram cannot be
+reached or the bot already runs), the optional portal login, and whether to check you in to online
+lectures. Each answer is asked again until it has the shape `envcheck` expects; a password is never
+shown. The answers go into `.env` made from `.env.example` — every explanation stays — or into the
+`.env` already there, which keeps everything else it holds; a value with a space, `#` or a quote is
+written in single quotes. The file is then read back with the reader the program uses, and if any value
+did not come back exactly (a `${...}` in a password) it is put back as it was and you are told. Last,
+the file is limited to your own Windows account (`icacls`). Run it again at any time: Enter keeps what
+is saved. `--offline` checks nothing over the network; `--answers file.json` takes the answers from a
+file, for automated installs. After the doctor, `install.ps1` offers to finish — the Moodle sign-in,
+the first check and the scheduled tasks — so a new student's whole installation is one double-click
+and a few answers.
 
 `python -m uninotifier.doctor` checks the whole installation — Python, `.env`, `schedule.json`, the
 archive folder (written to), Chromium, the bot token and your chat (`--offline` skips Telegram, `--send`

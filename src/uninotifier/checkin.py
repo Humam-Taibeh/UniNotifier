@@ -1,8 +1,9 @@
 """
 Automatic attendance check-in for the online lectures, with proof either way.
 
-Which   every session that is an online lecture (ك: live on Teams) — while
-        "auto_check_in" is true in schedule.json (off by default). Never an in-person
+Which   every session that is an online lecture (ك: live on Teams) — while it is
+        switched on (off by default): AUTO_CHECK_IN=true in .env, or "auto_check_in": true
+        in a schedule.json of your own (schedule.auto_check_in). Never an in-person
         day (و, or م for a blended course: your instructor marks you there) nor an
         activity day (ن: no class). Each session's day is decided by, in order:
           1. the class that starts then in the portal's own timetable (classtable.py:
@@ -138,7 +139,7 @@ def online_courses(sched: dict, content: dict) -> set[str]:
 
 
 def enabled(sched: dict) -> bool:
-    return sched.get("auto_check_in") is True
+    return schedule.auto_check_in(sched)
 
 
 def covers(course: str, sched: dict | None = None, content: dict | None = None) -> bool:

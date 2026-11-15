@@ -114,7 +114,7 @@ def wanted() -> bool:
 
 
 def checks_in() -> bool:
-    return schedule.load_schedule().get("auto_check_in") is True
+    return schedule.auto_check_in(schedule.load_schedule())
 
 
 def due(now: float) -> bool:

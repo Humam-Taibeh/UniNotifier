@@ -163,6 +163,18 @@ def _auto_text() -> str | None:
         return None
 
 
+def auto_check_in(current: dict | None = None) -> bool:
+    """Automatic attendance check-in is switched on. A schedule.json that says so, either way,
+    is obeyed ("auto_check_in": true / false); when it says nothing — or there is no
+    schedule.json at all, the timetable being the portal's — AUTO_CHECK_IN=true in .env decides."""
+    current = load_schedule() if current is None else current
+    chosen = current.get("auto_check_in")
+    if isinstance(chosen, bool):
+        return chosen
+    from uninotifier import envcheck
+    return envcheck.value("AUTO_CHECK_IN").lower() == "true"
+
+
 def _portal_will_build() -> bool:
     """The portal login is in .env: the bot reads the timetable there by itself (classtable.py)."""
     from uninotifier import envcheck

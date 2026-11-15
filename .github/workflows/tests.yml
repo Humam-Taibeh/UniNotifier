@@ -74,11 +74,29 @@ jobs:
       - name: Run scripts/install.ps1 (what install.bat runs)
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -NoEditor -Python "${{ steps.python.outputs.python-path }}"
 
-      - name: The environment works and the settings files exist
+      - name: The environment works and the settings file exists
         run: |
-          .venv\Scripts\python -c "import uninotifier.doctor, playwright, requests, lxml; print('imports ok')"
+          .venv\Scripts\python -c "import uninotifier.doctor, uninotifier.setup, playwright, requests, lxml; print('imports ok')"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not (Test-Path .env) -or -not (Test-Path schedule.json)) { Write-Error 'settings files missing'; exit 1 }
+          if (-not (Test-Path .env)) { Write-Error 'the settings file is missing'; exit 1 }
+          if (Test-Path schedule.json) { Write-Error 'the installer writes no timetable: the bot reads it from the portal'; exit 1 }
 
       - name: Running it again keeps everything
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -NoEditor
+
+      - name: The setup writes a student's answers (made-up ones; nothing is contacted) and the doctor accepts them
+        run: |
+          '{"ZUJ_USERNAME": "209900001@std-zuj.edu.jo", "ZUJ_PASSWORD": "made up p#ss", "TELEGRAM_BOT_TOKEN": "123456789:made-up-token-for-ci", "TELEGRAM_CHAT_ID": "555", "ADMIN_USER_ID": "555", "PORTAL_USERNAME": "209900001", "PORTAL_PASSWORD": "made up", "AUTO_CHECK_IN": "true"}' | Set-Content -Encoding utf8 answers.json
+          .venv\Scripts\python -m uninotifier.setup --answers answers.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .venv\Scripts\python -m uninotifier.doctor --offline
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: The timetable is drawn by a real Chromium (the example week)
+        run: |
+          Copy-Item schedule.example.json schedule.json
+          .venv\Scripts\python -m uninotifier.timetable_image
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($file in 'data\timetable\Weekly_Schedule.png', 'data\timetable\Weekly_Academic_Schedule.pdf') {
+            if (-not (Test-Path $file) -or (Get-Item $file).Length -lt 10000) { Write-Error "$file was not drawn"; exit 1 }
+          }

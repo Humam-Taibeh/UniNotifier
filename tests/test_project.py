@@ -143,6 +143,171 @@ def test_settings_are_checked_before_anything_runs():
     assert "  - X is not set - y." in text and str(paths.ENV_FILE) in text and "uninotifier.doctor" in text
 
 
+def test_the_setup_asks_five_things_and_writes_the_settings_file():
+    """setup.py: a new student answers in the console and never edits a file. Each answer is asked again
+    until it has the right shape, the token is checked with Telegram, the Telegram Id is found from the
+    Start pressed in the bot, a password is never shown, and what is written to .env is read back to prove
+    every value survived."""
+    from dotenv import dotenv_values
+    from uninotifier import setup
+
+    class Script(setup.Console):
+        def __init__(self, answers):
+            self.answers, self.said, self.asked = list(answers), [], []
+
+        def say(self, text=""):
+            self.said.append(text)
+
+        def ask(self, prompt, secret=False):
+            self.asked.append((prompt, secret))
+            return self.answers.pop(0)
+
+    nothing = lambda name: ""                                   # noqa: E731 — no .env yet
+    tmp = Path(tempfile.mkdtemp(prefix="uninotifier-setup-"))
+    keep = (setup.restrict, setup.telegram_bot, setup.telegram_people, setup.telegram_hello, setup.requests.get,
+            paths.ENV_FILE)
+    setup.restrict = lambda path: True
+    try:
+        # --- what is written: every explanation of .env.example stays, only the values change
+        env = tmp / ".env"
+        tricky = {"ZUJ_USERNAME": "209900001@std-zuj.edu.jo", "ZUJ_PASSWORD": "p#ss w'ord \"x\" back\\slash",
+                  "TELEGRAM_BOT_TOKEN": "111111111:AAAAAAAA-bbbb_cc", "TELEGRAM_CHAT_ID": "555", "ADMIN_USER_ID": "555",
+                  "PORTAL_USERNAME": "209900001", "PORTAL_PASSWORD": "كلمة $ign=100%", "AUTO_CHECK_IN": "true"}
+        assert setup.write_env(tricky, env) is True
+        assert {k: dotenv_values(env)[k] for k in tricky} == tricky, "read back exactly, by the reader the program uses"
+        text = env.read_text(encoding="utf-8")
+        example = paths.ENV_EXAMPLE.read_text(encoding="utf-8")
+        assert [l for l in text.splitlines() if l.startswith("#")] == [l for l in example.splitlines() if l.startswith("#")]
+        assert "ZUJ_USERNAME=209900001@std-zuj.edu.jo\n" in text and "your_password" not in text
+        assert setup.quoted("plain-1.2") == "plain-1.2" and setup.quoted("a b") == "'a b'" and setup.quoted("") == ""
+        # an .env that is already there keeps everything else it holds
+        env.write_text(text.replace("HEALTHCHECK_URL=", "HEALTHCHECK_URL=https://hc-ping.com/made-up", 1)
+                       + "# my own note\nMY_OWN=1\n", encoding="utf-8")
+        setup.write_env({"ZUJ_PASSWORD": "another one", "BOT_POLL_TIMEOUT": "30"}, env)
+        again = dotenv_values(env)
+        assert again["ZUJ_PASSWORD"] == "another one" and again["HEALTHCHECK_URL"] == "https://hc-ping.com/made-up"
+        assert again["MY_OWN"] == "1" and again["BOT_POLL_TIMEOUT"] == "30" and "# my own note" in env.read_text(encoding="utf-8")
+        # a value the file format would change is refused, and the file is put back as it was
+        before = env.read_text(encoding="utf-8")
+        try:
+            setup.write_env({"ZUJ_PASSWORD": "${HOME}x"}, env)
+            raise AssertionError("a value that does not survive must be refused")
+        except setup.SetupError as e:
+            assert "ZUJ_PASSWORD" in str(e) and "Nothing was changed" in str(e)
+        assert env.read_text(encoding="utf-8") == before
+        assert setup.render("A=1\nB=2\n", {"B": "x y", "C": "3"}) == "A=1\nB='x y'\n\n# Added by the setup\nC=3\n"
+
+        # --- the conversation, with Telegram answering
+        bots = [("refused", ""), ("ok", "my_uni_bot")]
+        people = [[], [{"id": "555", "name": "Sam (@sam)"}]]
+        hello = []
+        setup.telegram_bot = lambda token: bots.pop(0)
+        setup.telegram_people = lambda token: people.pop(0)
+        setup.telegram_hello = lambda token, chat: hello.append(chat) or "ok"
+        console = Script(["not-an-email", "209900001@std-zuj.edu.jo",       # 1: asked again until it is an e-mail
+                          "", "pa ss#1",                                    # 2: needed
+                          "123", "111111111:AAAAAAAAAAAA", "222222222:BBBBBBBBBBBB",   # 3: a shape, a refusal, the real one
+                          "", "", "",                                       # 4: Enter (nobody yet), Enter, "is that you?" -> yes
+                          "209900001", "portal pw", "y"])                   # 5: the portal and automatic check-in
+        values = setup.converse(console, saved=nothing)
+        assert values == {"ZUJ_USERNAME": "209900001@std-zuj.edu.jo", "ZUJ_PASSWORD": "pa ss#1",
+                          "TELEGRAM_BOT_TOKEN": "222222222:BBBBBBBBBBBB", "TELEGRAM_CHAT_ID": "555", "ADMIN_USER_ID": "555",
+                          "PORTAL_USERNAME": "209900001", "PORTAL_PASSWORD": "portal pw", "AUTO_CHECK_IN": "true"}, values
+        assert console.answers == [] and hello == ["555"], "the bot's first message goes to the chat that was found"
+        said = "\n".join(console.said)
+        for line in ("it should be an e-mail address", "This one is needed.", "Telegram does not know this token",
+                     "[ OK ] Your bot: @my_uni_bot", "t.me/my_uni_bot", "No message has reached the bot yet",
+                     "[ OK ] Look at Telegram"):
+            assert line in said, line
+        assert any("I see Sam (@sam). Is that you?" in prompt for prompt, _ in console.asked)
+        hidden_prompts = [prompt.strip() for prompt, hidden in console.asked if hidden]
+        assert {p.split(":")[0].split(" [")[0] for p in hidden_prompts} == {"Password", "Token", "Portal password"}, hidden_prompts
+        assert all(hidden for prompt, hidden in console.asked if "assword" in prompt or "Token" in prompt), "never echoed"
+        assert not any("userinfobot" in line for line in console.said), "no Id to look up when the bot can be asked"
+
+        # --- offline (or Telegram not reachable): nothing is checked, the Id is typed; the portal is skipped
+        def never(*a, **k):
+            raise AssertionError("no network in an offline setup")
+        setup.telegram_bot = setup.telegram_people = setup.telegram_hello = never
+        console = Script(["209900001@std-zuj.edu.jo", "pw", "222222222:BBBBBBBBBBBB", "abc", "555", ""])
+        values = setup.converse(console, offline=True, saved=nothing)
+        assert values["TELEGRAM_CHAT_ID"] == "555" and values["PORTAL_USERNAME"] == "" and values["AUTO_CHECK_IN"] == ""
+        assert any("userinfobot" in line for line in console.said) and any("should be a number" in line for line in console.said)
+        setup.telegram_bot = lambda token: ("unreachable", "")
+        console = Script(["209900001@std-zuj.edu.jo", "pw", "222222222:BBBBBBBBBBBB", "555", ""])
+        assert setup.converse(console, saved=nothing)["TELEGRAM_BOT_TOKEN"] == "222222222:BBBBBBBBBBBB"
+        assert any("cannot be reached" in line for line in console.said), "saved as typed; the doctor checks it later"
+
+        # --- the bot already runs (its updates cannot be read), or several people wrote to it
+        setup.telegram_bot = lambda token: ("ok", "my_uni_bot")
+        setup.telegram_hello = lambda token, chat: "blocked"
+        setup.telegram_people = lambda token: None
+        console = Script(["209900001@std-zuj.edu.jo", "pw", "222222222:BBBBBBBBBBBB", "", "777", ""])
+        assert setup.converse(console, saved=nothing)["ADMIN_USER_ID"] == "777"
+        assert any("press START in t.me/my_uni_bot" in line for line in console.said), "told when the bot could not write yet"
+        setup.telegram_people = lambda token: [{"id": "1", "name": "A"}, {"id": "2", "name": "B"}]
+        console = Script(["209900001@std-zuj.edu.jo", "pw", "222222222:BBBBBBBBBBBB", "", "2", ""])
+        assert setup.converse(console, saved=nothing)["TELEGRAM_CHAT_ID"] == "2"
+
+        # --- run again: Enter keeps what is saved, and a saved password is never shown
+        kept = dict(values, ZUJ_PASSWORD="the saved secret", PORTAL_USERNAME="209900001", PORTAL_PASSWORD="portal secret",
+                    AUTO_CHECK_IN="true", TELEGRAM_CHAT_ID="555")
+        console = Script(["", "", "", "", "", "", ""])
+        again = setup.converse(console, offline=True, saved=lambda name: kept.get(name, ""))
+        assert again["ZUJ_PASSWORD"] == "the saved secret" and again["PORTAL_PASSWORD"] == "portal secret"
+        assert again["AUTO_CHECK_IN"] == "true", "Enter keeps the choice that was made"
+        shown = "\n".join(console.said + [prompt for prompt, _ in console.asked])
+        assert "the saved secret" not in shown and "portal secret" not in shown and "Enter keeps the saved one" in shown
+
+        # --- Telegram's answers, read
+        class Answer:
+            def __init__(self, data):
+                self.data = data
+
+            def json(self):
+                return self.data
+        updates = {"ok": True, "result": [
+            {"message": {"chat": {"id": 555, "type": "private"}, "from": {"first_name": "Sam", "username": "sam"}}},
+            {"message": {"chat": {"id": -100, "type": "group"}, "from": {"first_name": "Group"}}},
+            {"message": {"chat": {"id": 9, "type": "private"}, "from": {"first_name": "Bot", "is_bot": True}}},
+            {"message": {"chat": {"id": 777, "type": "private"}, "from": {"first_name": "Lina", "last_name": "K"}}},
+            {"message": {"chat": {"id": 555, "type": "private"}, "from": {"first_name": "Sam", "username": "sam"}}},
+            {"edited_message": {}}]}
+        asked = []
+        setup.requests.get = lambda url, params=None, timeout=None: asked.append((url, params)) or Answer(updates)
+        assert keep[2]("111:tok") == [{"id": "555", "name": "Sam (@sam)"}, {"id": "777", "name": "Lina K"}], "newest first, once each"
+        assert asked[0][0].endswith("/bot111:tok/getUpdates")
+        setup.requests.get = lambda url, params=None, timeout=None: Answer({"ok": True, "result": {"username": "my_uni_bot"}})
+        assert keep[1]("t") == ("ok", "my_uni_bot") and keep[3]("t", "555") == "ok"
+        setup.requests.get = lambda url, params=None, timeout=None: Answer({"ok": False, "error_code": 409})
+        assert keep[1]("t") == ("refused", "") and keep[2]("t") is None and keep[3]("t", "555") == "blocked"
+
+        def down(url, params=None, timeout=None):
+            raise setup.requests.ConnectionError("no route")
+        setup.requests.get = down
+        assert keep[1]("t") == ("unreachable", "") and keep[2]("t") is None and keep[3]("t", "555") == "unreachable"
+
+        # --- python -m uninotifier.setup --answers FILE: an automated install; a wrong answer changes nothing
+        paths.ENV_FILE = tmp / "auto" / ".env"
+        paths.ENV_FILE.parent.mkdir()
+        answers = tmp / "answers.json"
+        answers.write_text(json.dumps({"ZUJ_USERNAME": "209900001@std-zuj.edu.jo", "ZUJ_PASSWORD": "pw",
+                                       "TELEGRAM_BOT_TOKEN": "222222222:BBBBBBBBBBBB", "TELEGRAM_CHAT_ID": "555"}), encoding="utf-8")
+        console = Script([])
+        assert setup.main(["--answers", str(answers)], console) == 0 and "[ OK ] Saved to .env" in console.said[-1]
+        assert dotenv_values(paths.ENV_FILE)["TELEGRAM_CHAT_ID"] == "555"
+        answers.write_text(json.dumps({"TELEGRAM_CHAT_ID": "not a number"}), encoding="utf-8")
+        console = Script([])
+        assert setup.main(["--answers", str(answers)], console) == 1 and console.said[-1].startswith("[FAIL] TELEGRAM_CHAT_ID")
+        answers.write_text(json.dumps({"NO_SUCH_SETTING": "1"}), encoding="utf-8")
+        assert setup.main(["--answers", str(answers)], Script([])) == 1
+        assert dotenv_values(paths.ENV_FILE)["TELEGRAM_CHAT_ID"] == "555", "a refused file changes nothing"
+    finally:
+        (setup.restrict, setup.telegram_bot, setup.telegram_people, setup.telegram_hello, setup.requests.get,
+         paths.ENV_FILE) = keep
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_archive_root_defaults_to_documents_university():
     """ARCHIVE_ROOT is optional: unset, files go to University in the Documents folder Explorer shows
     (OneDrive's when OneDrive backs up Documents); set, %VARS% and ~ are expanded, so one .env line
@@ -285,10 +450,16 @@ def test_the_repository_is_ready_for_students():
     installer = (project / "scripts" / "install.ps1").read_text(encoding="utf-8")
     assert all(ord(ch) < 128 for ch in installer), "Windows PowerShell 5.1 misreads a BOM-less non-ASCII script"
     for step in ("'3.11'", "'-r', 'requirements.txt'", "'--no-deps', '-e', '.'", "'playwright', 'install', 'chromium'",
-                 "'.env.example', '.env'", "'schedule.example.json', 'schedule.json'", "-m uninotifier.doctor"):
+                 "'.env.example'", "-m uninotifier.setup", "-m uninotifier.doctor",
+                 # the finish it offers: sign in, the first check, the scheduled tasks
+                 "-m uninotifier.tools.login_refresh", "'monitor.py'", "'setup_tasks.ps1'"):
         assert step in installer, f"the installer lost: {step}"
+    assert "notepad" not in installer.lower() and "schedule.example.json" not in installer, \
+        "a student edits no file: the settings are asked for, the timetable is read from the portal"
     ci = (project / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
     assert "installer:" in ci and "scripts\\install.ps1 -NoEditor" in ci and "pip install --no-deps -e ." in ci
+    assert "-m uninotifier.setup --answers" in ci and "-m uninotifier.timetable_image" in ci, \
+        "CI answers the setup and draws a timetable on a clean Windows"
     for workflow in sorted((project / ".github" / "workflows").glob("*.yml")):
         text = workflow.read_text(encoding="utf-8")
         assert re.search(r"^permissions:\n  contents: read$", text, re.M), (workflow.name, "read-only token by default")
