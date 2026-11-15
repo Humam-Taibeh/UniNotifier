@@ -16,6 +16,7 @@ crash loop (the scheduler restarting a dying bot) is also rate-limited across
 restarts.
 """
 
+import contextlib
 import logging
 import os
 import sys
@@ -54,6 +55,20 @@ def _load() -> dict:
         return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}
+
+
+@contextlib.contextmanager
+def _state():
+    """Around one read-modify-write of the file: this process's threads AND the other process (the bot
+    and the monitor both keep it) wait their turn, so neither writes back a copy that drops the
+    other's record — an alert told twice, or a "fine again" never sent. A lock held too long is
+    gone through anyway: an alert must never stop on its own bookkeeping."""
+    with _lock, contextlib.ExitStack() as held:
+        try:
+            held.enter_context(fileio.write_lock(STATE_FILE))
+        except OSError:                     # TimeoutError, or a data folder that is not there
+            log.warning("failsafe: %s is busy — written without waiting", STATE_FILE.name)
+        yield
 
 
 def _save(state: dict) -> None:
@@ -109,7 +124,7 @@ def _deliver(kind: str, text: str, fingerprint: str) -> bool:
             return False
         ok = bool(send(token, chat, text))
         if ok:
-            with _lock:
+            with _state():
                 state = _load()
                 state[kind] = {"at": time.time(), "fp": fingerprint, "suppressed": 0, "active": True}
                 _save(state)
@@ -130,7 +145,7 @@ def report(kind: str, headline: str, detail: str = "", exc: BaseException | None
     for callers that must not stop (the bot's polling loop). Returns True when a
     message went out (or is on its way). `cooldown` overrides COOLDOWN for this kind."""
     try:
-        with _lock:
+        with _state():
             state = _load()
             entry = state.get(kind) or {}
             if kind in _inflight or (time.time() - entry.get("at", 0) < (COOLDOWN if cooldown is None else cooldown)
@@ -184,7 +199,7 @@ def resolve(kind: str, text: str, wait: bool = True) -> bool:
     """The follow-up to report(): if `kind` was reported and still counts as open,
     say it is over (once)."""
     try:
-        with _lock:
+        with _state():
             state = _load()
             entry = state.get(kind) or {}
             if not entry.get("active"):
@@ -203,7 +218,7 @@ def resolve_matching(prefix: str, text: str, wait: bool = True) -> bool:
     """resolve() for every open kind starting with `prefix`, with ONE follow-up — for a problem
     whose kind carries what it was (a crash's signature): whichever it was, it is over."""
     try:
-        with _lock:
+        with _state():
             state = _load()
             kinds = [k for k, entry in state.items() if k.startswith(prefix) and (entry or {}).get("active")]
             if not kinds:
@@ -223,7 +238,7 @@ def forget(prefix: str, older_than: float, now: float | None = None) -> int:
     many went. Never raises."""
     try:
         now = time.time() if now is None else now
-        with _lock:
+        with _state():
             state = _load()
             old = [k for k, e in state.items() if k.startswith(prefix) and now - (e or {}).get("at", 0) >= older_than]
             for kind in old:

@@ -427,11 +427,29 @@ def test_failsafe_reports_once_and_resolves():
         failsafe.send = orig
     assert failsafe.report("down", "Network is back") is True
 
+    # the bot and the monitor both keep the file: one waits while the other writes, so neither drops
+    # the other's record (here: the monitor's alert, written while the bot was resolving one of its own)
+    import threading
+    from uninotifier import fileio
+    failsafe.STATE_FILE.write_text(json.dumps({"bot": {"at": 1, "fp": "", "suppressed": 0, "active": True}}),
+                                   encoding="utf-8")
+    with fileio.write_lock(failsafe.STATE_FILE):                    # the other process, mid-write
+        resolving = threading.Thread(target=failsafe.resolve, args=("bot", "✅ bot fine"))
+        resolving.start()
+        resolving.join(0.3)
+        assert resolving.is_alive(), "it waits for the other process"
+        failsafe.STATE_FILE.write_text(json.dumps({
+            "bot": {"at": 1, "fp": "", "suppressed": 0, "active": True},
+            "monitor": {"at": 2, "fp": "", "suppressed": 0, "active": True}}), encoding="utf-8")
+    resolving.join(5)
+    kept = json.loads(failsafe.STATE_FILE.read_text(encoding="utf-8"))
+    assert kept["monitor"]["active"] and not kept["bot"]["active"], kept
+    assert not failsafe.STATE_FILE.with_name(failsafe.STATE_FILE.name + ".lock").exists(), "the lock is let go"
+
     # bug signatures: the same bug, the same signature
     assert failsafe.signature(exc).startswith(f"ValueError@{Path(__file__).name}:")
 
     # whatever escapes a thread is reported (and then still printed by the default hook)
-    import threading
     hooks = (sys.excepthook, threading.excepthook)
     err = sys.stderr
     sys.stderr = open(os.devnull, "w")
