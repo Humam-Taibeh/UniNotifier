@@ -276,6 +276,17 @@ not trusted. A course whose sessions are none of them online by that table is ma
 its attendance page is not read again until the table changes. `python -m uninotifier.classtable`
 reads it now.
 
+**Said up front.** Once the attendance pages have been read, you get one message —
+**🤖 Auto Check-In — Your Online Courses** — with every online course and whether the check-in can
+work for it: ✅ its attendance page lists online sessions (and how many are ahead); ⚠️ the course has
+no attendance activity on Moodle (the instructor takes attendance another way); ⚠️ its attendance
+activity has not one online session by the timetable; ⏳ it lists no session yet (the instructor adds
+them — it is looked at again every 6 hours). A button opens each attendance page, which also shows
+the sessions you attended. What can only be known when a session opens — a password or a QR code —
+is said in the message. It is sent again only when a course's state changes (a course added, sessions
+added); sessions running out at the end of a term change nothing. `data/checkin_told.json` keeps what
+was told.
+
 Then:
 
 1. The sessions come from the attendance page itself (read every 6 hours), so a moved or

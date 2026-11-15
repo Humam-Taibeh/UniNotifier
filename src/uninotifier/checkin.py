@@ -42,6 +42,7 @@ same moment. The check-in page of every attempt is kept, its session key removed
 data/checkin_pages/ for a later look. Never raises from tick().
 """
 
+import hashlib
 import json
 import logging
 import re
@@ -510,12 +511,105 @@ def wrap_up(token: str, chat_id: str, watch: Watch, activity: dict, start: datet
 
 # ------------------------------------------------------------------ the clock
 
+# ------------------------------------------------------------------ said up front
+
+READY, NO_ACTIVITY, NO_ONLINE, NO_SESSIONS = "ready", "no_activity", "no_online", "no_sessions"
+TOLD_FILE = paths.DATA / "checkin_told.json"      # the course states last told (readiness_message)
+MAX_BUTTONS = 6
+
+
+def readiness(cache: dict, sched: dict, content: dict, now: datetime) -> list[dict]:
+    """For every online course, whether the check-in can work for it, from what the bot already
+    read: [{"course", "state", "sessions": online sessions still ahead, "url": its attendance page}].
+      ready        an attendance activity that lists online sessions (the state does not change as
+                   they pass: the end of a term is no news)
+      no_activity  no attendance activity on Moodle: the instructor takes attendance another way
+      no_online    an attendance activity, but not one online session on it (by the timetable)
+      no_sessions  an attendance activity that lists no session yet (the instructor adds them)"""
+    found = []
+    for course in sorted(online_courses(sched, content)):
+        mine = [a for a in cache.get("activities", []) if a.get("course") == course]
+        if not mine:
+            found.append({"course": course, "state": NO_ACTIVITY, "sessions": 0, "url": None})
+            continue
+        ahead, online, listed = 0, 0, 0
+        for activity in mine:
+            for s in activity.get("sessions", []):
+                try:
+                    start = datetime.fromisoformat(s["start"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                listed += 1
+                if online_session(activity, start, sched):
+                    online += 1
+                    ahead += start > now
+        state = READY if online else NO_ONLINE if listed else NO_SESSIONS
+        found.append({"course": course, "state": state, "sessions": ahead, "url": page_url(mine[0])})
+    return found
+
+
+def readiness_message(states: list[dict]) -> tuple[str, list]:
+    """One message: every online course and whether the check-in can work for it, and why not —
+    with a button to each attendance page (it shows the sessions you attended)."""
+    lines = ["🤖 *Auto Check-In — Your Online Courses*", ""]
+    if not states:
+        lines.append("You have no online course this term — there is nothing for me to check in to.")
+    for s in states:
+        name = f"*{escape_md(s['course'])}*"
+        if s["state"] == READY:
+            lines.append(f"✅ {name} — I check you in to its online sessions ({s['sessions']} ahead).")
+        elif s["state"] == NO_ACTIVITY:
+            lines.append(f"⚠️ {name} — no attendance activity on Moodle: your instructor takes attendance "
+                         "another way, so check in as they ask.")
+        elif s["state"] == NO_ONLINE:
+            lines.append(f"⚠️ {name} — its attendance page has no online session: nothing to check in to.")
+        else:
+            lines.append(f"⏳ {name} — its attendance page lists no session yet. I look again every few hours "
+                         "and check you in once they are there.")
+    if any(s["state"] == READY for s in states):
+        lines += ["", "_A session that asks for a password or a QR code can only be known when it opens: "
+                      "then you get 🚨 Check In by Hand._"]
+    rows = [[{"text": f"📝 {s['course'][:40]}", "url": s["url"]}] for s in states if s["url"]][:MAX_BUTTONS]
+    return "\n".join(lines), rows
+
+
+def tell_readiness(token: str, chat_id: str, cache: dict, sched: dict, now: datetime) -> bool:
+    """The message above, once at the start of a term and again whenever a course's state changes —
+    only after the attendance pages have been read, so nothing is guessed."""
+    if not cache.get("read"):
+        return False
+    states = readiness(cache, sched, _load_content(), now)
+    told = [(s["course"], s["state"]) for s in states]
+    try:
+        before = json.loads(TOLD_FILE.read_text(encoding="utf-8")).get("told")
+    except (OSError, ValueError, AttributeError):
+        before = None
+    if before is not None and [tuple(t) for t in before] == told:
+        return False
+    key = "checkin-readiness-" + hashlib.sha1(json.dumps(told, ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
+    if not daily.claim(key):                   # the bot and a fallback run: one message
+        return False
+    text, rows = readiness_message(states)
+    if not notifier.send_message(token, chat_id, text, rows=rows):
+        daily.release(key)
+        return False
+    fileio.write_json_atomic(TOLD_FILE, {"told": told, "at": now.timestamp()})
+    log.info("Check-in: told which online courses can be checked in (%d)", len(states))
+    return True
+
+
 def tick(token: str, chat_id: str, watch: Watch, now: datetime | None = None) -> None:
     now = now or datetime.now()
     sched = schedule.load_schedule()
     if not enabled(sched):
         return
     cache = refresh(watch, sched, now.timestamp())
+    try:
+        tell_readiness(token, chat_id, cache, sched, now)
+    except Exception as e:
+        log.exception("Telling which courses can be checked in failed")
+        failsafe.bug("checkin:readiness", "The message about which courses can be checked in failed", e,
+                     "The check-in itself goes on as before.")
     for activity in cache.get("activities", []):
         for s in activity.get("sessions", []):
             try:

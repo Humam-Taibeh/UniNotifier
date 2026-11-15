@@ -63,6 +63,12 @@ All notable changes to this project are documented here. The format follows
   limits the file to your Windows account. The installer no longer opens Notepad or writes a
   `schedule.json`, and after the doctor it offers to finish: the Moodle sign-in, the first check and
   the scheduled tasks.
+- 🤖 Auto Check-In — Your Online Courses: one message, once the attendance pages are read, with every
+  online course and whether the check-in can work for it (✅, or ⚠️/⏳ with the reason: no attendance
+  activity, no online session, no session listed yet) and a button to each attendance page. Sent
+  again only when a course's state changes.
+- `python -m uninotifier.setup --demo`: the setup tried with made-up answers — nothing contacted,
+  nothing written; it shows what `.env` would hold.
 - `AUTO_CHECK_IN=true` in `.env` switches automatic attendance check-in on — the place for it when
   there is no `schedule.json`. A `schedule.json` that sets `auto_check_in` is still obeyed.
 - The portal's timetable keeps every day it lists: a Saturday lab is shown in the timetable (the

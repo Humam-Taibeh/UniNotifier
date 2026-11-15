@@ -5,6 +5,7 @@ from support import (ATTENDANCE_PAGE, _check_in_form, CHECK_IN_PAGE, _legacy_mar
 
 import json
 import re
+import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -882,6 +883,57 @@ def test_teams_meeting_and_attendance_items():
     assert activities.recorded(sessions[0]) and not activities.recorded(sessions[1]), "a link is not a status"
 
 
+def test_which_online_course_can_be_checked_in_is_said_up_front():
+    """Before a lecture is missed, the student learns for every online course whether the check-in can work:
+    ✅ online sessions listed; ⚠️ no attendance activity (attendance is taken another way); ⚠️ an attendance
+    activity without one online session; ⏳ no session listed yet — each with a button to its attendance page."""
+    from datetime import datetime
+    from uninotifier import checkin
+
+    sched = {"days": {"wed": [{"start": "19:00", "end": "20:30", "course": c, "course_ar": "x", "section": "01",
+                               "mode": "Online"} for c in ("Arabic", "Ethics", "History", "Statistics")],
+                      "mon": [{"start": "19:00", "end": "20:30", "course": "History", "course_ar": "x", "section": "01",
+                               "mode": "Activity"}]}}
+    url = "https://x/mod/attendance/view.php?id={}"
+    cache = {"read": 1.0, "activities": [
+        {"cmid": "1", "course": "Arabic", "name": "Attendance", "url": url.format(1), "marked": False,
+         "sessions": [{"start": "2026-11-04T19:00:00", "end": None}, {"start": "2026-11-18T19:00:00", "end": None}]},
+        {"cmid": "3", "course": "History", "name": "Attendance", "url": url.format(3), "marked": False,
+         "sessions": [{"start": "2026-11-02T19:00:00", "end": None}]},                     # a Monday: an activity day
+        {"cmid": "4", "course": "Statistics", "name": "Attendance", "url": url.format(4), "marked": False, "sessions": []}]}
+    states = checkin.readiness(cache, sched, {}, datetime(2026, 11, 10, 12, 0))
+    assert [(s["course"], s["state"], s["sessions"]) for s in states] == [
+        ("Arabic", "ready", 1), ("Ethics", "no_activity", 0), ("History", "no_online", 0), ("Statistics", "no_sessions", 0)]
+    late = checkin.readiness(cache, sched, {}, datetime(2026, 12, 30, 12, 0))
+    assert late[0]["state"] == "ready" and late[0]["sessions"] == 0, "the end of a term is no news: the state stays"
+    text, rows = checkin.readiness_message(states)
+    for line in ("✅ *Arabic* — I check you in to its online sessions (1 ahead).",
+                 "⚠️ *Ethics* — no attendance activity on Moodle", "⚠️ *History* — its attendance page has no online session",
+                 "⏳ *Statistics* — its attendance page lists no session yet", "password or a QR code"):
+        assert line in text, line
+    assert [r[0]["text"] for r in rows] == ["📝 Arabic", "📝 History", "📝 Statistics"] and _legacy_markdown_ok(text)
+    assert rows[0][0]["url"] == url.format(1) + "&view=5", "the page that lists every session"
+    none, _ = checkin.readiness_message([])
+    assert "no online course this term" in none and "QR" not in none
+
+    # told once per change of a state, after the pages were read, by one process only
+    sent = []
+    tmp = Path(tempfile.mkdtemp(prefix="uninotifier-ready-"))
+    keep = (checkin.TOLD_FILE, checkin._load_content, notifier.send_message, daily.CLAIM_DIR)
+    checkin.TOLD_FILE, checkin._load_content, daily.CLAIM_DIR = tmp / "told.json", lambda: {}, tmp / "claims"
+    notifier.send_message = lambda token, chat, text, rows=None, **kw: sent.append(text) or True
+    try:
+        now = datetime(2026, 11, 10, 12, 0)
+        assert not checkin.tell_readiness("t", "c", {"read": 0, "activities": []}, sched, now), "nothing read yet: nothing guessed"
+        assert checkin.tell_readiness("t", "c", cache, sched, now) and len(sent) == 1
+        assert not checkin.tell_readiness("t", "c", cache, sched, now) and len(sent) == 1
+        cache["activities"][2]["sessions"] = [{"start": "2026-11-11T19:00:00", "end": None}]    # sessions were added
+        assert checkin.tell_readiness("t", "c", cache, sched, now) and len(sent) == 2 and "✅ *Statistics*" in sent[-1]
+    finally:
+        checkin.TOLD_FILE, checkin._load_content, notifier.send_message, daily.CLAIM_DIR = keep
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_automatic_check_in():
     """Online lectures check themselves in: during each session the attendance page is read
     every minute; when check-in opens, Present + Save changes; then Moodle itself must show it
@@ -1038,6 +1090,13 @@ def test_automatic_check_in():
             cache = json.loads(checkin.CACHE_FILE.read_text(encoding="utf-8"))
             assert [a["cmid"] for a in cache["activities"]] == ["4242"] and len(cache["activities"][0]["sessions"]) == 6
             assert cache["activities"][0]["sessions"][0] == {"start": "2026-11-04T19:00:00", "end": "2026-11-04T20:30:00"}
+            # said up front, once the attendance page was read: which online course is checked in, and why not
+            assert len(sent) == 1 and sent[0][1].startswith("🤖 *Auto Check-In — Your Online Courses*"), sent
+            assert "✅ *Big Data* — I check you in to its online sessions (" in sent[0][1], sent[0][1]
+            assert sent[0][2] == [[{"text": "📝 Big Data", "url": view + "&view=5"}]] and _legacy_markdown_ok(sent[0][1])
+            tick("Wed 4 Nov 2026", 18, 41)
+            assert len(sent) == 1, "nothing changed: not told again"
+            sent.clear()
             assert len(moodle["gets"]) == 1 and sent == [], "18:40 is before the watch (10 min early)"
 
             # ✅ during the session: read every minute; check-in opens -> Present, Save changes, recorded

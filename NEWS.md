@@ -13,6 +13,8 @@ does not have yet when it tells its owner that a new version is ready (newest fi
   read; if the two ever disagree, the portal's figure is shown and the message says so.
 - Installing is one double-click and five short answers: `install.bat` asks for your settings and
   writes them itself — no file to edit. `AUTO_CHECK_IN=true` in `.env` turns automatic check-in on.
+- With automatic check-in on, one message tells you up front which online courses it can check you in
+  to, and why not for the others — before a lecture is missed.
 
 ## 2026-11-15 — A new quiz comes with its times
 - A quiz found the minute it is published now comes with its opening and closing times, read from the
