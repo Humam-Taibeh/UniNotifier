@@ -25,10 +25,10 @@ into a tidy folder per course.
 It runs quietly in the background through two Windows scheduled tasks, needs no server and no
 subscription, and nothing about you ever leaves your PC except the messages it sends to *your* bot.
 
-- [Features](#features) · [What it looks like](#what-it-looks-like) · [How it fits together](#how-it-fits-together)
+- [Features](#features) · [What it looks like](#what-it-looks-like)
 - [Install in 3 steps](#install-in-3-steps)
 - [Everyday use](#everyday-use) · [Where everything lives](#where-everything-lives) · [Optional extras](#optional-extras)
-- [Updating, pausing, uninstalling](#updating-pausing-uninstalling) · [Troubleshooting](#troubleshooting) · [Security & privacy](#security--privacy)
+- [Updating, pausing, uninstalling](#updating-pausing-uninstalling) · [Troubleshooting](#troubleshooting) · [Security & privacy](#security--privacy) · [How it fits together](#how-it-fits-together)
 - Every behaviour in depth: **[docs/REFERENCE.md](docs/REFERENCE.md)**
 
 ---
@@ -75,50 +75,6 @@ marks are made up. In Telegram they look the same, in your own theme, with tappa
 
 ---
 
-## How it fits together
-
-```
-  SOURCES (read only)       YOUR WINDOWS PC                                                                YOU
-
-+----------------------+    +------------------------------------------------+
-| Moodle e-learning    |    | monitor.py     task "UniNotifier"              |
-| elearning.zuj.edu.jo |<---| every 15 min: scan > diff > download > alert   |----+
-| Microsoft SSO + 2FA  |    | sign-in, screenshots: headless Chromium        |    |
-+----------------------+    +------------------------------------------------+    |
-                                    |                            |                |
-                                    | course files               | state          |
-                                    v                            v                |    +----------------+
-                            +------------------+    +------------------------+    +----> Telegram       |---> your phone:
-                            | ARCHIVE_ROOT\    |    | data\  (git-ignored)   |         | Bot API        |     alerts, files
-                            |  <Course>\       |    |  saved_items.json      |    +<---> (your bot)     |<--- taps, commands
-                            |   01_Lectures    |    |  sessions, caches      |    |    +----------------+
-                            |   02_Assignments |    |  logs\                 |    |
-                            |   03_Exams       |    +------------------------+    |
-                            +------------------+                 ^                |
-+----------------------+                                         |                |
-| Registration portal  |    +------------------------------------------------+    |
-| portal.zuj.edu.jo    |<---| bot.py   task "UniNotifier_BotListener"        |    |
-| transcript, balance  |    | always on: menus, reminders, lecture alerts,   |<---+
-+----------------------+    | 2-min Moodle probe, /check -> monitor.py,      |
-| Cambridge One        |    | portal answers: saved copy now, fresh behind,  |
-| class assignments    |<---| Cambridge One every 30 min (optional)          |
-| (optional)           |    +------------------------------------------------+
-+----------------------+
-```
-
-- **`monitor.py` — the check.** Every 15 minutes it reads all your courses (plain HTTP with the
-  saved session; Chromium only to sign in and take screenshots), compares them with what it saw
-  last time (`data\saved_items.json`), files new documents into your archive, and sends what is new.
-- **`bot.py` — the assistant.** Always on: answers your taps and commands, sends lecture and
-  reminder alerts on the minute, takes a ~1 KB look at Moodle every 2 minutes (and starts a check at
-  once when something is new), reads the registration portal when you ask — answering
-  instantly from the last copy and refreshing it behind ("stale-while-revalidate") — plus one
-  look at your timetable there each semester, and, if you turn it on,
-  watches Cambridge One.
-- **Telegram** is the only thing that leaves your PC: your bot, talking only to you.
-
----
-
 ## Install in 3 steps
 
 About 10 minutes, and no file to edit.
@@ -127,7 +83,7 @@ About 10 minutes, and no file to edit.
 
 | You need | How to get it | Check |
 |---|---|---|
-| Windows 10 or 11 | — | — |
+| Windows 10 or 11 | a PC that is on and online for most of the day: UniNotifier runs on it, so while it is off or asleep nothing is checked (it catches up when it wakes) | — |
 | **Python 3.11 or newer** | [python.org/downloads](https://www.python.org/downloads/) — its default **Python install manager** downloads Python by itself the first time you run `py --version`; with the classic installer instead, tick **"Add python.exe to PATH"** | `py --version` |
 | **Git** | [git-scm.com/download/win](https://git-scm.com/download/win) (all defaults are fine) | `git --version` |
 | Telegram | on your phone | — |
@@ -412,6 +368,7 @@ Then look at `data\logs\monitor.log` and `data\logs\bot.log`.
 |---|---|
 | *"UniNotifier can't start - some settings in .env need your attention"* | the list under it names each setting; fix `.env` and run the doctor |
 | The doctor says *"The bot can't reach your chat yet"* | open your bot in Telegram and press **Start** |
+| The doctor says *"this network blocks Telegram"* (nothing arrives, the internet works) | some providers and routers block Telegram's address. Try a phone hotspot to be sure; to fix it for good, turn on a VPN such as [Cloudflare WARP](https://one.one.one.one/) on the PC. Nothing is lost meanwhile: what could not be sent goes out once Telegram is reachable |
 | The bot doesn't answer | is `UniNotifier_BotListener` running? (`Get-ScheduledTask UniNotifier*`) — is `ADMIN_USER_ID` your own Id? |
 | *"running scripts is disabled on this system"* | start the script as shown: `powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1` |
 | `No module named uninotifier` | run `.venv\Scripts\pip install --no-deps -e .` **from the project folder** (or double-click `install.bat` again) |
@@ -438,6 +395,50 @@ Then look at `data\logs\monitor.log` and `data\logs\bot.log`.
   Cambridge. It signs in with *your own* account, the way you would — use it only with your own account,
   in line with the university's rules, and at your own risk (see the warranty notice in [LICENSE](LICENSE)).
 - **Found a security problem?** Please report it privately — see [SECURITY.md](SECURITY.md).
+
+---
+
+## How it fits together
+
+```
+  SOURCES (read only)       YOUR WINDOWS PC                                                                YOU
+
++----------------------+    +------------------------------------------------+
+| Moodle e-learning    |    | monitor.py     task "UniNotifier"              |
+| elearning.zuj.edu.jo |<---| every 15 min: scan > diff > download > alert   |----+
+| Microsoft SSO + 2FA  |    | sign-in, screenshots: headless Chromium        |    |
++----------------------+    +------------------------------------------------+    |
+                                    |                            |                |
+                                    | course files               | state          |
+                                    v                            v                |    +----------------+
+                            +------------------+    +------------------------+    +----> Telegram       |---> your phone:
+                            | ARCHIVE_ROOT\    |    | data\  (git-ignored)   |         | Bot API        |     alerts, files
+                            |  <Course>\       |    |  saved_items.json      |    +<---> (your bot)     |<--- taps, commands
+                            |   01_Lectures    |    |  sessions, caches      |    |    +----------------+
+                            |   02_Assignments |    |  logs\                 |    |
+                            |   03_Exams       |    +------------------------+    |
+                            +------------------+                 ^                |
++----------------------+                                         |                |
+| Registration portal  |    +------------------------------------------------+    |
+| portal.zuj.edu.jo    |<---| bot.py   task "UniNotifier_BotListener"        |    |
+| transcript, balance  |    | always on: menus, reminders, lecture alerts,   |<---+
++----------------------+    | 2-min Moodle probe, /check -> monitor.py,      |
+| Cambridge One        |    | portal answers: saved copy now, fresh behind,  |
+| class assignments    |<---| Cambridge One every 30 min (optional)          |
+| (optional)           |    +------------------------------------------------+
++----------------------+
+```
+
+- **`monitor.py` — the check.** Every 15 minutes it reads all your courses (plain HTTP with the
+  saved session; Chromium only to sign in and take screenshots), compares them with what it saw
+  last time (`data\saved_items.json`), files new documents into your archive, and sends what is new.
+- **`bot.py` — the assistant.** Always on: answers your taps and commands, sends lecture and
+  reminder alerts on the minute, takes a ~1 KB look at Moodle every 2 minutes (and starts a check at
+  once when something is new), reads the registration portal when you ask — answering
+  instantly from the last copy and refreshing it behind ("stale-while-revalidate") — plus one
+  look at your timetable there each semester, and, if you turn it on,
+  watches Cambridge One.
+- **Telegram** is the only thing that leaves your PC: your bot, talking only to you.
 
 ---
 
