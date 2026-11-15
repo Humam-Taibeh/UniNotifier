@@ -717,7 +717,7 @@ def test_a_manual_check_reports_what_it_found():
     from uninotifier.bot import chat as chat_part, checks
 
     screens, edits, started = [], [], []
-    keep = (chat_part.send_view, chat_part.edit_view, chat_part.load_last_run, checks.subprocess.run,
+    keep = (chat_part.send_view, chat_part.edit_view, chat_part.load_last_run, checks.gitsync.run_bounded,
             checks._read_timetable, checks.threading.Thread, checks.failsafe.bug)
 
     class Inline:
@@ -738,7 +738,7 @@ def test_a_manual_check_reports_what_it_found():
         chat_part.load_last_run = lambda: last
         checks._read_timetable = lambda: None
         checks.threading.Thread = Inline
-        checks.subprocess.run = lambda cmd, **kw: started.append(kw["env"]["UNINOTIFIER_MANUAL"]) or Done(0)
+        checks.gitsync.run_bounded = lambda cmd, timeout, **kw: started.append(kw["env"]["UNINOTIFIER_MANUAL"]) or Done(0)
 
         last.update(ok=True, courses=6, items=80, new_items=[{"type": "assign", "name": "HW_2", "course": "Big Data"}],
                     new_courses=0, updated_files=1, new_posts=2, edited=0, pending=3, seconds=4.5)
@@ -757,20 +757,20 @@ def test_a_manual_check_reports_what_it_found():
                                 (1, {"ok": False}, "Check Failed")):
             last.clear()
             last.update(run)
-            checks.subprocess.run = lambda cmd, code=code, **kw: Done(code)
+            checks.gitsync.run_bounded = lambda cmd, timeout, code=code, **kw: Done(code)
             checks.start_check(9)
             assert said in edits[-1][1], (code, edits[-1][1])
 
-        def too_long(cmd, **kw):
+        def too_long(cmd, timeout, **kw):
             raise checks.subprocess.TimeoutExpired(cmd, 1)
-        checks.subprocess.run = too_long
+        checks.gitsync.run_bounded = too_long
         last.clear()
         checks.start_check(9)
         assert "Check Failed" in edits[-1][1], "a check past its time limit failed"
 
         bugs = []
         checks.failsafe.bug = lambda area, headline, exc, detail="": bugs.append(area) or True
-        checks.subprocess.run = lambda cmd, **kw: 1 / 0
+        checks.gitsync.run_bounded = lambda cmd, timeout, **kw: 1 / 0
         checks.start_check(9)
         assert bugs == ["bot:check"] and edits[-1][1].startswith("❌ *Check Failed* — something went wrong")
 
@@ -780,7 +780,7 @@ def test_a_manual_check_reports_what_it_found():
         finally:
             checks._check_lock.release()
     finally:
-        (chat_part.send_view, chat_part.edit_view, chat_part.load_last_run, checks.subprocess.run,
+        (chat_part.send_view, chat_part.edit_view, chat_part.load_last_run, checks.gitsync.run_bounded,
          checks._read_timetable, checks.threading.Thread, checks.failsafe.bug) = keep
 
 

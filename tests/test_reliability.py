@@ -1032,7 +1032,7 @@ def test_catch_alls_tell_the_owner():
     once per bug). /check never stays on "Checking the portal…". And no new silent catch-all can
     slip into the modules that run unattended."""
     import ast
-    import subprocess
+    from uninotifier import gitsync
 
     bot = _package("uninotifier.bot")
     checks = importlib.import_module("uninotifier.bot.checks")
@@ -1040,7 +1040,7 @@ def test_catch_alls_tell_the_owner():
     def boom(*a, **k):
         raise KeyError("text")
 
-    keep = (schedule.due_messages, notifier.send_message, subprocess.run, bot.edit_view)
+    keep = (schedule.due_messages, notifier.send_message, gitsync.run_bounded, bot.edit_view)
     _fresh_failsafe()
     try:
         # a lecture alert whose sending crashes
@@ -1058,14 +1058,14 @@ def test_catch_alls_tell_the_owner():
         # /check crashing: reported, and the screen says so instead of "Checking…" forever
         screens = []
         bot.edit_view = lambda message_id, text, rows: screens.append(text)
-        subprocess.run = boom
+        gitsync.run_bounded = boom
         checks.run_check(7)
         failsafe.wait_idle()
         assert screens[0].startswith("🔄") and "Check Failed" in screens[-1], screens
         assert any("/check failed" in t for t in OUTBOX), OUTBOX
         assert not checks._check_lock.locked()
     finally:
-        schedule.due_messages, notifier.send_message, subprocess.run, bot.edit_view = keep
+        schedule.due_messages, notifier.send_message, gitsync.run_bounded, bot.edit_view = keep
         reminders.STATE_FILE.unlink(missing_ok=True)
 
     # the guard: in the unattended code, a handler that logs an exception also tells the owner —

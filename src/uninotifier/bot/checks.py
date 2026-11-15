@@ -11,6 +11,7 @@ import sys
 import threading
 
 from uninotifier import failsafe
+from uninotifier import gitsync
 from uninotifier import media
 from uninotifier import mfa
 from uninotifier import paths
@@ -95,12 +96,13 @@ def run_check(message_id: int | None) -> None:
         log.info("Manual check started")
         threading.Thread(target=_read_timetable, name="timetable", daemon=True).start()
         try:
-            code = subprocess.run(
-                [sys.executable, str(MONITOR)], cwd=paths.ROOT, capture_output=True,
-                timeout=CHECK_TIMEOUT, stdin=subprocess.DEVNULL,
+            # run_bounded: past the time limit the monitor AND what it started (Playwright's driver,
+            # Chromium) are ended together — subprocess.run would end the monitor alone and then wait
+            # on the browser holding its output open, so /check itself would never finish
+            code = gitsync.run_bounded(
+                [sys.executable, str(MONITOR)], CHECK_TIMEOUT, cwd=paths.ROOT,
                 # the user is right here: a Microsoft verification may be relayed now
-                env={**os.environ, "UNINOTIFIER_MANUAL": "1"},
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).returncode
+                env={**os.environ, "UNINOTIFIER_MANUAL": "1"}).returncode
         except subprocess.TimeoutExpired:
             code = 1
         log.info("Manual check finished (exit %s)", code)
