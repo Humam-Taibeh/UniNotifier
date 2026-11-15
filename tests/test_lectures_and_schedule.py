@@ -18,6 +18,50 @@ from uninotifier import moodle
 from uninotifier import notifier
 from uninotifier import paths
 from uninotifier import schedule
+from uninotifier import timetable_image
+
+
+def test_the_timetable_picture_is_built_from_the_schedule():
+    """timetable_image: the days with a class are the columns, each start–end pair is a row, a long
+    gap is a break; a name can never become markup and the page asks for no outside file."""
+    from datetime import date
+
+    def lec(start, end, course, mode="In-Person", **extra):
+        return {"start": start, "end": end, "course": course, "course_ar": "مادة تجريبية", "section": "2",
+                "mode": mode, **extra}
+    week = {"semester": "First Semester 2026/2027", "days": {
+        "sat": [lec("08:00", "11:00", "Physics Lab", place="Lab 12")],
+        "sun": [lec("09:30", "11:00", "Calculus (1)", place="Room 9101"), lec("14:00", "15:30", "Statistics", "Blended")],
+        "tue": [lec("09:30", "11:00", "Calculus (1)", "Activity"), lec("09:30", "11:00", "Clash <b>Course</b>", "Online")],
+        "wed": []}}
+    plan = timetable_image.layout(week)
+    assert plan["days"] == ["sun", "tue", "sat"], "the days that have a class, in week order"
+    rows = plan["rows"]
+    assert [(r.get("start"), r.get("end"), r.get("break")) for r in rows] == [
+        ("08:00", "11:00", None), ("09:30", "11:00", None), (None, None, ("11:00", "14:00")),
+        ("14:00", "15:30", None)], "a lab with its own hours has its own row; three free hours are a break"
+    assert len(rows[1]["cells"]["tue"]) == 2 and rows[1]["cells"]["sat"] == [], "two classes at one time share a cell"
+    assert timetable_image.on_campus(week, "sun") and not timetable_image.on_campus(week, "tue")
+
+    hours = {"Physics Lab": 1, "Calculus (1)": 3, "Statistics": 3, "Clash <b>Course</b>": 3}
+    assert timetable_image.totals(week, hours) == (4, 10)
+    assert timetable_image.totals(week, {"Statistics": 3}) == (4, None), "hours are shown only when all are known"
+    assert timetable_image.summary_line(week) == "4 Courses" and timetable_image.summary_line(week, hours).endswith("10 Credit Hours")
+
+    page = timetable_image.build_html(week, hours, issued=date(2026, 11, 5))
+    for text in ("4 Courses · 10 Credit Hours · Sun–Sat", "Issued Nov 5, 2026", "First Semester 2026/2027",
+                 "Saturday", "SEC 02", "Room 9101", "Lab 12", "Remote / Teams", "Asynchronous / Self-study",
+                 "Break / Transition", "وجاهي", "مدمج", "مادة تجريبية", "Clash &lt;b&gt;Course&lt;/b&gt;"):
+        assert text in page, text
+    assert "<b>Course" not in page, "a course's name is text, never markup"
+    assert not re.search(r"<script|<link|<img|https?:|url\(|@import", page), "nothing is loaded from outside"
+    assert page.count('class="where mono">On campus') == 2 and page.count('class="where mono">Remote') == 1
+    with_logo = timetable_image.build_html(week, logo=b"\x89PNG-made-up")
+    assert '<img alt="" src="data:image/png;base64,' in with_logo and "Credit Hours" not in with_logo
+
+    empty = timetable_image.build_html({"days": {}})
+    assert "No classes in this timetable yet." in empty and "Legend" not in empty
+    assert timetable_image.page_width(1) == timetable_image.page_width(3) < timetable_image.page_width(6)
 
 
 def test_schedule():
