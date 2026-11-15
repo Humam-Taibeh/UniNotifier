@@ -509,7 +509,8 @@ in the code — and, when the copy is behind, sends **one** message per new vers
 - **⬇️ Update Now** and **⏰ Later**.
 
 Nothing is installed without that press. Update Now only fast-forwards a clean copy: a project file
-you changed yourself stops it, with the file's name (`git pull` by hand then). When
+you changed yourself stops it, with the file's name (`git pull` by hand then). A copy that follows an
+address without encryption (`http://`, `git://`) is refused before anything is fetched. When
 `requirements.txt` changed, the requirements are installed again (and Playwright's Chromium is
 refreshed). The new files must compile; otherwise the copy goes back to the version it had, and
 says so. Then the bot ends itself and its scheduled task starts it again a few seconds later on the

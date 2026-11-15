@@ -100,8 +100,6 @@ consistency is wanted later; it changes no behaviour, so it comes after registra
 Found in the last audit and judged not worth the risk of changing without a real case:
 - Claim-file code exists three times (daily, lectures, reminders).
 - Data file paths are declared in several modules.
-- `failsafe.json` is read-modify-written by two processes without a file lock.
-- A `/check` that times out can leave a Chromium child process running.
 - The meeting re-read loop has no guard on how often it runs.
 - Session dates in `checkin`/`activities` are parsed in English only — safe because of the English
   session above.

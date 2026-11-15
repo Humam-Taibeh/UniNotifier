@@ -6,7 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+- ⬇️ Update Now refuses to install code from an address without encryption (`http://`, `git://`):
+  anyone on the same network could have changed it on its way. https, ssh and a folder on the PC are
+  accepted, so a student who keeps a copy of their own can still update from it.
+- The setup limits `.env` to your Windows account in two steps, by the account's exact security Id
+  (not its name): your access is given first, and only then is everyone else's taken away, so the
+  file can never end up open to nobody.
+- `SECURITY.md` says what is kept, where, and who can see it.
+
 ### Fixed
+- A `/check` past its 15-minute limit now ends the browser the check started as well; before, Chromium
+  was left running and `/check` could wait on it for ever.
+- The bot and the monitor take turns writing `failsafe.json`, so one no longer writes back a copy
+  without the other's record (an alert told twice, or a "fine again" never sent).
 - A quiz published a minute before a check was announced, and listed, with "No due date set": Moodle's
   calendar did not list it yet. A quiz the calendar does not list is now dated from its own page
   (`Opens:` / `Closes:`), so it comes with its times and gets its reminders from the first message.
