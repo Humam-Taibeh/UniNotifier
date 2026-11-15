@@ -176,6 +176,18 @@ def test_new_versions_and_news():
             except updates.UpdateError as e:
                 assert "does not start (bot.py line 1" in str(e) and "back on the version it had" in str(e)
             assert git(copy, "rev-parse", "HEAD") == before and (copy / "bot.py").read_text(encoding="utf-8") == "print('two')\n"
+
+            # code is never installed from an address without encryption: refused before any fetch
+            assert updates.source(copy) == str(origin)
+            for address in ("http://example.invalid/UniNotifier.git", "git://example.invalid/UniNotifier.git"):
+                git(copy, "remote", "set-url", "origin", address)
+                try:
+                    updates.apply(copy)
+                    raise AssertionError(f"an update over {address} must be refused")
+                except updates.UpdateError as e:
+                    assert "without encryption" in str(e) and "https" in str(e)
+                assert git(copy, "rev-parse", "HEAD") == before
+            git(copy, "remote", "set-url", "origin", str(origin))
         finally:
             updates.STATE_FILE = keep_state
 

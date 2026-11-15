@@ -175,12 +175,28 @@ def check(send, now: float | None = None, root: Path | None = None) -> dict | No
 
 # ---------------------------------------------------------------- the update
 
+INSECURE = ("http://", "git://")         # anyone on the same network could change the code on its way
+
+
+def source(root: Path | None = None) -> str | None:
+    """The address the new version would come from (the remote the branch follows), or None."""
+    upstream = _out("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}", root=root)
+    if not upstream or "/" not in upstream:
+        return None
+    return _out("remote", "get-url", upstream.split("/", 1)[0], root=root)
+
+
 def apply(root: Path | None = None, python: str | None = None) -> str:
     """Bring this copy to the remote version. Returns one line about what was done; raises
-    UpdateError with the reason when nothing was changed (the copy is as it was)."""
+    UpdateError with the reason when nothing was changed (the copy is as it was).
+    Code is installed only from an address that is protected on its way here (https, ssh, or a
+    folder on this PC): one over plain http:// or git:// is refused before anything is fetched."""
     root = root or paths.ROOT
     if not is_clone(root):
         raise UpdateError("this copy was not cloned with git — download the new ZIP as the README's *Updating* says")
+    if (source(root) or "").strip().lower().startswith(INSECURE):
+        raise UpdateError("this copy follows an address without encryption (http:// or git://) — "
+                          "clone it again from the https address in the README")
     changed = _out("status", "--porcelain", "--untracked-files=no", root=root)
     if changed is None:
         raise UpdateError("git could not read this copy")
