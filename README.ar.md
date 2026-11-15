@@ -279,6 +279,12 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1
 تسجيله بنفسك إن لم يستطع. ولا يسجّل أبداً في يوم وجاهي أو يوم نشاط. ويحتاج بيانات دخول البوابة أعلاه،
 فمنها يعرف أي الأيام إلكترونية.
 
+**رسائلك على Slack** — إن كانت شبكتك تحجب تيليجرام، أو كنت تفضّل Slack: شغّل
+`.venv\Scripts\python -m uninotifier.setup --slack`. يرشدك خطوة بخطوة إلى مساحة عمل وتطبيق مجانيين على Slack
+(وينسخ لك إعدادات التطبيق لتلصقها)، ويتعرّف عليك هناك بنفسه، ومن بعدها تصل كل رسالة إلى Slack، بما فيها
+الملفات والتذكيرات وتنبيهات المحاضرات والتنبيهات. أما قوائم تيليجرام وأزراره فتبقى تجيب في تيليجرام. للعودة
+إلى تيليجرام: `NOTIFY_VIA=telegram` في `.env`.
+
 **مراقبة الحالة** — حساب مجاني على [healthchecks.io](https://healthchecks.io) يُعلمك عندما يكون جهازك
 مطفأً أو يتوقف البرنامج. أنشئ فحصين وضع رابطَي الـ ping الخاصين بهما في `HEALTHCHECK_URL` (الفترة
 Period ‏15 دقيقة، ومهلة السماح Grace 45 دقيقة) و `BOT_HEALTHCHECK_URL` (الفترة 5 دقائق، ومهلة
@@ -369,7 +375,7 @@ powershell -ExecutionPolicy Bypass -File scripts\remove_tasks.ps1
 |---|---|
 | رسالة *"UniNotifier can't start - some settings in .env need your attention"* | القائمة تحتها تسمّي كل إعداد يحتاج إلى تصحيح؛ صحّح `.env` ثم شغّل أداة الفحص |
 | أداة الفحص تقول *"The bot can't reach your chat yet"* | افتح بوتك في تيليجرام واضغط **Start** |
-| أداة الفحص تقول *"this network blocks Telegram"* (لا يصل شيء والإنترنت يعمل) | بعض مزوّدي الإنترنت وأجهزة الراوتر تحجب عنوان تيليجرام. جرّب نقطة اتصال من هاتفك للتأكد؛ وللحل الدائم شغّل على الجهاز VPN مثل [Cloudflare WARP](https://one.one.one.one/). لا يضيع شيء في هذه الأثناء: ما لم يُرسل يصل حين يعود تيليجرام متاحاً |
+| أداة الفحص تقول *"this network blocks Telegram"* (لا يصل شيء والإنترنت يعمل) | بعض مزوّدي الإنترنت وأجهزة الراوتر تحجب عنوان تيليجرام. جرّب نقطة اتصال من هاتفك للتأكد؛ وللحل الدائم شغّل على الجهاز VPN مثل [Cloudflare WARP](https://one.one.one.one/)، أو استقبل رسائلك على Slack (*إضافات اختيارية*). لا يضيع شيء في هذه الأثناء: ما لم يُرسل يصل حين يعود تيليجرام متاحاً |
 | البوت لا يرد | هل المهمة `UniNotifier_BotListener` تعمل؟ (`Get-ScheduledTask UniNotifier*`) — وهل `ADMIN_USER_ID` هو رقمك التعريفي؟ |
 | رسالة *"running scripts is disabled on this system"* | شغّل السكربت كما هو موضح: `powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1` |
 | الخطأ `No module named uninotifier` | شغّل `.venv\Scripts\pip install --no-deps -e .` **من داخل مجلد المشروع** (أو انقر نقراً مزدوجاً على `install.bat` مجدداً) |

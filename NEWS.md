@@ -4,6 +4,12 @@ What is new, in plain words, for the people who use UniNotifier. The bot shows t
 does not have yet when it tells its owner that a new version is ready (newest first; one entry is
 `## YYYY-MM-DD — Title`, then the text). The full list of changes is in [CHANGELOG.md](CHANGELOG.md).
 
+## 2026-11-16 — Your messages on Slack, when Telegram is blocked
+- Telegram is blocked on some networks in Jordan. Your messages can now come on Slack instead —
+  free, on your phone, the moment anything changes: run `.venv\Scripts\python -m uninotifier.setup --slack`
+  and it walks you through it in five minutes.
+- The doctor now says plainly when your network blocks Telegram, instead of "check the internet".
+
 ## 2026-11-15 — Your timetable, read and drawn for you
 - With `PORTAL_USERNAME` and `PORTAL_PASSWORD` in `.env`, the bot reads your weekly timetable from the
   portal by itself — no `schedule.json` to write. One you wrote yourself still wins.

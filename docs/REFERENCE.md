@@ -727,6 +727,29 @@ no roles and no other users' data.
   (`python -c "from uninotifier import telegram; print(telegram.summary(24))"`). The long poll is 20 s
   (`BOT_POLL_TIMEOUT` in `.env` changes it); an outage is logged once when it starts and once when it ends.
 
+### Messages on Slack instead (`slack.py`)
+
+For a network that blocks Telegram (measured in Jordan in November 2026: the connection is cut as soon
+as it names telegram.org), or a student who prefers Slack. `python -m uninotifier.setup --slack` makes
+it with you: a free workspace, an app made from `docs/slack-app-manifest.json` (copied to the clipboard
+for pasting; scopes `chat:write`, `files:write`, `im:write`, `users:read`), its Bot User OAuth Token
+checked with Slack (`auth.test`), you found among the workspace's people, your private conversation
+with the app opened (`conversations.open`) and greeted. It writes `SLACK_BOT_TOKEN`, `SLACK_CHANNEL` and
+`NOTIFY_VIA=slack`.
+
+With `NOTIFY_VIA=slack`, `notifier._request` — the one door every message, file and album goes
+through — hands each Telegram call to `slack.deliver`, which says it in Slack's words: Telegram's
+Markdown as mrkdwn (`*bold*`, `_italic_` and `` `code` `` are written the same; `[label](address)` becomes
+`<address|label>`; `& < >` are escaped), the buttons that open a page as links under the message,
+files with Slack's two-step upload (`files.getUploadURLExternal`, then one `files.completeUploadExternal`
+that shares an album as one message). A button that needs a press has no meaning in a message-only app
+and is left out. Telegram's remembered file Ids are not used. Sends are paced to about one a second; a
+network failure, a server error or a "slow down" is tried again, a refusal is not; either way the call
+counts as not delivered and is tried again on the next check, as with Telegram. The Microsoft sign-in
+picture goes to Slack too. The Telegram menus (`bot/chat.py`) still answer in Telegram; the bot's
+answers sent as messages (a transcript, the timetable files) go to Slack. The doctor checks the app and,
+while messages go to Slack, a Telegram it cannot reach is only a warning.
+
 ### The bot's heartbeat, and being told when something breaks
 
 The always-on bot has two loops that must keep turning — listening to Telegram and the

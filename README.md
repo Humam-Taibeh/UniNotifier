@@ -279,6 +279,12 @@ you in to every *online* lecture as soon as the instructor opens attendance and 
 proof, or tells you to do it by hand when it cannot. Never an in-person or activity day. It needs the
 portal login above, which is how it knows which days are online.
 
+**Your messages on Slack** — for a network that blocks Telegram, or if you prefer Slack: run
+`.venv\Scripts\python -m uninotifier.setup --slack`. It walks you through a free Slack workspace and
+app (the app's settings are copied for you to paste), finds you there, and from then on every
+message goes to Slack — files, reminders, lecture alerts and alerts included. The Telegram menus
+and buttons still answer in Telegram. Back to Telegram: `NOTIFY_VIA=telegram` in `.env`.
+
 **Health monitoring** — a free [healthchecks.io](https://healthchecks.io) account tells you when your
 PC is off or the program stopped. Create two checks and put their ping URLs in `HEALTHCHECK_URL`
 (period 15 min, grace 45 min) and `BOT_HEALTHCHECK_URL` (period 5 min, grace 15 min).
@@ -368,7 +374,7 @@ Then look at `data\logs\monitor.log` and `data\logs\bot.log`.
 |---|---|
 | *"UniNotifier can't start - some settings in .env need your attention"* | the list under it names each setting; fix `.env` and run the doctor |
 | The doctor says *"The bot can't reach your chat yet"* | open your bot in Telegram and press **Start** |
-| The doctor says *"this network blocks Telegram"* (nothing arrives, the internet works) | some providers and routers block Telegram's address. Try a phone hotspot to be sure; to fix it for good, turn on a VPN such as [Cloudflare WARP](https://one.one.one.one/) on the PC. Nothing is lost meanwhile: what could not be sent goes out once Telegram is reachable |
+| The doctor says *"this network blocks Telegram"* (nothing arrives, the internet works) | some providers and routers block Telegram's address. Try a phone hotspot to be sure; to fix it for good, turn on a VPN such as [Cloudflare WARP](https://one.one.one.one/) on the PC, or get your messages on Slack (*Optional extras*). Nothing is lost meanwhile: what could not be sent goes out once Telegram is reachable |
 | The bot doesn't answer | is `UniNotifier_BotListener` running? (`Get-ScheduledTask UniNotifier*`) — is `ADMIN_USER_ID` your own Id? |
 | *"running scripts is disabled on this system"* | start the script as shown: `powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1` |
 | `No module named uninotifier` | run `.venv\Scripts\pip install --no-deps -e .` **from the project folder** (or double-click `install.bat` again) |

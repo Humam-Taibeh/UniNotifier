@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Messages on Slack instead of Telegram (`NOTIFY_VIA=slack`), for a network that blocks Telegram:
+  `python -m uninotifier.setup --slack` makes the Slack app with you (its settings in
+  `docs/slack-app-manifest.json`, copied for pasting), checks its token, finds you and greets you there.
+  Every message, file and album then goes to Slack in Slack's format, with retries as before; the
+  Microsoft sign-in picture too. The Telegram menus still answer in Telegram.
+
 ### Security
 - ⬇️ Update Now refuses to install code from an address without encryption (`http://`, `git://`):
   anyone on the same network could have changed it on its way. https, ssh and a folder on the PC are
