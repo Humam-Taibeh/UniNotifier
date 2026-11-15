@@ -843,12 +843,12 @@ def test_messages_go_to_slack_when_chosen():
     def no_telegram(*a, **k):
         raise AssertionError("Telegram must not be used while messages go to Slack")
 
-    keep = (slack.requests.post, telegram.request, slack.MIN_INTERVAL, slack.BACKOFF_SECONDS)
+    keep = (slack.requests.post, telegram.request, slack.MIN_INTERVAL, slack.BACKOFF_SECONDS, slack.SHARE_WAIT)
     fake = "-".join(("xoxb", "1111", "2222", "abcdefghij"))             # made up, built so no scanner takes it for a key
     on = {"NOTIFY_VIA": "slack", "SLACK_BOT_TOKEN": fake, "SLACK_CHANNEL": "D0123ABCD"}
     try:
         slack.requests.post, telegram.request = fake_post, no_telegram
-        slack.MIN_INTERVAL, slack.BACKOFF_SECONDS = 0, (0, 0)
+        slack.MIN_INTERVAL, slack.BACKOFF_SECONDS, slack.SHARE_WAIT = 0, (0, 0), 0
 
         # Telegram's Markdown in Slack's words
         assert slack.mrkdwn("*New:* HW\\_2 — [Open it](https://x.example/a_b?c=1&d=2) & <b>") == \
@@ -946,4 +946,4 @@ def test_messages_go_to_slack_when_chosen():
         assert "abcdefghij" not in notifier.redact(f"token {fake} used")
         assert "SECRET" not in notifier.redact("https://files.slack.com/upload/v1/SECRET")
     finally:
-        slack.requests.post, telegram.request, slack.MIN_INTERVAL, slack.BACKOFF_SECONDS = keep
+        slack.requests.post, telegram.request, slack.MIN_INTERVAL, slack.BACKOFF_SECONDS, slack.SHARE_WAIT = keep

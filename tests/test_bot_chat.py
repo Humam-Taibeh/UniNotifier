@@ -6,6 +6,7 @@ import importlib
 import json
 import os
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -887,13 +888,13 @@ def test_the_bot_lives_in_slack():
     def no_telegram(*a, **k):
         raise AssertionError("Telegram must not be used while the bot lives in Slack")
 
-    keep = (slack.requests.post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect)
+    keep = (slack.requests.post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, slack.SHARE_WAIT)
     owner = _as_owner(bot)
     on = {"NOTIFY_VIA": "slack", "SLACK_BOT_TOKEN": "-".join(("xoxb", "1", "2", "made-up")), "SLACK_CHANNEL": "D0123ABCD",
           "SLACK_APP_TOKEN": "-".join(("xapp", "1", "made-up")), "SLACK_USER": "U0OWNER1", "TELEGRAM_CHAT_ID": OWNER}
     with tempfile.TemporaryDirectory() as tmp:
         try:
-            slack.requests.post, telegram.request, slack.MIN_INTERVAL = fake_post, no_telegram, 0
+            slack.requests.post, telegram.request, slack.MIN_INTERVAL, slack.SHARE_WAIT = fake_post, no_telegram, 0, 0
             slackbot.STORE, slackbot._connect = Path(tmp) / "slack_messages.json", lambda: None
 
             def scenario():
@@ -934,6 +935,42 @@ def test_the_bot_lives_in_slack():
                            for m, d in calls), calls
                 menu = next(d for m, d in calls if m == "chat.update")
                 assert sent_rows(menu), "the menu has its buttons"
+
+                # the buttons side by side, the way back apart at the bottom
+                assert len(sent_rows(menu)[0]["elements"]) > 1, "Telegram's one-per-row buttons go side by side"
+                laid = slack.buttons({"inline_keyboard": [[{"text": "⏳ Tasks", "callback_data": "tasks"}],
+                                                          [{"text": "📅 Timetable", "callback_data": "schedule"}],
+                                                          [{"text": "🔙 Main Menu", "callback_data": "menu"}]]})
+                assert [b["type"] for b in laid] == ["actions", "divider", "actions"] and laid[-1]["block_id"] == "nav"
+                assert [e["value"] for e in laid[0]["elements"]] == ["tasks", "schedule"]
+
+                # the Home page: a press there redraws the page itself (views.publish), never the chat
+                calls.clear()
+                slackbot.take("interactive", {"type": "block_actions", "user": {"id": "U0OWNER1"},
+                                              "container": {"type": "view", "view_id": "V1"},
+                                              "view": {"type": "home"},
+                                              "actions": [{"action_id": "b0_1", "value": "tasks", "action_ts": "1.7"}]})
+                home_press = slackbot.get_updates(None, 0)[0]
+                assert home_press["callback_query"]["message"]["message_id"] == slackbot.HOME_ID
+                bot.dispatch(home_press)
+                published = [d for m, d in calls if m == "views.publish"]
+                assert published and not [m for m, _ in calls if m in ("chat.postMessage", "chat.update", "chat.delete")], calls
+                view = json.loads(published[-1]["view"])
+                assert view["type"] == "home" and view["blocks"][0]["type"] == "header" and published[-1]["user_id"] == "U0OWNER1"
+                assert "Show more" not in json.dumps(view) and not [b for b in view["blocks"] if b.get("type") == "attachments"]
+                # opening Home with nothing on it draws the main menu there
+                calls.clear()
+                drawn = threading.Event()
+                keep_menu = slackbot.home_menu
+                slackbot.home_menu = lambda: drawn.set()
+                try:
+                    stored = slackbot._load()
+                    stored["messages"].pop(str(slackbot.HOME_ID), None)
+                    slackbot._save(stored)
+                    slackbot.take("events_api", {"event": {"type": "app_home_opened", "tab": "home", "user": "U0OWNER1"}})
+                    assert drawn.wait(5)
+                finally:
+                    slackbot.home_menu = keep_menu
 
                 # someone else in the workspace: not the owner
                 slackbot.take("interactive", {"type": "block_actions", "user": {"id": "U0STRANGER"},
@@ -976,5 +1013,5 @@ def test_the_bot_lives_in_slack():
             # without the live connection's token, the bot stays on Telegram (messages may still go to Slack)
             assert _with_env({**on, "SLACK_APP_TOKEN": ""}, slackbot.interactive) is False
         finally:
-            slack.requests.post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect = keep
+            slack.requests.post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, slack.SHARE_WAIT = keep
             bot.CHAT_ID, access.ADMIN_USER_ID = owner

@@ -120,6 +120,7 @@ def compose(text: str, reply_markup=None) -> str:
 # ------------------------------------------------------------------ the card (Block Kit)
 
 _TITLE = re.compile(r"^(\S+\s+)?\*([^*\n]+)\*$")                        # "⏰ *Reminder*"
+_TITLE_LEAD = re.compile(r"^(\S+\s+)\*([^*\n:]+)\*(\s+[•·—-]\s+.+)$")    # "🎓 *UniNotifier System* • First Semester"
 _FIELD = re.compile(r"^(\S+\s+)?\*([^*\n]{1,40}?):\*\s*(.+)$")            # "📘 *Course:* Big Data"
 _NOTE = re.compile(r"^_[^_\n].*_$")                                     # "_A note in italics._"
 HEADER_LIMIT = 150
@@ -153,13 +154,22 @@ def _markup(reply_markup) -> list[list[dict]]:
     return [[b for b in row if isinstance(b, dict)] for row in rows or [] if isinstance(row, list)]
 
 
+NAV_MARKS = ("🔙", "🏠", "⬅", "↩")                  # the way back: kept apart, at the very bottom
+NAV_WORDS = ("Main Menu", "Back")
+ROW_SIZE = 5                                        # buttons side by side; Slack wraps a row that is too wide
+
+
+def _is_nav(label: str) -> bool:
+    return label.startswith(NAV_MARKS) or any(label.endswith(word) for word in NAV_WORDS)
+
+
 def buttons(reply_markup) -> list[dict]:
-    """Telegram's keyboard as Slack's: one row of buttons per row, a button that opens a page opening
+    """Telegram's keyboard as Slack's: the buttons side by side (Telegram stacks one per row, which in
+    Slack reads as a long list), the way back apart under a line, a button that opens a page opening
     it, any other carrying its Telegram callback data as its value (slackbot hands the press to the
     bot exactly as Telegram would). ✅ is Slack's green button, 🗑 its red one."""
-    out = []
+    content, nav = [], []
     for r, row in enumerate(_markup(reply_markup)):
-        elements = []
         for c, button in enumerate(row[:25]):
             label = str(button.get("text") or "·")
             element = {"type": "button", "text": {"type": "plain_text", "text": label[:75], "emoji": True}}
@@ -173,9 +183,13 @@ def buttons(reply_markup) -> list[dict]:
                 element["style"] = "primary"
             elif label.startswith("🗑"):
                 element["style"] = "danger"
-            elements.append(element)
-        if elements:
-            out.append({"type": "actions", "block_id": f"row{r}", "elements": elements})
+            (nav if _is_nav(label) else content).append(element)
+    out = [{"type": "actions", "block_id": f"row{n}", "elements": content[n:n + ROW_SIZE]}
+           for n in range(0, len(content), ROW_SIZE)]
+    if nav:
+        if out:
+            out.append({"type": "divider"})
+        out.append({"type": "actions", "block_id": "nav", "elements": nav[:25]})
     return out
 
 
@@ -187,10 +201,13 @@ def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | Non
     lines = (text or "").split("\n")
     out: list[dict] = []
     first = lines[0].strip() if lines else ""
-    title = _TITLE.match(first)
+    title = _TITLE.match(first) or _TITLE_LEAD.match(first)
     if title and not _FIELD.match(first):
         header = ((title.group(1) or "") + _plain(title.group(2))).strip()
         out.append({"type": "header", "text": {"type": "plain_text", "text": header[:HEADER_LIMIT], "emoji": True}})
+        rest = title.group(3).strip(" •·—-") if title.re is _TITLE_LEAD else ""
+        if rest:                                       # "🎓 *UniNotifier System* • First Semester": the rest, small
+            out.append({"type": "context", "elements": [{"type": "mrkdwn", "text": mrkdwn(rest)[:2900]}]})
         lines = lines[1:]
     prose: list[str] = []
     fields: list[dict] = []
@@ -240,6 +257,24 @@ def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | Non
     if not out or len(out) > MAX_BLOCKS:
         return None
     return out
+
+
+HOME_TITLE = "🎓 UniNotifier"
+HOME_BLOCKS = 100
+
+
+def home_view(text: str, reply_markup=None) -> dict:
+    """A screen of the bot as the app's Home page: the whole screen on one page — nothing folded under
+    "Show more", nothing piling up in the conversation — rewritten in place at every press."""
+    card = blocks(text, reply_markup, live=True) or [
+        {"type": "section", "text": {"type": "mrkdwn", "text": mrkdwn(text)[:SECTION_LIMIT] or " "}}]
+    if card[0]["type"] != "header":
+        card.insert(0, {"type": "header", "text": {"type": "plain_text", "text": HOME_TITLE, "emoji": True}})
+    stamp = int(time.time())
+    card.append({"type": "context", "elements": [{"type": "mrkdwn", "text":
+                 f"Updated <!date^{stamp}^{{date_short_pretty}} at {{time}}|just now> · type *menu* in Messages "
+                 "for the same screens in the conversation"}]})
+    return {"type": "home", "blocks": card[:HOME_BLOCKS]}
 
 
 # ------------------------------------------------------------------ the API
@@ -399,7 +434,30 @@ def upload(token: str, channel: str, files: list[tuple[str, bytes]], comment: st
         data["initial_comment"] = comment
     answer = call(token, "files.completeUploadExternal", data, timeout=UPLOAD_TIMEOUT)
     answer["file_ids"] = [f["id"] for f in shared]
+    _await_share(token, channel, answer["file_ids"])
     return answer
+
+
+SHARE_WAIT = 12.0          # seconds a shared file may take to appear in the conversation
+
+
+def _await_share(token: str, channel: str, file_ids: list[str]) -> None:
+    """Slack shares an uploaded file a moment AFTER confirming it: a message sent at once would land
+    above the file (a menu above the timetable it belongs under). Wait until the file shows in the
+    conversation — read with im:history; without it, a short pause does the same."""
+    deadline = time.monotonic() + SHARE_WAIT
+    while time.monotonic() < deadline:
+        try:
+            recent = call(token, "conversations.history", {"channel": channel, "limit": "5"})
+        except SlackError:                             # no im:history (an app made before the buttons)
+            time.sleep(2.5)
+            return
+        except requests.RequestException:
+            return
+        shown = {f.get("id") for m in recent.get("messages") or [] for f in m.get("files") or []}
+        if set(file_ids) <= shown:
+            return
+        time.sleep(0.6)
 
 
 # ------------------------------------------------------------------ Telegram's calls, said in Slack

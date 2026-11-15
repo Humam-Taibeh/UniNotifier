@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from uninotifier import fileio
 from uninotifier import notifier
 from uninotifier import paths
+from uninotifier import slackbot
 from uninotifier.notifier import escape_md
 
 log = logging.getLogger("uninotifier")
@@ -261,6 +262,11 @@ def with_action(action: str = "typing"):
 # data/ui_state.json, so it survives a restart.
 
 UI_FILE = paths.DATA / "ui_state.json"
+SLACK_UI_FILE = paths.DATA / "ui_state.slack.json"     # Slack numbers its messages apart: its own menu
+
+
+def _ui_file():
+    return SLACK_UI_FILE if slackbot.interactive() else UI_FILE
 _menu_lock = threading.Lock()
 _menu: dict = {"message_id": None, "text": None, "rows": None}
 _menu_loaded = False
@@ -272,7 +278,7 @@ def _load_menu() -> None:
         return
     _menu_loaded = True
     try:
-        data = json.loads(UI_FILE.read_text(encoding="utf-8"))
+        data = json.loads(_ui_file().read_text(encoding="utf-8"))
         if isinstance(data, dict) and isinstance(data.get("message_id"), int):
             _menu.update(message_id=data["message_id"], text=data.get("text"), rows=data.get("rows"))
     except (OSError, ValueError):
@@ -281,9 +287,9 @@ def _load_menu() -> None:
 
 def _save_menu() -> None:
     try:
-        fileio.write_json_atomic(UI_FILE, _menu)
+        fileio.write_json_atomic(_ui_file(), _menu)
     except OSError:
-        log.warning("Could not write %s", UI_FILE.name)
+        log.warning("Could not write %s", _ui_file().name)
 
 
 def reset_menu() -> None:
@@ -364,6 +370,10 @@ def edit_view(message_id: int, text: str, rows: list) -> None:
     """Change a screen in place. A screen with buttons that is not the menu - an old one a
     button was pressed on, a status line that has finished - is not edited where it sits: the
     new screen goes to the bottom and the old one is removed."""
+    if slackbot.is_home(message_id):                  # Slack's Home page: always redrawn where it is
+        api("editMessageText", chat_id=CHAT_ID, message_id=message_id, text=text, parse_mode="Markdown",
+            reply_markup={"inline_keyboard": rows})
+        return
     with _menu_lock:
         _load_menu()
         active = _menu["message_id"]

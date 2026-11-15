@@ -99,11 +99,41 @@ def remember(ts: str, text: str = "", markup=None, files: list[str] | None = Non
     return number
 
 
+HOME_ID = 999_999_999              # the app's Home page, as the bot sees it: one screen, always there
+HOME_TS = "home"
+
+
 def entry(message_id) -> dict | None:
     try:
-        return _load()["messages"].get(str(int(message_id)))
+        found = _load()["messages"].get(str(int(message_id)))
     except (TypeError, ValueError):
         return None
+    if found is None and str(message_id) == str(HOME_ID):
+        return {"ts": HOME_TS, "text": "", "markup": "", "files": []}
+    return found
+
+
+def is_home(message_id) -> bool:
+    return str(message_id) == str(HOME_ID)
+
+
+def show_home(text: str, markup=None) -> dict:
+    """A screen drawn on the Home page (views.publish), kept as the Home "message"."""
+    token, _ = _settings()
+    slack.call(token, "views.publish", {"user_id": owner(),
+                                        "view": json.dumps(slack.home_view(text, markup), ensure_ascii=False)})
+    with fileio.write_lock(STORE):
+        data = _load()
+        data["messages"][str(HOME_ID)] = {"ts": HOME_TS, "text": text, "markup": _rows_json(markup), "files": []}
+        _save(data)
+    return {"message_id": HOME_ID, "chat": {"id": _chat_id()}, "text": text}
+
+
+def home_menu() -> None:
+    """The main menu on the Home page (when the bot starts, and when Home is opened with nothing on it)."""
+    from uninotifier.bot import views
+    text, rows = views.view_menu()
+    show_home(text, {"inline_keyboard": rows})
 
 
 def _change(message_id, **fields) -> None:
@@ -160,6 +190,8 @@ def _edit(message_id, text: str | None, markup, keep_markup: bool = False) -> di
     token, channel = _settings()
     text = found.get("text", "") if text is None else text
     markup = found.get("markup") if keep_markup else markup
+    if found.get("ts") == HOME_TS:                   # a screen on the Home page: the page is redrawn
+        return show_home(text, markup)
     slack.update(token, channel, found["ts"], slack.compose(text, markup), slack.blocks(text, markup, live=True),
                  slack.tone(text))
     _change(message_id, text=text, markup=_rows_json(markup))
@@ -168,8 +200,8 @@ def _edit(message_id, text: str | None, markup, keep_markup: bool = False) -> di
 
 def _delete(message_id) -> bool:
     found = entry(message_id)
-    if not found:
-        return True                                  # nothing of ours: nothing to remove
+    if not found or found.get("ts") == HOME_TS:
+        return True                                  # nothing of ours / the Home page stays: nothing to remove
     token, channel = _settings()
     for file_id in found.get("files") or []:
         try:
@@ -311,15 +343,20 @@ def from_press(payload: dict) -> list[dict]:
     if payload.get("type") != "block_actions":
         return []
     user = (payload.get("user") or {}).get("id", "")
-    ts = (payload.get("container") or {}).get("message_ts") or (payload.get("message") or {}).get("ts")
-    number = number_of(ts) if ts else None
+    container = payload.get("container") or {}
+    if container.get("type") == "view" or (payload.get("view") or {}).get("type") == "home":
+        ts, number = HOME_TS, HOME_ID                 # pressed on the Home page
+    else:
+        ts = container.get("message_ts") or (payload.get("message") or {}).get("ts")
+        number = number_of(ts) if ts else None
     found = entry(number) if number else None
     sender, chat = _person(user)
     out = []
     for action in payload.get("actions") or []:
         if action.get("url") or not action.get("value"):
             continue                                      # a button that opens a page: Slack opens it
-        message = {"message_id": number or 0, "chat": chat, "date": int(float(ts or 0)),
+        message = {"message_id": number or 0, "chat": chat,
+                   "date": int(time.time()) if ts == HOME_TS else int(float(ts or 0)),
                    "text": (found or {}).get("text", "")}
         if found and found.get("markup"):
             message["reply_markup"] = json.loads(found["markup"])
@@ -346,10 +383,15 @@ def from_event(event: dict) -> list[dict]:
 def take(kind: str, payload: dict) -> None:
     """What Socket Mode delivered, queued for the bot's loop. Never raises (it runs on Slack's thread)."""
     try:
+        event = payload.get("event") or {}
+        if kind == "events_api" and event.get("type") == "app_home_opened":
+            if event.get("tab") == "home" and event.get("user") == owner() and not (_load()["messages"].get(str(HOME_ID)) or {}).get("text"):
+                threading.Thread(target=_home_menu_quietly, name="slack-home", daemon=True).start()
+            return
         if kind == "interactive":
             updates = from_press(payload)
         elif kind == "events_api":
-            updates = from_event(payload.get("event") or {})
+            updates = from_event(event)
         else:
             updates = []
         for update in updates:
@@ -380,6 +422,14 @@ def _connect() -> None:
     socket.connect()
     _client["socket"] = socket
     log.info("Slack: connected — buttons and messages reach the bot")
+    threading.Thread(target=_home_menu_quietly, name="slack-home", daemon=True).start()   # Home: fresh at start
+
+
+def _home_menu_quietly() -> None:
+    try:
+        home_menu()
+    except Exception:
+        log.exception("Slack: the Home page could not be drawn")
 
 
 def get_updates(offset: int | None, timeout: float) -> list[dict] | None:
