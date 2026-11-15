@@ -26,7 +26,7 @@ It runs quietly in the background through two Windows scheduled tasks, needs no 
 subscription, and nothing about you ever leaves your PC except the messages it sends to *your* bot.
 
 - [Features](#features) · [What it looks like](#what-it-looks-like) · [How it fits together](#how-it-fits-together)
-- [Setup in 6 steps](#setup-in-6-steps)
+- [Install in 3 steps](#install-in-3-steps)
 - [Everyday use](#everyday-use) · [Where everything lives](#where-everything-lives) · [Optional extras](#optional-extras)
 - [Updating, pausing, uninstalling](#updating-pausing-uninstalling) · [Troubleshooting](#troubleshooting) · [Security & privacy](#security--privacy)
 - Every behaviour in depth: **[docs/REFERENCE.md](docs/REFERENCE.md)**
@@ -119,23 +119,11 @@ marks are made up. In Telegram they look the same, in your own theme, with tappa
 
 ---
 
-## Setup in 6 steps
+## Install in 3 steps
 
-About 20 minutes. Every command below is typed in **PowerShell** (Start menu → "PowerShell"),
-inside the project folder once you have it. The quickest way there: in File Explorer, open the project
-folder, type `powershell` in the address bar and press Enter.
+About 10 minutes, and no file to edit.
 
-> **Shortcut:** after step 1, get the code with step 2's `git clone` and create your bot (step 4) —
-> then double-click **`install.bat`** in the project folder.
-> **Use `git clone`, not Download ZIP:** only a cloned copy is told about new versions and fixes in the
-> chat and can install them with one tap (see [Updating](#updating-pausing-uninstalling)). A ZIP copy
-> works, but it never hears about an update and has to be replaced by hand each time.
-> It does the rest of steps 2 and 3 for you (`.venv`, the packages, Chromium), then **asks you five
-> short questions and writes your settings itself** — no file to edit; it even finds your Telegram Id
-> when you press Start in your bot — runs the doctor, and offers to finish step 6 too: the Moodle
-> sign-in, the first check and the scheduled tasks.
-
-### 1. Prerequisites
+### 1. Install Python and Git (once)
 
 | You need | How to get it | Check |
 |---|---|---|
@@ -145,20 +133,57 @@ folder, type `powershell` in the address bar and press Enter.
 | Telegram | on your phone | — |
 | Your ZUJ Microsoft account | the one you sign in to Moodle with, and the Authenticator app if you use it | — |
 
-### 2. Get the code and create its private Python environment
+### 2. Make your own Telegram bot
+
+1. In Telegram, open **[@BotFather](https://t.me/BotFather)** → **Start** → send `/newbot`.
+2. Choose a display name (e.g. *My Uni Bot*) and a username ending in `bot` (e.g. `my_uni_2027_bot`).
+3. BotFather replies with a **token** like `123456789:AAH4x…` — copy it, and keep it secret: it is your bot's password.
+
+That is all you need from Telegram: the installer finds out who you are by itself.
+
+### 3. Get UniNotifier and run the installer
+
+Open **PowerShell** (Start menu → type "PowerShell") and type these four lines:
 
 ```powershell
 cd $HOME
 git clone https://github.com/Humam-Taibeh/UniNotifier.git
 cd UniNotifier
+.\install.bat
+```
+
+The installer does everything else, and tells you what it is doing at each step:
+
+1. it prepares UniNotifier on your PC (a few minutes the first time);
+2. it asks you **five short questions** — your university e-mail and password, the bot token from step 2,
+   then it asks you to press **Start** in your bot and recognises you, then the registration portal
+   login (optional, but it is what reads your timetable) and whether to check you in to online lectures;
+3. it checks everything, opens a browser window to sign in to Moodle (approve Microsoft on your phone if
+   it asks), makes the first, quiet check, and switches UniNotifier on.
+
+Open your bot in Telegram and send **/start**. That's it — from now on it runs by itself, and your
+timetable arrives a few minutes later, read from the portal and drawn for you.
+
+> **Use `git clone`, not Download ZIP:** only a cloned copy is told about new versions and fixes in the
+> chat and can install them with one tap (see [Updating](#updating-pausing-uninstalling)).
+> Keep the project in your user folder as shown, not inside OneDrive: syncing breaks it.
+> The first check never floods you: everything already on Moodle becomes the baseline. Only what
+> appears afterwards is announced.
+
+<details>
+<summary><b>Installing by hand, step by step</b> — if you prefer it, or the installer stopped</summary>
+
+<br>
+
+**a. The private Python environment** (in the project folder):
+
+```powershell
 py -3 -m venv .venv
 ```
 
 `.venv` is a private copy of Python for this project only; nothing is installed system-wide.
-Keep the project in your user folder as shown, not inside OneDrive: syncing breaks `.venv` and locks
-the files UniNotifier writes.
 
-### 3. Install the dependencies and the browser
+**b. The packages and the browser:**
 
 ```powershell
 .venv\Scripts\python -m pip install --upgrade pip
@@ -171,33 +196,20 @@ the files UniNotifier writes.
 UniNotifier itself, and the last one downloads the headless Chromium (~150 MB) used to sign in and take
 screenshots.
 
-### 4. Create your private Telegram bot
-
-1. In Telegram, open **[@BotFather](https://t.me/BotFather)** → **Start** → send `/newbot`.
-2. Choose a display name (e.g. *My Uni Bot*) and a username ending in `bot` (e.g. `my_uni_2027_bot`).
-3. BotFather replies with a **token** like `123456789:AAH4x…` — keep it secret; it is your bot's password.
-4. Open **[@userinfobot](https://t.me/userinfobot)** → **Start**. It replies with your **Id** (a number).
-5. Open **your new bot** (the `t.me/<username>` link BotFather gave you) and press **Start** —
-   a bot cannot message you before you have written to it once.
-
-### 5. Fill in your settings and your timetable
+**c. Your settings** — the same five questions the installer asks:
 
 ```powershell
-copy .env.example .env
-notepad .env
+.venv\Scripts\python -m uninotifier.setup
 ```
 
-Fill in the four **required** values — `ZUJ_USERNAME`, `ZUJ_PASSWORD`, `TELEGRAM_BOT_TOKEN`,
-`TELEGRAM_CHAT_ID` (your Id from @userinfobot) — and put the same Id in `ADMIN_USER_ID`.
-Everything else is optional and explained right there in the file; an empty value means "off".
-Course files go to `Documents\University` unless you set another folder in `ARCHIVE_ROOT`
-(`%USERPROFILE%` works there).
+It writes `.env` for you. Every setting is also explained in that file, if you ever want to change one
+by hand; an empty value means "off". Course files go to `Documents\University` unless you set another
+folder in `ARCHIVE_ROOT` (`%USERPROFILE%` works there).
 
-**Your timetable needs no file** when `PORTAL_USERNAME` and `PORTAL_PASSWORD` are filled in: a few
-minutes after it starts, the bot reads your timetable from the registration portal by itself, tells
-you what it found, and draws it for the 📅 Weekly Timetable button (send `/check` whenever your
-courses change). Then skip the next two lines. Without the portal login — or to write the timetable
-your own way — make a `schedule.json`; one you wrote always wins over the portal's:
+**Your timetable needs no file** when the portal login is set: the bot reads it from the registration
+portal by itself, tells you what it found, and draws it for the 📅 Weekly Timetable button (send
+`/check` whenever your courses change). Without the portal login — or to write the timetable your own
+way — make a `schedule.json`; one you wrote always wins over the portal's:
 
 ```powershell
 copy schedule.example.json schedule.json
@@ -210,7 +222,7 @@ time (24-hour), English and Arabic course name, section, and mode (`In-Person`, 
 `assets\` as `Weekly_Academic_Schedule.pdf` / `Weekly_Schedule.png` — it is sent instead of the drawn
 one (see [assets/README.md](assets/README.md)).
 
-Now let the doctor check everything:
+**d. Let the doctor check everything:**
 
 ```powershell
 .venv\Scripts\python -m uninotifier.doctor
@@ -219,7 +231,7 @@ Now let the doctor check everything:
 ```
 [ OK ] Python 3.12.7
 [ OK ] Settings (.env): everything required is filled in
-[ OK ] Timetable: First Semester 2026/2027, 12 weekly classes
+[ OK ] Timetable: read from the portal - First Semester 2026/2027, 12 weekly classes
 [ OK ] Course files are saved to C:\Users\you\Documents\University
 [ OK ] Chromium for Playwright is installed
 [ OK ] Telegram bot: @my_uni_2027_bot
@@ -230,7 +242,7 @@ All set.
 
 Every `[FAIL]` line comes with an arrow telling you exactly what to do.
 
-### 6. First sign-in, first run, and switch it on
+**e. First sign-in, first run, and switch it on:**
 
 ```powershell
 # 1. sign in to Moodle once, in a visible browser window (approve Microsoft on your phone if asked)
@@ -254,10 +266,7 @@ registers both tasks for your Windows account — no administrator rights needed
 | `UniNotifier` | `monitor.py` every 15 minutes | catches up right after the PC wakes, waits for the network, one run at a time, 15-minute limit, runs on battery |
 | `UniNotifier_BotListener` | `bot.py` at every sign-in, and right now | no time limit, restarted every minute if it fails, runs on battery |
 
-Open your bot in Telegram and send **/start**. That's it — from now on it runs by itself.
-
-> The first check never floods you: everything already on Moodle becomes the baseline. Only what
-> appears afterwards is announced.
+</details>
 
 ---
 
@@ -408,7 +417,7 @@ Then look at `data\logs\monitor.log` and `data\logs\bot.log`.
 | `No module named uninotifier` | run `.venv\Scripts\pip install --no-deps -e .` **from the project folder** (or double-click `install.bat` again) |
 | `Executable doesn't exist … chromium` | `.venv\Scripts\python -m playwright install chromium` |
 | Microsoft asks for verification | the bot relays it to Telegram — approve it on your phone (or reply with the SMS code). Last resort: `.venv\Scripts\python -m uninotifier.tools.login_refresh` |
-| The doctor says *"schedule.json still holds the example classes"* | replace them with your own week (step 5) — left as they are, the bot would announce lectures you don't have |
+| The doctor says *"schedule.json still holds the example classes"* | replace them with your own week (*Installing by hand*, c.) — left as they are, the bot would announce lectures you don't have |
 | *"schedule.json needs fixing"* on Telegram | the message lists each mistake; reminders keep using the last good copy until it is fixed |
 | Nothing happens after a restart | sign in to Windows — the tasks run while you are signed in; checks catch up by themselves |
 

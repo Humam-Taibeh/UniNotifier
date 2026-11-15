@@ -173,13 +173,13 @@ if ($healthy -and -not $NoEditor) {
 Write-Host ''
 Write-Host '==================================================================================='
 if ($healthy) {
-    Write-Host 'Installed. Three commands are left (README, step 6):' -ForegroundColor Green
+    Write-Host 'Installed. Three commands are left (README, Installing by hand, e.):' -ForegroundColor Green
 } else {
     Write-Host 'Installed - fix the [FAIL] lines above, then check again with:' -ForegroundColor Yellow
     Write-Host '  .venv\Scripts\python -m uninotifier.setup      answer the questions again'
     Write-Host '  .venv\Scripts\python -m uninotifier.doctor'
     Write-Host ''
-    Write-Host 'After that, three commands are left (README, step 6):'
+    Write-Host 'After that, three commands are left (README, Installing by hand, e.):'
 }
 Write-Host '  (type them in PowerShell in this folder: in File Explorer, type powershell in the address bar)'
 Write-Host '  .venv\Scripts\python -m uninotifier.tools.login_refresh      sign in to Moodle once'

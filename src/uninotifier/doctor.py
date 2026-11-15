@@ -101,7 +101,7 @@ def check_schedule(r: Report) -> None:
         if copied and copied == lectures:
             # left as installed, it would announce lectures the student doesn't have
             r.line(FAIL, f"{name} still holds the example classes",
-                   f"open it (notepad {name}) and replace them with your own week - README, step 5")
+                   f"open it (notepad {name}) and replace them with your own week - README, Installing by hand, c.")
         else:
             r.line(OK, f"Timetable: {data.get('semester') or '(no semester name)'}, {lectures} weekly classes")
             if copied:
