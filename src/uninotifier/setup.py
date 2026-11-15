@@ -308,6 +308,7 @@ def converse(console: Console, offline: bool = False, saved=envcheck.value) -> d
 # ------------------------------------------------------------------ Slack (--slack)
 
 SLACK_MANIFEST = paths.ROOT / "docs" / "slack-app-manifest.json"
+SLACK_ICON = paths.ROOT / "docs" / "images" / "uninotifier-icon.png"      # Slack lets only the owner set it
 SLACK_HELLO = "✅ UniNotifier is connected to Slack. Setup goes on in the window on your PC."
 
 
@@ -372,6 +373,7 @@ def converse_slack(console: Console, saved=envcheck.value) -> dict[str, str]:
         raise SetupError(f"The app could not write to you on Slack ({e}) - nothing was changed. "
                          "Was it installed to the workspace (Install to Workspace - Allow)?") from e
     console.say("   [ OK ] Look at Slack: UniNotifier just wrote to you (under Apps).")
+    console.say(f"   Its picture (optional): Basic Information -> App icon -> upload {SLACK_ICON}")
     on = _yes(console, "Send your notifications to Slack from now on (instead of Telegram)?", True)
     return {"SLACK_BOT_TOKEN": token, "SLACK_CHANNEL": channel, "NOTIFY_VIA": "slack" if on else "telegram"}
 

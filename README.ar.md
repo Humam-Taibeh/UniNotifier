@@ -283,7 +283,8 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1
 `.venv\Scripts\python -m uninotifier.setup --slack`. يرشدك خطوة بخطوة إلى مساحة عمل وتطبيق مجانيين على Slack
 (وينسخ لك إعدادات التطبيق لتلصقها)، ويتعرّف عليك هناك بنفسه، ومن بعدها تصل كل رسالة إلى Slack، بما فيها
 الملفات والتذكيرات وتنبيهات المحاضرات والتنبيهات. أما قوائم تيليجرام وأزراره فتبقى تجيب في تيليجرام. للعودة
-إلى تيليجرام: `NOTIFY_VIA=telegram` في `.env`.
+إلى تيليجرام: `NOTIFY_VIA=telegram` في `.env`. أما صورة التطبيق فتضعها أنت: *Basic Information ← App icon*
+← `docs\images\uninotifier-icon.png`.
 
 **مراقبة الحالة** — حساب مجاني على [healthchecks.io](https://healthchecks.io) يُعلمك عندما يكون جهازك
 مطفأً أو يتوقف البرنامج. أنشئ فحصين وضع رابطَي الـ ping الخاصين بهما في `HEALTHCHECK_URL` (الفترة

@@ -283,7 +283,8 @@ portal login above, which is how it knows which days are online.
 `.venv\Scripts\python -m uninotifier.setup --slack`. It walks you through a free Slack workspace and
 app (the app's settings are copied for you to paste), finds you there, and from then on every
 message goes to Slack — files, reminders, lecture alerts and alerts included. The Telegram menus
-and buttons still answer in Telegram. Back to Telegram: `NOTIFY_VIA=telegram` in `.env`.
+and buttons still answer in Telegram. Back to Telegram: `NOTIFY_VIA=telegram` in `.env`. The app's
+picture is yours to set: *Basic Information → App icon* → `docs\images\uninotifier-icon.png`.
 
 **Health monitoring** — a free [healthchecks.io](https://healthchecks.io) account tells you when your
 PC is off or the program stopped. Create two checks and put their ping URLs in `HEALTHCHECK_URL`
