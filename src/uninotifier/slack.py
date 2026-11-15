@@ -117,6 +117,92 @@ def compose(text: str, reply_markup=None) -> str:
     return body[:TEXT_LIMIT]
 
 
+# ------------------------------------------------------------------ the card (Block Kit)
+
+_TITLE = re.compile(r"^(\S+\s+)?\*([^*\n]+)\*$")                        # "⏰ *Reminder*"
+_FIELD = re.compile(r"^(\S+\s+)?\*([^*\n]{1,40}?):\*\s*(.+)$")            # "📘 *Course:* Big Data"
+_NOTE = re.compile(r"^_[^_\n].*_$")                                     # "_A note in italics._"
+HEADER_LIMIT = 150
+SECTION_LIMIT = 2900
+MAX_BLOCKS = 50
+
+
+def _plain(text: str) -> str:
+    """mrkdwn markers gone, for Slack's plain-text header."""
+    return re.sub(r"(?<!\\)[*_`]", "", _unescape_markers(text)).strip()
+
+
+def _sections(lines: list[str]) -> list[dict]:
+    blocks, chunk = [], ""
+    for line in lines:
+        if chunk and len(chunk) + len(line) + 1 > SECTION_LIMIT:
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": chunk}})
+            chunk = ""
+        chunk = f"{chunk}\n{line}" if chunk else line
+    if chunk.strip():
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": chunk[:SECTION_LIMIT]}})
+    return blocks
+
+
+def blocks(text: str, reply_markup=None) -> list[dict] | None:
+    """The message as a Slack card: its title as a header, its "Label: value" lines side by side in
+    two columns, its paragraphs as sections, its italic notes small and grey, the links that open a
+    page at the bottom. None when the message is too long for a card (it then goes as text)."""
+    lines = (text or "").split("\n")
+    out: list[dict] = []
+    first = lines[0].strip() if lines else ""
+    title = _TITLE.match(first)
+    if title and not _FIELD.match(first):
+        header = ((title.group(1) or "") + _plain(title.group(2))).strip()
+        out.append({"type": "header", "text": {"type": "plain_text", "text": header[:HEADER_LIMIT], "emoji": True}})
+        lines = lines[1:]
+    prose: list[str] = []
+    fields: list[dict] = []
+    field_lines: list[str] = []
+
+    def flush_prose():
+        out.extend(_sections([mrkdwn(l) for l in prose]))
+        prose.clear()
+
+    def flush_fields():
+        if len(fields) == 1:                                   # one alone reads better as the line it was
+            out.append({"type": "section", "text": {"type": "mrkdwn", "text": mrkdwn(field_lines[0])}})
+        else:
+            for start in range(0, len(fields), 10):           # Slack shows up to 10 fields per section
+                out.append({"type": "section", "fields": fields[start:start + 10]})
+        field_lines.clear()
+        fields.clear()
+
+    for raw in lines:
+        line = raw.rstrip()
+        field = _FIELD.match(line.strip())
+        if field:
+            flush_prose()
+            label = ((field.group(1) or "") + _plain(field.group(2))).strip()
+            fields.append({"type": "mrkdwn", "text": f"*{_escape(label)}*\n{mrkdwn(field.group(3))}"[:1990]})
+            field_lines.append(line.strip())
+            continue
+        if fields:
+            flush_fields()
+        if _NOTE.match(line.strip()):
+            flush_prose()
+            out.append({"type": "context", "elements": [{"type": "mrkdwn", "text": mrkdwn(line.strip())[:2900]}]})
+        elif line.strip():
+            prose.append(line)
+        else:
+            flush_prose()
+    flush_prose()
+    if fields:
+        flush_fields()
+    links = link_lines(reply_markup)
+    if links:
+        out.append({"type": "divider"})
+        out.append({"type": "context", "elements": [{"type": "mrkdwn", "text": "   ".join(links)[:2900]}]})
+    if not out or len(out) > MAX_BLOCKS:
+        return None
+    return out
+
+
 # ------------------------------------------------------------------ the API
 
 def _wait_turn() -> None:
@@ -161,10 +247,20 @@ def call(token: str, method: str, data: dict | None = None, timeout=TIMEOUT) -> 
     raise requests.ConnectionError(f"Slack {method} failed")       # not reached
 
 
-def post(token: str, channel: str, text: str) -> dict:
+def post(token: str, channel: str, text: str, card: list[dict] | None = None) -> dict:
+    """A message: `card` (blocks) when given, `text` as what a notification shows — and the message
+    itself when the card is refused, so a layout Slack does not take never costs the message."""
+    data = {"channel": channel, "text": text, "mrkdwn": "true", "unfurl_links": "false", "unfurl_media": "false"}
     _wait_turn()
-    return call(token, "chat.postMessage", {"channel": channel, "text": text, "mrkdwn": "true",
-                                            "unfurl_links": "false", "unfurl_media": "false"})
+    if card:
+        try:
+            return call(token, "chat.postMessage", {**data, "blocks": json.dumps(card, ensure_ascii=False)})
+        except SlackError as e:
+            if "block" not in str(e) and "invalid_arguments" not in str(e):
+                raise
+            log.warning("Slack refused the card (%s) — sent as text", e)
+            _wait_turn()
+    return call(token, "chat.postMessage", data)
 
 
 def upload(token: str, channel: str, files: list[tuple[str, bytes]], comment: str = "") -> dict:
@@ -205,7 +301,8 @@ def deliver(method: str, data: dict, file_name: str = "file", file_path: Path | 
     token, channel = found
     try:
         if method == "sendMessage":
-            post(token, channel, compose(data.get("text", ""), data.get("reply_markup")))
+            post(token, channel, compose(data.get("text", ""), data.get("reply_markup")),
+                 blocks(data.get("text", ""), data.get("reply_markup")))
         elif method in ("sendDocument", "sendPhoto"):
             one = _file(file_name, file_path, file_bytes)
             if one is None:                           # a Telegram file_id: Slack cannot use it

@@ -834,6 +834,8 @@ def test_messages_go_to_slack_when_chosen():
         if url.startswith("https://files.slack.com/upload/"):
             return Answer(status=200)
         reply = replies[method]
+        if isinstance(reply, list):                     # one answer per call, in order
+            reply = reply.pop(0)
         if isinstance(reply, Exception):
             raise reply
         return Answer(reply)
@@ -863,6 +865,26 @@ def test_messages_go_to_slack_when_chosen():
             assert data["text"].startswith("📢 *New post*") and "<https://teams.example/j|🎥 Join>" in data["text"]
             assert "<https://portal.example/x|🌐 Open in ZUJ Portal ↗️>" in data["text"]
             assert "Mark as done" not in data["text"], "a button that needs a press has no meaning here"
+
+            # ...and it goes as a card: the title a header, the label lines side by side, notes small
+            card = json.loads(data["blocks"])
+            assert card[0] == {"type": "header", "text": {"type": "plain_text", "text": "📢 New post", "emoji": True}}
+            assert card[-1]["type"] == "context" and "<https://teams.example/j|🎥 Join>" in card[-1]["elements"][0]["text"]
+            calls.clear()
+            assert notifier.send_message("T", "1", "⏰ *Reminder*\n\n📘 *Course:* Big Data\n📋 *Type:* Quiz\n\n"
+                                                   "Soon.\n🕒 *Detected:* now\n\n_A note._")
+            card = json.loads(calls[-1][1]["blocks"])
+            assert [b["type"] for b in card] == ["header", "section", "section", "section", "context"], card
+            assert card[1]["fields"] == [{"type": "mrkdwn", "text": "*📘 Course*\nBig Data"},
+                                         {"type": "mrkdwn", "text": "*📋 Type*\nQuiz"}]
+            assert card[3]["text"]["text"] == "🕒 *Detected:* now", "a lone label line stays as it was"
+            assert card[4]["elements"][0]["text"] == "_A note._"
+            # a card Slack refuses never costs the message: it goes again as text
+            replies["chat.postMessage"] = [{"ok": False, "error": "invalid_blocks"}, {"ok": True}]
+            calls.clear()
+            assert notifier.send_message("T", "1", "⏰ *Reminder*\n\nx")
+            assert len(calls) == 2 and "blocks" in calls[0][1] and "blocks" not in calls[1][1]
+            replies["chat.postMessage"] = {"ok": True, "ts": "1.1"}
 
             # a file: uploaded in two steps, its caption above it — a Telegram file Id is never used
             calls.clear()
