@@ -866,14 +866,23 @@ def test_messages_go_to_slack_when_chosen():
             assert "<https://portal.example/x|🌐 Open in ZUJ Portal ↗️>" in data["text"]
             assert "Mark as done" not in data["text"], "a button that needs a press has no meaning here"
 
-            # ...and it goes as a card: the title a header, the label lines side by side, notes small
-            card = json.loads(data["blocks"])
+            # ...and it goes as a card: the title a header on top, the rest in a frame whose colour says
+            # what the message is — the label lines side by side, notes small, the links at the bottom
+            def card_of(sent):
+                frame = json.loads(sent.get("attachments") or "[{}]")[0]
+                return json.loads(sent["blocks"]) + frame.get("blocks", []), frame.get("color")
+
+            card, colour = card_of(data)
             assert card[0] == {"type": "header", "text": {"type": "plain_text", "text": "📢 New post", "emoji": True}}
             assert card[-1]["type"] == "context" and "<https://teams.example/j|🎥 Join>" in card[-1]["elements"][0]["text"]
+            assert colour == slack.DEFAULT_TONE, "something new on Moodle: the project's green"
             calls.clear()
             assert notifier.send_message("T", "1", "⏰ *Reminder*\n\n📘 *Course:* Big Data\n📋 *Type:* Quiz\n\n"
                                                    "Soon.\n🕒 *Detected:* now\n\n_A note._")
-            card = json.loads(calls[-1][1]["blocks"])
+            card, colour = card_of(calls[-1][1])
+            assert colour == "#e0a020", "time-bound: gold"
+            assert [slack.tone(t) for t in ("🚨 *Check In by Hand*", "🎉 *Marks Detected*", "✅ done", "")] == [
+                "#d93f3f", "#3b6fd8", slack.DEFAULT_TONE, slack.DEFAULT_TONE]
             assert [b["type"] for b in card] == ["header", "section", "section", "section", "context"], card
             assert card[1]["fields"] == [{"type": "mrkdwn", "text": "*📘 Course*\nBig Data"},
                                          {"type": "mrkdwn", "text": "*📋 Type*\nQuiz"}]

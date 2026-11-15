@@ -247,14 +247,35 @@ def call(token: str, method: str, data: dict | None = None, timeout=TIMEOUT) -> 
     raise requests.ConnectionError(f"Slack {method} failed")       # not reached
 
 
-def post(token: str, channel: str, text: str, card: list[dict] | None = None) -> dict:
-    """A message: `card` (blocks) when given, `text` as what a notification shows — and the message
-    itself when the card is refused, so a layout Slack does not take never costs the message."""
+TONES = (("#d93f3f", ("🚨", "❌", "⚠️", "⛔", "🔴", "🆘")),          # needs you now
+         ("#e0a020", ("⏰", "⏳", "⌛", "📅", "🗓", "🔔", "📌")),           # time: deadlines, reminders, lectures
+         ("#3b6fd8", ("🎉", "📊", "🎓", "🏁", "💯", "📈")))               # marks and results
+DEFAULT_TONE = "#0f5f37"                                                # everything else: new on Moodle, done, info
+
+
+def tone(text: str) -> str:
+    """The colour of a message's frame, from the mark its first line starts with."""
+    first = (text or "").lstrip().split("\n", 1)[0]
+    return next((colour for colour, marks in TONES if first.startswith(marks)), DEFAULT_TONE)
+
+
+def framed(card: list[dict], colour: str) -> dict:
+    """The card as Slack shows it: its first block (the title) on top, the rest inside a frame with a
+    coloured edge — each message stands on its own, its colour saying what it is."""
+    data = {"blocks": json.dumps(card[:1], ensure_ascii=False)}
+    if card[1:]:
+        data["attachments"] = json.dumps([{"color": colour, "blocks": card[1:]}], ensure_ascii=False)
+    return data
+
+
+def post(token: str, channel: str, text: str, card: list[dict] | None = None, colour: str = DEFAULT_TONE) -> dict:
+    """A message: `card` (blocks, framed) when given, `text` as what a notification shows — and the
+    message itself when the card is refused, so a layout Slack does not take never costs the message."""
     data = {"channel": channel, "text": text, "mrkdwn": "true", "unfurl_links": "false", "unfurl_media": "false"}
     _wait_turn()
     if card:
         try:
-            return call(token, "chat.postMessage", {**data, "blocks": json.dumps(card, ensure_ascii=False)})
+            return call(token, "chat.postMessage", {**data, **framed(card, colour)})
         except SlackError as e:
             if "block" not in str(e) and "invalid_arguments" not in str(e):
                 raise
@@ -302,7 +323,7 @@ def deliver(method: str, data: dict, file_name: str = "file", file_path: Path | 
     try:
         if method == "sendMessage":
             post(token, channel, compose(data.get("text", ""), data.get("reply_markup")),
-                 blocks(data.get("text", ""), data.get("reply_markup")))
+                 blocks(data.get("text", ""), data.get("reply_markup")), tone(data.get("text", "")))
         elif method in ("sendDocument", "sendPhoto"):
             one = _file(file_name, file_path, file_bytes)
             if one is None:                           # a Telegram file_id: Slack cannot use it
