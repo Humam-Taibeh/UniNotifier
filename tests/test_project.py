@@ -322,6 +322,38 @@ def test_the_setup_asks_five_things_and_writes_the_settings_file():
         answers.write_text(json.dumps({"NO_SUCH_SETTING": "1"}), encoding="utf-8")
         assert setup.main(["--answers", str(answers)], Script([])) == 1
         assert dotenv_values(paths.ENV_FILE)["TELEGRAM_CHAT_ID"] == "555", "a refused file changes nothing"
+
+        # --- --slack: the app's settings copied for pasting, the token checked, you found, a first message
+        from uninotifier import slack
+        keep_slack = (slack.who, slack.people, slack.conversation, slack.post, setup.copy_to_clipboard)
+        clipboard, posted = [], []
+
+        def who(token):
+            if token != "xoxb-good-token-1111":
+                raise slack.SlackError("invalid_auth")
+            return {"team": "UniNotifier", "bot": "uninotifier"}
+        try:
+            slack.who = who
+            slack.people = lambda token: [{"id": "U1", "name": "Someone Else"}, {"id": "U2", "name": "Sam"}]
+            slack.conversation = lambda token, user: {"U2": "D0999ZZZZ"}[user]
+            slack.post = lambda token, channel, text: posted.append((channel, text)) or {"ok": True}
+            setup.copy_to_clipboard = lambda text: clipboard.append(text) or True
+            console = Script(["not-a-slack-token",                   # not the shape: asked again
+                              "xoxb-bad-token-0000",                 # refused by Slack: asked again
+                              "xoxb-good-token-1111",
+                              "2",                                   # which of the two people you are
+                              ""])                                   # messages to Slack: yes (the default)
+            assert setup.main(["--slack"], console) == 0, console.said
+            assert json.loads(clipboard[0])["oauth_config"]["scopes"]["bot"], "the manifest is what was copied"
+            assert all(secret for prompt, secret in console.asked if "Token" in prompt), "the token is never shown"
+            assert posted == [("D0999ZZZZ", setup.SLACK_HELLO)]
+            saved = dotenv_values(paths.ENV_FILE)
+            assert (saved["SLACK_BOT_TOKEN"], saved["SLACK_CHANNEL"], saved["NOTIFY_VIA"]) == (
+                "xoxb-good-token-1111", "D0999ZZZZ", "slack")
+            assert saved["TELEGRAM_CHAT_ID"] == "555", "the Telegram settings stay as they were"
+            assert any("setup_tasks.ps1" in line for line in console.said), "it says how the bot picks it up"
+        finally:
+            slack.who, slack.people, slack.conversation, slack.post, setup.copy_to_clipboard = keep_slack
     finally:
         (setup.restrict, setup.telegram_bot, setup.telegram_people, setup.telegram_hello, setup.requests.get,
          paths.ENV_FILE) = keep

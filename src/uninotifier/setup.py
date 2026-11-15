@@ -5,6 +5,8 @@ The first-time setup as a short conversation in the console — no file to edit.
   python -m uninotifier.setup --offline        ask and write; check nothing over the network
   python -m uninotifier.setup --answers FILE   take the answers from a JSON file {"NAME": "value"}
                                                (automated installs; nothing is asked)
+  python -m uninotifier.setup --slack          your messages on Slack instead of Telegram (a network that
+                                               blocks Telegram): the app, its token, you — found by itself
   python -m uninotifier.setup --demo           try it with made-up answers: the same questions, Telegram
                                                played by the setup itself, nothing contacted, nothing
                                                written — at the end it shows what WOULD be in .env
@@ -269,7 +271,8 @@ def converse(console: Console, offline: bool = False, saved=envcheck.value) -> d
         if state == "unreachable":
             console.say("   [WARN] Telegram cannot be reached from this PC right now - the token is saved as typed;")
             console.say("          the doctor checks it later. If your internet works, this network may block")
-            console.say("          Telegram: try a phone hotspot, or a VPN such as Cloudflare WARP (1.1.1.1).")
+            console.say("          Telegram: try a phone hotspot, or a VPN such as Cloudflare WARP (1.1.1.1) - or")
+            console.say("          get your messages on Slack: .venv\\Scripts\\python -m uninotifier.setup --slack")
             break
         console.say("   Telegram does not know this token. Copy it again from @BotFather (/mybots - API Token).")
     values["TELEGRAM_BOT_TOKEN"] = token
@@ -300,6 +303,77 @@ def converse(console: Console, offline: bool = False, saved=envcheck.value) -> d
         values["PORTAL_PASSWORD"], values["AUTO_CHECK_IN"] = "", ""
         console.say("   Skipped: you can run this setup again later to add it.")
     return values
+
+
+# ------------------------------------------------------------------ Slack (--slack)
+
+SLACK_MANIFEST = paths.ROOT / "docs" / "slack-app-manifest.json"
+SLACK_HELLO = "✅ UniNotifier is connected to Slack. Setup goes on in the window on your PC."
+
+
+def copy_to_clipboard(text: str) -> bool:
+    """Windows' clipboard, so the student pastes instead of opening a file. False when it cannot be done."""
+    if os.name != "nt":
+        return False
+    try:
+        return subprocess.run(["clip"], input=text.encode("ascii"), capture_output=True, timeout=15).returncode == 0
+    except (OSError, subprocess.SubprocessError, UnicodeEncodeError):     # the manifest is plain ASCII
+        return False
+
+
+def converse_slack(console: Console, saved=envcheck.value) -> dict[str, str]:
+    """Slack as the way messages reach you: the app made from the manifest, its token checked, you found
+    in the workspace by yourself, a first message sent. Returns the .env values."""
+    from uninotifier import slack
+    console.say("UniNotifier on Slack - for a network that blocks Telegram, or if you prefer Slack.")
+    console.say("")
+    console.say("1. Make a free Slack workspace if you have none: slack.com/get-started")
+    console.say("2. Open api.slack.com/apps -> Create New App -> From a manifest -> pick your workspace")
+    try:
+        manifest = SLACK_MANIFEST.read_text(encoding="utf-8")
+    except OSError as e:
+        raise SetupError(f"{SLACK_MANIFEST.name} is missing from the project - get the project again.") from e
+    if copy_to_clipboard(manifest):
+        console.say("3. Choose JSON, delete what is there and paste (Ctrl+V): the app's settings are copied for you")
+    else:
+        console.say(f"3. Choose JSON, delete what is there and paste the whole of {SLACK_MANIFEST}")
+    console.say("4. Next -> Create -> Install to Workspace -> Allow")
+    console.say("5. OAuth & Permissions -> copy the Bot User OAuth Token (it starts with xoxb-)")
+    console.say("")
+    while True:
+        token = _ask(console, "SLACK_BOT_TOKEN", "Bot User OAuth Token", saved("SLACK_BOT_TOKEN"), secret=True)
+        try:
+            info = slack.who(token)
+            console.say(f"   [ OK ] Your app in the workspace \"{info['team']}\"")
+            break
+        except slack.SlackError:
+            console.say("   Slack does not accept this token. Copy it again (OAuth & Permissions - Bot User OAuth Token).")
+        except requests.RequestException:
+            raise SetupError("Slack cannot be reached from this PC right now - nothing was changed. Try again later.")
+    try:
+        found = slack.people(token)
+    except (slack.SlackError, requests.RequestException) as e:
+        raise SetupError(f"The people of your workspace could not be read ({e}) - nothing was changed.") from e
+    if not found:
+        raise SetupError("Your workspace has nobody in it yet - open Slack once, then run this again.")
+    person = None
+    if len(found) == 1 and _yes(console, f"I see {found[0]['name']}. Is that you?", True):
+        person = found[0]
+    while person is None:
+        for number, someone in enumerate(found, 1):
+            console.say(f"     {number}. {someone['name']}")
+        pick = console.ask("   Which one are you? Type the number: ")
+        if pick.isdigit() and 1 <= int(pick) <= len(found):
+            person = found[int(pick) - 1]
+    try:
+        channel = slack.conversation(token, person["id"])
+        slack.post(token, channel, SLACK_HELLO)
+    except (slack.SlackError, requests.RequestException) as e:
+        raise SetupError(f"The app could not write to you on Slack ({e}) - nothing was changed. "
+                         "Was it installed to the workspace (Install to Workspace - Allow)?") from e
+    console.say("   [ OK ] Look at Slack: UniNotifier just wrote to you (under Apps).")
+    on = _yes(console, "Send your notifications to Slack from now on (instead of Telegram)?", True)
+    return {"SLACK_BOT_TOKEN": token, "SLACK_CHANNEL": channel, "NOTIFY_VIA": "slack" if on else "telegram"}
 
 
 def from_answers(answers: dict) -> dict[str, str]:
@@ -363,7 +437,9 @@ def main(argv: list[str], console: Console | None = None) -> int:
         console.say("[ OK ] Try-out finished - nothing was written. For real: .venv\\Scripts\\python -m uninotifier.setup")
         return 0
     try:
-        if "--answers" in argv:
+        if "--slack" in argv:
+            values = converse_slack(console)
+        elif "--answers" in argv:
             source = argv[argv.index("--answers") + 1:][:1]
             if not source:
                 raise SetupError("--answers needs the path of a JSON file.")
@@ -384,6 +460,9 @@ def main(argv: list[str], console: Console | None = None) -> int:
     console.say("")
     console.say(f"[ OK ] Saved to {paths.ENV_FILE.name}"
                 + (" - only your Windows account can open it, and" if private else " -") + " it never leaves this PC.")
+    if "--slack" in argv:
+        console.say("       The 15-minute check uses it from its next run. For the bot's own reminders, start it")
+        console.say("       again: powershell -ExecutionPolicy Bypass -File scripts\\setup_tasks.ps1 -SkipCheck")
     return 0
 
 

@@ -166,13 +166,44 @@ def check_telegram(r: Report, send: bool) -> None:
             r.line(OK if sent.get("ok") else FAIL, "Test message sent" if sent.get("ok") else
                    f"Test message refused: {sent.get('description', '?')}")
     except requests.RequestException as e:
-        if internet_works():
+        from uninotifier import slack
+        if slack.active():
+            r.line(WARN, f"Couldn't reach Telegram ({e.__class__.__name__}) - your messages go to Slack meanwhile; "
+                         "the Telegram menus answer once Telegram is reachable")
+        elif internet_works():
             r.line(FAIL, "Your internet works, but this network blocks Telegram - nothing can reach your phone",
                    "some providers and routers block Telegram's address: try another network (a phone hotspot) "
                    "to be sure, or turn on a VPN such as Cloudflare WARP (1.1.1.1) on this PC. Nothing is lost "
                    "meanwhile: what could not be sent goes out once Telegram is reachable")
         else:
             r.line(WARN, f"Couldn't reach Telegram ({e.__class__.__name__}) - check the internet connection")
+
+
+def check_slack(r: Report, send: bool) -> None:
+    """Slack, when it is chosen (NOTIFY_VIA=slack) or set up: the token, and the conversation."""
+    import requests
+
+    from uninotifier import slack
+    found = slack.settings()
+    if slack.mode() != "slack" and not found:
+        return
+    if not found:
+        r.line(FAIL, "NOTIFY_VIA=slack, but Slack is not set up", "run .venv\\Scripts\\python -m uninotifier.setup --slack")
+        return
+    token, channel = found
+    try:
+        info = slack.who(token)
+        r.line(OK, f"Slack app in \"{info['team']}\"" + (" - your messages go to Slack" if slack.active() else
+                                                          " (not used: NOTIFY_VIA is telegram)"))
+        if send:
+            slack.post(token, channel, "✅ UniNotifier is set up on this PC - this is a test message from the doctor.")
+            r.line(OK, "Test message sent to Slack")
+    except slack.SlackError as e:
+        r.line(FAIL if slack.active() else WARN, f"Slack refused the app ({e})",
+               "run .venv\\Scripts\\python -m uninotifier.setup --slack again")
+    except requests.RequestException as e:
+        r.line(FAIL if slack.active() else WARN, f"Couldn't reach Slack ({e.__class__.__name__})",
+               "check the internet connection")
 
 
 NEUTRAL_SITE = "https://elearning.zuj.edu.jo/"      # what the bot reads anyway: no other address is contacted
@@ -278,6 +309,7 @@ def main(argv: list[str]) -> int:
     check_browser(r)
     if not offline:
         check_telegram(r, send)
+        check_slack(r, send)
     check_state(r)
     check_cambridge(r)
     check_tasks(r)

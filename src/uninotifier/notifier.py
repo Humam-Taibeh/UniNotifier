@@ -1,5 +1,5 @@
 """
-Telegram delivery with automatic retry.
+Telegram delivery with automatic retry (or Slack's, with NOTIFY_VIA=slack — see slack.py).
 
 Every send goes through `_request`, which retries transient failures
 (network errors, 5xx, 429 rate limits) up to MAX_ATTEMPTS times with
@@ -22,6 +22,7 @@ from dotenv import dotenv_values
 
 from uninotifier import fileids
 from uninotifier import paths
+from uninotifier import slack
 from uninotifier import telegram
 
 log = logging.getLogger("uninotifier")
@@ -54,6 +55,8 @@ SECRETS_RECHECK_SECONDS = 30
 
 _SHAPES = [
     (re.compile(r"(bot)?\d{6,}:[A-Za-z0-9_-]{30,}"), lambda m: (m.group(1) or "") + "<redacted>"),
+    (re.compile(r"xox[abposr]-[A-Za-z0-9-]{10,}"), "<redacted>"),          # a Slack token
+    (re.compile(r"(files\.slack\.com/upload/)[^\s\"'<>)]+"), r"\1<redacted>"),   # a one-time upload address
     (re.compile(r"""(sesskey["']?\s*[=:]\s*["']?)[A-Za-z0-9]+""", re.I), r"\1<redacted>"),
     (re.compile(r"""(MoodleSession\w*["']?\s*[=:]\s*["']?)[^\s;,"'&)]+""", re.I), r"\1<redacted>"),
     (re.compile(r"""(hc-ping\.com/)[^\s"'<>)]+""", re.I), r"\1<redacted>"),
@@ -233,7 +236,11 @@ def _request(token: str, method: str, data: dict, file_field: str | None = None,
              file_name: str = "file", attachments: dict[str, tuple[str, bytes]] | None = None,
              outcome: dict | None = None) -> bool:
     """`outcome`, when given, is filled in: {"body": Telegram's JSON reply} on success, or
-    {"status": 4xx, "description": ...} when Telegram refused the request for good."""
+    {"status": 4xx, "description": ...} when Telegram refused the request for good.
+    With NOTIFY_VIA=slack the same call is delivered to Slack instead (slack.deliver)."""
+    if slack.active():
+        return slack.deliver(method, data, file_name=file_name, file_path=file_path, file_bytes=file_bytes,
+                             attachments=attachments, outcome=outcome)
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             files = None
@@ -389,7 +396,7 @@ def send_document(token: str, chat_id: str, path: Path, caption: str, url: str |
     if kb:
         data["reply_markup"] = kb
     fp = fileids.fingerprint(path)
-    cached = fileids.lookup(fp)
+    cached = None if slack.active() else fileids.lookup(fp)        # a Telegram file_id means nothing to Slack
     if cached:
         outcome: dict = {}
         if _request(token, "sendDocument", {**data, "document": cached}, outcome=outcome):
@@ -413,7 +420,7 @@ def send_document_group(token: str, chat_id: str, items: list[tuple[Path, str]])
     album). `items` is [(path, caption)]; each file keeps its own caption. Files Telegram
     already holds go by file_id, only the others are uploaded (fileids.py)."""
     prints = [fileids.fingerprint(path) for path, _ in items]
-    cached = [fileids.lookup(fp) for fp in prints]
+    cached = [None if slack.active() else fileids.lookup(fp) for fp in prints]
     for use_cache in ((True, False) if any(cached) else (False,)):
         media, attachments = [], {}
         for n, ((path, caption), fp, file_id) in enumerate(zip(items, prints, cached)):

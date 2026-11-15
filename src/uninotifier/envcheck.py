@@ -51,6 +51,12 @@ VARIABLES = (
     Var("PORTAL_PASSWORD", (), "the registration portal password"),
     Var("AUTO_CHECK_IN", (), "true = the bot checks you in to your online lectures by itself",
         r"(?i)true|false", "true or false"),
+    Var("NOTIFY_VIA", (), "where your messages go: telegram (the default) or slack",
+        r"(?i)telegram|slack", "telegram or slack"),
+    Var("SLACK_BOT_TOKEN", (), "your Slack app's Bot User OAuth Token (OAuth & Permissions)",
+        r"xoxb-[\w-]+", "a token that starts with xoxb-"),
+    Var("SLACK_CHANNEL", (), "your private conversation with the Slack app (the setup finds it)",
+        r"[CDG][A-Z0-9]{6,}", "a Slack conversation Id, e.g. D0123ABCD"),
     Var("HEALTHCHECK_URL", (), "a ping URL from healthchecks.io", r"https?://\S+", "a web address"),
     Var("BOT_HEALTHCHECK_URL", (), "a second ping URL from healthchecks.io", r"https?://\S+", "a web address"),
     Var("BOT_POLL_TIMEOUT", (), "seconds of each Telegram long poll (5-50)", r"\d+", "a number"),
@@ -97,6 +103,9 @@ def problems(role: str | None = None) -> list[str]:
     admin, chat = value("ADMIN_USER_ID"), value("TELEGRAM_CHAT_ID")
     if admin and chat and admin != chat and re.fullmatch(r"-?\d+", chat):
         found.append("TELEGRAM_CHAT_ID must be your private chat with the bot - the same number as ADMIN_USER_ID.")
+    if value("NOTIFY_VIA").lower() == "slack" and not (value("SLACK_BOT_TOKEN") and value("SLACK_CHANNEL")):
+        found.append("NOTIFY_VIA=slack needs SLACK_BOT_TOKEN and SLACK_CHANNEL - "
+                     "run `.venv\\Scripts\\python -m uninotifier.setup --slack`.")
     return found
 
 

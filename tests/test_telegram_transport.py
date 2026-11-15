@@ -805,3 +805,105 @@ def test_the_statistics_do_not_grow_forever():
         telegram._stats.clear()
         telegram._stats.update(keep)
         telegram.STATS_FILE.unlink(missing_ok=True)
+
+
+def test_messages_go_to_slack_when_chosen():
+    """NOTIFY_VIA=slack: every message the program sends goes to Slack instead — the same words in
+    Slack's format, the links that open a page under it, files uploaded with Slack's two steps — and
+    Telegram is not touched. Telegram's own file Ids are never offered to Slack; a refusal or a network
+    failure means "try again later", exactly as with Telegram."""
+    from support import _with_env
+    from uninotifier import envcheck, slack
+
+    calls = []
+
+    class Answer:
+        def __init__(self, body=None, status=200, headers=None):
+            self.status_code, self.ok, self.headers, self._body = status, status < 400, headers or {}, body
+
+        def json(self):
+            return self._body
+
+    replies = {"chat.postMessage": {"ok": True, "ts": "1.1"},
+               "files.getUploadURLExternal": {"ok": True, "upload_url": "https://files.slack.com/upload/v1/X", "file_id": "F1"},
+               "files.completeUploadExternal": {"ok": True}}
+
+    def fake_post(url, data=None, timeout=None, headers=None):
+        method = url.rsplit("/", 1)[-1]
+        calls.append((method, data, headers))
+        if url.startswith("https://files.slack.com/upload/"):
+            return Answer(status=200)
+        reply = replies[method]
+        if isinstance(reply, Exception):
+            raise reply
+        return Answer(reply)
+
+    def no_telegram(*a, **k):
+        raise AssertionError("Telegram must not be used while messages go to Slack")
+
+    keep = (slack.requests.post, telegram.request, slack.MIN_INTERVAL, slack.BACKOFF_SECONDS)
+    fake = "-".join(("xoxb", "1111", "2222", "abcdefghij"))             # made up, built so no scanner takes it for a key
+    on = {"NOTIFY_VIA": "slack", "SLACK_BOT_TOKEN": fake, "SLACK_CHANNEL": "D0123ABCD"}
+    try:
+        slack.requests.post, telegram.request = fake_post, no_telegram
+        slack.MIN_INTERVAL, slack.BACKOFF_SECONDS = 0, (0, 0)
+
+        # Telegram's Markdown in Slack's words
+        assert slack.mrkdwn("*New:* HW\\_2 — [Open it](https://x.example/a_b?c=1&d=2) & <b>") == \
+            "*New:* HW_2 — <https://x.example/a_b?c=1&d=2|Open it> &amp; &lt;b&gt;"
+        assert slack.mrkdwn("see https://x.example/p_q") == "see <https://x.example/p_q>"
+
+        def scenario():
+            assert slack.active()
+            rows = [[{"text": "✅ Mark as done", "callback_data": "done:1"}], [{"text": "🎥 Join", "url": "https://teams.example/j"}]]
+            assert notifier.send_message("T", "1", "📢 *New post*", url="https://portal.example/x", rows=rows)
+            method, data, headers = calls[-1]
+            assert method == "chat.postMessage" and data["channel"] == "D0123ABCD", calls[-1]
+            assert headers["Authorization"] == f"Bearer {fake}"
+            assert data["text"].startswith("📢 *New post*") and "<https://teams.example/j|🎥 Join>" in data["text"]
+            assert "<https://portal.example/x|🌐 Open in ZUJ Portal ↗️>" in data["text"]
+            assert "Mark as done" not in data["text"], "a button that needs a press has no meaning here"
+
+            # a file: uploaded in two steps, its caption above it — a Telegram file Id is never used
+            calls.clear()
+            with tempfile.TemporaryDirectory() as tmp:
+                doc = Path(tmp) / "Lecture 5.pdf"
+                doc.write_bytes(b"%PDF-1.4 lecture")
+                fileids.remember(fileids.fingerprint(doc), "TELEGRAM-FILE-ID", doc.name)
+                assert notifier.send_document("T", "1", doc, "📄 *Lecture 5*")
+            assert [c[0] for c in calls] == ["files.getUploadURLExternal", "X", "files.completeUploadExternal"], calls
+            assert calls[0][1] == {"filename": "Lecture 5.pdf", "length": str(len(b"%PDF-1.4 lecture"))}
+            assert calls[1][1] == b"%PDF-1.4 lecture"
+            done = calls[2][1]
+            assert json.loads(done["files"]) == [{"id": "F1", "title": "Lecture 5.pdf"}]
+            assert done["channel_id"] == "D0123ABCD" and done["initial_comment"] == "📄 *Lecture 5*"
+
+            # an album: every file uploaded, ONE message shares them all
+            calls.clear()
+            assert notifier.send_png_files("T", "1", [b"a", b"b", b"c"], "Post.png")
+            assert [c[0] for c in calls].count("files.getUploadURLExternal") == 3
+            assert [c[0] for c in calls].count("files.completeUploadExternal") == 1
+            assert [f["title"] for f in json.loads(calls[-1][1]["files"])] == [
+                "Post (1 of 3).png", "Post (2 of 3).png", "Post (3 of 3).png"]
+
+            # refused for good, or Slack not reached: not delivered — tried again later
+            replies["chat.postMessage"] = {"ok": False, "error": "invalid_auth"}
+            calls.clear()
+            assert notifier.send_message("T", "1", "x") is False and len(calls) == 1, "a refusal is not retried"
+            replies["chat.postMessage"] = slack.requests.ConnectionError("down")
+            calls.clear()
+            assert notifier.send_message("T", "1", "x") is False and len(calls) == slack.MAX_ATTEMPTS
+            replies["chat.postMessage"] = {"ok": True}
+
+        _with_env(on, scenario)
+
+        # Slack chosen but not set up: the settings say so before anything runs
+        assert any("NOTIFY_VIA=slack needs SLACK_BOT_TOKEN" in p for p in _with_env(
+            {**on, "SLACK_BOT_TOKEN": ""}, envcheck.problems))
+        assert _with_env({**on, "NOTIFY_VIA": "telegram"}, slack.active) is False, "Telegram stays the default"
+        assert _with_env({"NOTIFY_VIA": "", "SLACK_BOT_TOKEN": "", "SLACK_CHANNEL": ""}, slack.active) is False
+        # a Slack token never reaches a log
+        assert "abcdefghij" not in notifier.redact(f"token {fake} used")
+        assert "SECRET" not in notifier.redact("https://files.slack.com/upload/v1/SECRET")
+    finally:
+        slack.requests.post, telegram.request, slack.MIN_INTERVAL, slack.BACKOFF_SECONDS = keep
