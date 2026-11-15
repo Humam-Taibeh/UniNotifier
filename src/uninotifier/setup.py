@@ -78,15 +78,32 @@ def render(template: str, values: dict[str, str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def account_sid() -> str | None:
+    """The security Id of the Windows account running this (S-1-5-21-...) — exact, where a name can
+    be ambiguous (a domain account, a renamed account)."""
+    try:
+        done = subprocess.run(["whoami", "/user", "/fo", "csv", "/nh"], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    found = re.search(r'"(S-1-[\d-]+)"', done.stdout or "")
+    return found.group(1) if done.returncode == 0 and found else None
+
+
 def restrict(path) -> bool:
     """Only your own Windows account may open the file (it holds your passwords). False when
-    that could not be done — the file is still written, and still git-ignored."""
-    user = os.environ.get("USERNAME")
-    if os.name != "nt" or not user:
+    that could not be done — the file is still written, and still git-ignored.
+    In two steps, so the file can never end up open to nobody: your account is given full access
+    first, and only when that worked is everyone else's inherited access taken away."""
+    if os.name != "nt":
+        return False
+    sid = account_sid()
+    if not sid:
         return False
     try:
-        done = subprocess.run(["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:F"],
-                              capture_output=True, timeout=30)
+        granted = subprocess.run(["icacls", str(path), "/grant:r", f"*{sid}:F"], capture_output=True, timeout=30)
+        if granted.returncode != 0:
+            return False
+        done = subprocess.run(["icacls", str(path), "/inheritance:r"], capture_output=True, timeout=30)
         return done.returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False
