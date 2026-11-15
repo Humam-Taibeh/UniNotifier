@@ -72,6 +72,58 @@ def cumulative(all_attempts: list[dict]) -> tuple[float | None, float]:
     return (sum(a["grade"] * a["hours"] for a in rows) / hours if hours else None), hours
 
 
+PRINT_TOLERANCE = 0.051      # the portal prints its cumulative average to one decimal place
+
+
+def agreement(semesters: list[dict]) -> dict:
+    """Does the rule above give THIS student's record the cumulative average the portal itself
+    prints? Every finished semester that prints one is recomputed from the attempts up to it:
+
+      {"checked": how many semesters could be compared,
+       "ok": True / False for the newest of them — the figure everything else builds on —
+             or None when the record prints nothing to compare with,
+       "computed", "printed": that semester's two figures, "worst": the largest gap of all}
+
+    A record the rule does not reproduce (a kind of course or a regulation not met before) must
+    not be shown as if it were: the caller shows the portal's own figure instead."""
+    found = {"checked": 0, "ok": None, "computed": None, "printed": None, "worst": 0.0}
+    for index, sem in enumerate(semesters):
+        printed = sem.get("cumulative")
+        if printed is None or sem.get("average") is None or not sem["courses"] \
+                or any(c["passed"] is None for c in sem["courses"]):
+            continue                              # nothing printed, or a term still in progress
+        older = next((s["cumulative"] for s in semesters[index + 1:] if s.get("cumulative") is not None), None)
+        if index == 0 and printed == older:
+            continue                              # the portal's field is late: still last term's figure
+        computed, _ = cumulative(attempts(semesters[index:]))
+        if computed is None:
+            continue
+        gap = abs(computed - printed)
+        if not found["checked"]:
+            found.update(ok=gap <= PRINT_TOLERANCE, computed=computed, printed=printed)
+        found["checked"] += 1
+        found["worst"] = max(found["worst"], gap)
+    return found
+
+
+def record_figures(semesters: list[dict]) -> dict:
+    """The record's own figures, for the transcript answer and the Grade Needed base:
+    record_cgpa / record_hours (every counted attempt) and base_cgpa / base_hours (the record
+    without the current term — its marks are locked into the planner separately, never twice).
+    When the rule does not reproduce the portal's figure on this record (agreement()), none of
+    them is given — only "unverified_cgpa", so the answer can say so and show the portal's."""
+    record_cgpa, record_hours = cumulative(attempts(semesters))
+    if record_cgpa is None:
+        return {}
+    if agreement(semesters)["ok"] is False:
+        return {"unverified_cgpa": round(record_cgpa, 2)}
+    figures = {"record_cgpa": round(record_cgpa, 2), "record_hours": record_hours}
+    base_cgpa, base_hours = cumulative(attempts(semesters[1:]))
+    if base_cgpa is not None:
+        figures.update(base_cgpa=base_cgpa, base_hours=base_hours)
+    return figures
+
+
 def current_roster(semesters: list[dict]) -> list[dict]:
     """The courses of the semester in progress: the newest block."""
     return list(semesters[0]["courses"]) if semesters else []

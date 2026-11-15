@@ -374,16 +374,13 @@ def _interpret(page, result: Result, text: str) -> None:
                 latest = next((s["cumulative"] for s in semesters if s["cumulative"] is not None), None)
                 if latest is not None:
                     result.figures["cgpa"] = latest
-                # the record computed directly: every attempt counts (failures at 35),
-                # a retaken course only once — this is what the portal's own figure is built from
-                record_cgpa, record_hours = gradebook.cumulative(gradebook.attempts(semesters))
-                if record_cgpa is not None:
-                    result.figures.update(record_cgpa=round(record_cgpa, 2), record_hours=record_hours)
-                # the base for this semester's targets: the record without the current term
-                # (its grades are locked into the planner separately — never counted twice)
-                base_cgpa, base_hours = gradebook.cumulative(gradebook.attempts(semesters[1:]))
-                if base_cgpa is not None:
-                    result.figures.update(base_cgpa=base_cgpa, base_hours=base_hours)
+                # the record computed directly: every attempt counts (failures at 35), a retaken
+                # course only once — and the base for this semester's targets. Only when that rule
+                # gives this record the figure the portal itself prints (gradebook.agreement)
+                result.figures.update(gradebook.record_figures(semesters))
+                if "unverified_cgpa" in result.figures:
+                    log.warning("The record rule does not reproduce the portal's cumulative average on this "
+                                "record: the portal's own figure is shown and the Grade Needed base is left alone")
                 # this term's retakes: {code: the old attempt as recorded}, for Grade Needed
                 report = gradebook.season_report(semesters, {})
                 result.data["retakes"] = {c["code"]: c["replaces"] for c in report["courses"]

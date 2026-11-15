@@ -95,9 +95,13 @@ def parse(html: str) -> dict | None:
             if hours is None or not cells[at["code"]]:
                 continue
             before = cells[at["prereqs"]] if "prereqs" in at and len(cells) > at["prereqs"] else ""
-            courses.append({"code": cells[at["code"]], "name": cells[at["name"]], "hours": hours,
-                            "status": STATUSES.get(cells[at["status"]], "open" if not cells[at["status"]] else "other"),
-                            "prereqs": prerequisites(before)})
+            word = cells[at["status"]]
+            course = {"code": cells[at["code"]], "name": cells[at["name"]], "hours": hours,
+                      "status": STATUSES.get(word, "open" if not word else "other"),
+                      "prereqs": prerequisites(before)}
+            if course["status"] == "other":
+                course["status_text"] = word        # a status not met before: shown as published, never guessed
+            courses.append(course)
         totals = _totals(panel)
         if not courses or len(totals) < 3:
             continue
@@ -162,6 +166,22 @@ def progress(plan: dict) -> dict:
             "term": sum(c["hours"] for c in current), "term_courses": len(current),
             "after": remaining - sum(_term_hours(cat) for cat in counted),
             "failed": sum(c["hours"] for c in failed), "failed_courses": len(failed)}
+
+
+def unknown_statuses(plan: dict) -> list[dict]:
+    """The courses whose status on the portal is a word this program does not know. The hours
+    of the summary are still right — they are the portal's own totals — but such a course is
+    neither counted as this term's nor as failed, and it is never suggested for registration."""
+    return [c for cat in plan["categories"] for c in cat["courses"] if c["status"] == "other"]
+
+
+def unknown_line(plan: dict) -> str | None:
+    courses = unknown_statuses(plan)
+    if not courses:
+        return None
+    words = " · ".join(dict.fromkeys(f"{FSI}{escape_md(c.get('status_text') or '?')}{PDI}" for c in courses))
+    return (f"⚠️ {_count(len(courses), 'course')} with a status I do not know ({words}) — "
+            "shown as the portal writes it; the hours above are the portal's own.")
 
 
 def placement(plan: dict) -> dict | None:
@@ -248,12 +268,14 @@ def progress_lines(plan: dict, retakes: int = 0, repeated: int = 0) -> list[str]
     exams = placement(plan)
     if exams and exams["left"]:
         left += f" · +{_n(exams['left'])} remedial"
-    return lines + [left] + [line for line in (placement_line(plan),) if line]
+    return lines + [left] + [line for line in (placement_line(plan), unknown_line(plan)) if line]
 
 
 def _course(course: dict) -> str:
     icon, note = {"in_progress": ("⏳", " — this term"), "failed": ("❌", " — failed, retake")}.get(
         course["status"], ("▫️", ""))
+    if course["status"] == "other":
+        icon, note = "❔", f" — {FSI}{escape_md(course.get('status_text') or '?')}{PDI} on the portal"
     return f"{LRM}{icon} {FSI}{escape_md(course['name'] or course['code'])}{PDI} · {_n(course['hours'])}h{note}"
 
 

@@ -526,6 +526,20 @@ as 35; a retaken course replaces its old attempt (matched by code or name) and i
 hours aren't counted twice. So the hours behind your CGPA are *all* attempted hours,
 not only passed ones — `/transcript` shows both.
 
+That rule is **proved on every record, every time it is read** (`gradebook.agreement`): the
+newest finished semester that prints a cumulative average is recomputed from the attempts up to
+it, and the two must agree to the portal's one printed decimal. When they do, the bot's finer
+figure is shown and becomes the Grade Needed base. When they do not — a record with a kind of
+course or a regulation the rule has not met — the transcript shows the **portal's own** figure
+with a ⚠️ line saying the bot's calculation does not match, and the Grade Needed base is left
+as it was. A term whose marks are all in while the portal's field still shows last term's
+figure is not a disagreement: the comparison moves to the semester before it.
+
+The study plan's hours (the degree, passed, left, per category — electives and free courses
+included) are never computed: they are the portal's own totals for the signed-in student. A
+course whose status there is a word the bot does not know is shown with that word (❔), is not
+counted as this term's or as failed, and is never offered in the Registration Plan.
+
 ### Grade Needed and Course Adjustments
 
 ZUJ grades on a 100-point scale. The rules, all in `gpa.py`: pass mark 50 per

@@ -181,6 +181,9 @@ def advise(plan: dict, kind: str = REGULAR) -> dict:
     for entry in entries:
         if _MILITARY.search(entry["course"]["name"]) and not graduating:
             entry["state"], entry["why"], entry["reason"] = "blocked", "graduation term only", "military"
+        if entry["course"]["status"] == "other":      # a status this program does not know: never suggested
+            entry["state"], entry["reason"] = "blocked", "status"
+            entry["why"] = f"the portal marks it «{entry['course'].get('status_text') or '?'}» — check it there"
         if entry["state"] == "blocked" and not entry["why"]:
             entry["why"] = "after " + " and ".join(_name(c) for c in entry["waits"])
     entries.sort(key=lambda e: (_ORDER[e["kind"]], -e["unlocks"], _level(e["course"]), e["course"]["code"]))
@@ -407,4 +410,10 @@ def blocked_lines(advice: dict) -> list[str]:
     military = [e for e in held if e["reason"] == "military"]
     if military:
         lines += ["", "🏁 *Graduation term only*"] + [course(e) for e in military]
+    unclear = [e for e in held if e["reason"] == "status"]
+    if unclear:
+        lines += ["", "❔ *A status I do not know — check it on the portal*"]
+        for entry in unclear:
+            word = escape_md(entry["course"].get("status_text") or "?")
+            lines += [course(entry), f"{LRM}      └ the portal marks it {FSI}{word}{PDI}"]
     return lines

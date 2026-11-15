@@ -54,6 +54,13 @@ All notable changes to this project are documented here. The format follows
   once — no more sign-ins or *sign in again* alerts after the course is over. `--login` turns it back on.
 
 ### Changed
+- The cumulative average the bot computes is checked against the portal on every record: it is shown,
+  and feeds Grade Needed, only when the same rule gives the newest finished semester the figure the
+  portal itself prints. A record it does not reproduce gets the portal's own figure and a ⚠️ line, and
+  the Grade Needed base is left alone — never a figure that is wrong for that student.
+- A study-plan course whose status is a word the bot does not know is shown with the portal's own word
+  (❔) and is never offered in the Registration Plan; it used to be listed as a course still to take.
+- An old transcript row without a result (withdrawn, never graded) is no longer counted as *in progress*.
 - The test suite is one file per topic instead of a single 9,000-line file; it runs the same way.
 
 ## [1.1.0] - 2026-11-11

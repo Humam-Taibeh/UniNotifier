@@ -344,6 +344,39 @@ def test_finals_check_ends_on_the_grades_screen():
             bot._portal_lock.release()
 
 
+def test_a_plan_status_the_program_does_not_know_is_never_guessed():
+    """Another student's plan can carry a status word not met before (an equivalence, a withdrawal).
+    Such a course is shown with the portal's own word, is not counted as this term's or as failed,
+    and is never offered for registration; the hours stay the portal's own totals."""
+    from uninotifier import degreeplan, registration
+
+    categories = [list(c) for c in REGISTRATION_PLAN]
+    categories[2] = ["متطلبات تخصص (اختيارية)", 3, 0, 3, [("معادلة", "0900331", "أمن الشبكات", 3),
+                                                          ("", "0900332", "الحوسبة السحابية", 3)]]
+    plan = degreeplan.parse(_plan_html(categories))
+    course = next(c for cat in plan["categories"] for c in cat["courses"] if c["code"] == "0900331")
+    assert course["status"] == "other" and course["status_text"] == "معادلة"
+    assert degreeplan.unknown_statuses(plan) == [course]
+    assert degreeplan.unknown_statuses(degreeplan.parse(_plan_html(REGISTRATION_PLAN))) == []
+    known = degreeplan.progress(degreeplan.parse(_plan_html(REGISTRATION_PLAN)))
+    assert degreeplan.progress(plan) == known, "the figures are the portal's totals: the unknown word changes none"
+
+    summary = degreeplan.progress_lines(plan)
+    assert summary[-1].startswith("⚠️ 1 course with a status I do not know (") and "معادلة" in summary[-1]
+    assert not any("⚠️" in line for line in degreeplan.progress_lines(degreeplan.parse(_plan_html(REGISTRATION_PLAN))))
+    listed = [line.lstrip(degreeplan.LRM) for line in degreeplan.remaining_lines(plan)]
+    assert any(line.startswith("❔") and "أمن الشبكات" in line and "معادلة" in line for line in listed), listed
+
+    advice = registration.advise(plan)
+    entry = next(e for e in advice["entries"] if e["course"]["code"] == "0900331")
+    assert entry["state"] == "blocked" and entry["reason"] == "status" and "معادلة" in entry["why"]
+    for hours, _ in registration.options(advice):
+        assert "0900331" not in [e["course"]["code"] for e in registration.propose(advice, hours)["entries"]], hours
+    assert registration.check(advice, ["0900331", "0900332"])["total"] == 3, "nor taken by a choice of your own"
+    held = "\n".join(registration.blocked_lines(advice))
+    assert "A status I do not know" in held and "معادلة" in held and _legacy_markdown_ok(held)
+
+
 def test_registration_plan():
     """What to register next term, from the plan and its prerequisites: this term's courses count
     as passed, a failed course comes first, a course is held back until what comes before it is

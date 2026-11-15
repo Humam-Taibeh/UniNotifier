@@ -33,17 +33,22 @@ def standing(semesters: list[dict]) -> dict:
     """Where every course of the record stands, each counted once at its newest attempt: hours passed,
     in progress, failed and not retaken yet ("to repeat"), and how many attempts a later retake replaced."""
     kept: list[dict] = []
+    newest: list[dict] = []
     retaken = 0
-    for sem in semesters:                                   # newest first
+    for index, sem in enumerate(semesters):                 # newest first
         for course in sem["courses"]:
             if any(gradebook._same_course(course, k) for k in kept):
                 retaken += 1                                # a newer attempt replaced this one
             else:
                 retaken += 1 if course.get("repeated") else 0   # the portal says it was repeated
                 kept.append(course)
+                if index == 0:
+                    newest.append(course)
     hours = lambda rows: sum(c["hours"] for c in rows)      # noqa: E731
     passed = [c for c in kept if c["passed"] is True]
-    progress = [c for c in kept if c["passed"] is None]
+    # only the newest term can be in progress: an old row without a result (withdrawn, never
+    # graded) is not a course being taken
+    progress = [c for c in newest if c["passed"] is None]
     repeat = [c for c in kept if c["passed"] is False]
     return {"passed": hours(passed), "in_progress": hours(progress), "to_repeat": hours(repeat),
             "retaken": retaken, "courses_passed": len(passed)}
@@ -66,6 +71,10 @@ def summary_lines(semesters: list[dict], figures: dict, status: str | None = Non
         shown = (f" (Portal display: {gpa.fmt(figures['cgpa'])}%)"
                  if "cgpa" in figures and "record_cgpa" in figures and figures["cgpa"] != figures["record_cgpa"] else "")
         lines.append(f"🎓 *Cumulative GPA:* {cgpa:.2f}%{shown}")
+        if "unverified_cgpa" in figures:
+            lines.append(f"⚠️ This is the portal's own figure. My calculation gives {figures['unverified_cgpa']:.2f}% "
+                         "and does not match your record, so I do not use it — Grade Needed keeps the base "
+                         "you entered.")
     state = standing(semesters) if semesters else None
     if plan:
         if status:

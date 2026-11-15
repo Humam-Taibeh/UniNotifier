@@ -114,6 +114,53 @@ def test_gradebook_record():
     assert gradebook.season_report([], {})["total"] == 0
 
 
+def test_the_record_rule_is_proved_against_the_portal_on_every_record():
+    """The cumulative average the bot computes is shown — and feeds Grade Needed — only when the
+    same rule gives this record the figure the portal itself prints. A record it does not reproduce
+    (another student's, with a kind of course not met before) gets the portal's own figure, said so."""
+    from uninotifier import gradebook, transcript
+
+    def sem(term, courses, average=None, cumulative=None):
+        return {"term": term, "average": average, "cumulative": cumulative, "courses": [
+            {"code": code, "name": name, "hours": hours, "mark": mark, "repeated": False,
+             "passed": None if mark is None else mark >= 50} for code, name, hours, mark in courses]}
+    now = sem("Term 3", [("0900301", "C", 3, None)], cumulative=71.7)          # in progress: last term's figure
+    second = sem("Term 2", [("0900201", "B", 3, 35), ("0900202", "D", 3, 90)], average=62.5, cumulative=71.7)
+    first = sem("Term 1", [("0900101", "A", 3, 80), ("0900102", "E", 3, 81.6)], average=80.8, cumulative=80.8)
+    record = [now, second, first]
+
+    check = gradebook.agreement(record)
+    assert check["checked"] == 2 and check["ok"] is True and check["printed"] == 71.7, check
+    assert abs(check["computed"] - 71.65) < 1e-9 and check["worst"] <= gradebook.PRINT_TOLERANCE
+    figures = gradebook.record_figures(record)
+    assert figures == {"record_cgpa": 71.65, "record_hours": 12, "base_cgpa": check["computed"], "base_hours": 12}
+
+    # the same marks under a regulation the rule does not know (the portal's figure is another one)
+    odd = [now | {"cumulative": 76.4}, second | {"cumulative": 76.4}, first]
+    assert gradebook.agreement(odd)["ok"] is False
+    assert gradebook.record_figures(odd) == {"unverified_cgpa": 71.65}, "no figure of the bot's own, no Grade Needed base"
+    lines = transcript.summary_lines(odd, {"cgpa": 76.4, "passed_hours": 9.0, **gradebook.record_figures(odd)})
+    assert lines[0] == "🎓 *Cumulative GPA:* 76.40%", "the portal's own figure"
+    assert lines[1].startswith("⚠️ This is the portal's own figure. My calculation gives 71.65%"), lines[1]
+    assert not any("Attempted" in line for line in lines)
+
+    # an older semester that disagrees does not hide a newest one that agrees (the portal recalculated since)
+    assert gradebook.agreement([now, second, first | {"cumulative": 99.0}])["ok"] is True
+    # finals: every mark is in, but the portal's field still shows last term's figure — not a disagreement
+    late = [sem("Term 3", [("0900301", "C", 3, 60)], average=60.0, cumulative=71.7), second, first]
+    check = gradebook.agreement(late)
+    assert check["ok"] is True and check["checked"] == 2 and check["printed"] == 71.7
+    assert gradebook.record_figures(late)["record_cgpa"] == 69.32, "the new mark is in the bot's figure already"
+    # nothing printed to compare with (a first term): the bot's figure stands, as before
+    fresh = [sem("Term 1", [("0900101", "A", 3, 80)])]
+    assert gradebook.agreement(fresh)["ok"] is None and gradebook.record_figures(fresh)["record_cgpa"] == 80.0
+    assert gradebook.record_figures([now]) == {} and gradebook.agreement([])["checked"] == 0
+
+    # an old row with no result (withdrawn, never graded) is not a course in progress
+    old_gap = [now, sem("Term 2", [("0900201", "B", 3, None), ("0900202", "D", 3, 90)])]
+    assert transcript.standing(old_gap)["in_progress"] == 3.0, "only the newest term's"
+
+
 def test_results_page_parser():
     from uninotifier import portal_pages
 
