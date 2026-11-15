@@ -374,8 +374,26 @@ def converse_slack(console: Console, saved=envcheck.value) -> dict[str, str]:
                          "Was it installed to the workspace (Install to Workspace - Allow)?") from e
     console.say("   [ OK ] Look at Slack: UniNotifier just wrote to you (under Apps).")
     console.say(f"   Its picture (optional): Basic Information -> App icon -> upload {SLACK_ICON}")
+    console.say("")
+    console.say("6. The buttons and menus: Basic Information -> App-Level Tokens -> Generate Token and Scopes,")
+    console.say("   name it socket, Add Scope connections:write, Generate, and copy the token (it starts with xapp-)")
+    while True:
+        app = _ask(console, "SLACK_APP_TOKEN", "App-Level Token (Enter = messages only, no buttons)",
+                   saved("SLACK_APP_TOKEN"), secret=True, optional=True)
+        if not app:
+            console.say("   Messages only: run this again with the token to get the buttons and menus.")
+            break
+        try:
+            slack.call(app, "apps.connections.open")
+            console.say("   [ OK ] Buttons and menus: on - you can also type to the bot (menu, tasks, check ...)")
+            break
+        except slack.SlackError:
+            console.say("   Slack does not accept this token. It is the App-Level Token (xapp-), with connections:write.")
+        except requests.RequestException:
+            raise SetupError("Slack cannot be reached from this PC right now - nothing was changed. Try again later.")
     on = _yes(console, "Send your notifications to Slack from now on (instead of Telegram)?", True)
-    return {"SLACK_BOT_TOKEN": token, "SLACK_CHANNEL": channel, "NOTIFY_VIA": "slack" if on else "telegram"}
+    return {"SLACK_BOT_TOKEN": token, "SLACK_CHANNEL": channel, "SLACK_USER": person["id"],
+            "SLACK_APP_TOKEN": app, "NOTIFY_VIA": "slack" if on else "telegram"}
 
 
 def from_answers(answers: dict) -> dict[str, str]:

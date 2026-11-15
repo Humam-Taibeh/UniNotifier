@@ -325,8 +325,14 @@ def test_the_setup_asks_five_things_and_writes_the_settings_file():
 
         # --- --slack: the app's settings copied for pasting, the token checked, you found, a first message
         from uninotifier import slack
-        keep_slack = (slack.who, slack.people, slack.conversation, slack.post, setup.copy_to_clipboard)
+        keep_slack = (slack.who, slack.people, slack.conversation, slack.post, setup.copy_to_clipboard, slack.call)
         clipboard, posted = [], []
+
+        def app_check(token, method, data=None, timeout=None):
+            assert method == "apps.connections.open"
+            if token != "xapp-good-token-2222":
+                raise slack.SlackError("invalid_auth")
+            return {"ok": True, "url": "wss://made.up/"}
 
         def who(token):
             if token != "xoxb-good-token-1111":
@@ -338,10 +344,13 @@ def test_the_setup_asks_five_things_and_writes_the_settings_file():
             slack.conversation = lambda token, user: {"U2": "D0999ZZZZ"}[user]
             slack.post = lambda token, channel, text: posted.append((channel, text)) or {"ok": True}
             setup.copy_to_clipboard = lambda text: clipboard.append(text) or True
+            slack.call = app_check
             console = Script(["not-a-slack-token",                   # not the shape: asked again
                               "xoxb-bad-token-0000",                 # refused by Slack: asked again
                               "xoxb-good-token-1111",
                               "2",                                   # which of the two people you are
+                              "xapp-bad-token-0000",                 # the app-level token, refused: asked again
+                              "xapp-good-token-2222",
                               ""])                                   # messages to Slack: yes (the default)
             assert setup.main(["--slack"], console) == 0, console.said
             assert json.loads(clipboard[0])["oauth_config"]["scopes"]["bot"], "the manifest is what was copied"
@@ -350,10 +359,13 @@ def test_the_setup_asks_five_things_and_writes_the_settings_file():
             saved = dotenv_values(paths.ENV_FILE)
             assert (saved["SLACK_BOT_TOKEN"], saved["SLACK_CHANNEL"], saved["NOTIFY_VIA"]) == (
                 "xoxb-good-token-1111", "D0999ZZZZ", "slack")
+            assert (saved["SLACK_APP_TOKEN"], saved["SLACK_USER"]) == ("xapp-good-token-2222", "U2")
+            assert all(secret for prompt, secret in console.asked if "App-Level" in prompt)
+            assert any("Buttons and menus: on" in line for line in console.said)
             assert saved["TELEGRAM_CHAT_ID"] == "555", "the Telegram settings stay as they were"
             assert any("setup_tasks.ps1" in line for line in console.said), "it says how the bot picks it up"
         finally:
-            slack.who, slack.people, slack.conversation, slack.post, setup.copy_to_clipboard = keep_slack
+            slack.who, slack.people, slack.conversation, slack.post, setup.copy_to_clipboard, slack.call = keep_slack
     finally:
         (setup.restrict, setup.telegram_bot, setup.telegram_people, setup.telegram_hello, setup.requests.get,
          paths.ENV_FILE) = keep

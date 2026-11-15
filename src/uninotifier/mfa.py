@@ -31,6 +31,7 @@ from pathlib import Path
 from uninotifier import fileio
 from uninotifier import notifier
 from uninotifier import slack
+from uninotifier import slackbot
 from uninotifier.notifier import escape_md
 from uninotifier.zuj_auth import MFARequiredError
 from uninotifier import paths
@@ -185,7 +186,7 @@ class TelegramMFA:
             png = box.screenshot() if box.count() and box.is_visible() else page.screenshot()
         except Exception:
             log.exception("Could not screenshot the sign-in page")
-        if slack.active():               # Slack: the picture and the words; its buttons need Telegram
+        if slack.active() and not slackbot.interactive():   # Slack without the bot: the picture and the words
             if not (png and notifier.send_png_file(self.token, self.chat_id, png, "sign-in.png", caption)):
                 notifier.send_message(self.token, self.chat_id, caption)
             self.message_id = None

@@ -144,10 +144,46 @@ def _sections(lines: list[str]) -> list[dict]:
     return blocks
 
 
-def blocks(text: str, reply_markup=None) -> list[dict] | None:
+def _markup(reply_markup) -> list[list[dict]]:
+    try:
+        markup = json.loads(reply_markup) if isinstance(reply_markup, str) else (reply_markup or {})
+    except ValueError:
+        return []
+    rows = markup.get("inline_keyboard") if isinstance(markup, dict) else None
+    return [[b for b in row if isinstance(b, dict)] for row in rows or [] if isinstance(row, list)]
+
+
+def buttons(reply_markup) -> list[dict]:
+    """Telegram's keyboard as Slack's: one row of buttons per row, a button that opens a page opening
+    it, any other carrying its Telegram callback data as its value (slackbot hands the press to the
+    bot exactly as Telegram would). ✅ is Slack's green button, 🗑 its red one."""
+    out = []
+    for r, row in enumerate(_markup(reply_markup)):
+        elements = []
+        for c, button in enumerate(row[:25]):
+            label = str(button.get("text") or "·")
+            element = {"type": "button", "text": {"type": "plain_text", "text": label[:75], "emoji": True}}
+            if button.get("url"):
+                element.update(url=str(button["url"])[:3000], action_id=f"u{r}_{c}")
+            elif button.get("callback_data"):
+                element.update(value=str(button["callback_data"])[:2000], action_id=f"b{r}_{c}")
+            else:
+                continue
+            if label.startswith("✅"):
+                element["style"] = "primary"
+            elif label.startswith("🗑"):
+                element["style"] = "danger"
+            elements.append(element)
+        if elements:
+            out.append({"type": "actions", "block_id": f"row{r}", "elements": elements})
+    return out
+
+
+def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | None:
     """The message as a Slack card: its title as a header, its "Label: value" lines side by side in
     two columns, its paragraphs as sections, its italic notes small and grey, the links that open a
-    page at the bottom. None when the message is too long for a card (it then goes as text)."""
+    page at the bottom. None when the message is too long for a card (it then goes as text).
+    `live`: the bot is connected to Slack (slackbot), so the keyboard becomes real buttons."""
     lines = (text or "").split("\n")
     out: list[dict] = []
     first = lines[0].strip() if lines else ""
@@ -194,10 +230,13 @@ def blocks(text: str, reply_markup=None) -> list[dict] | None:
     flush_prose()
     if fields:
         flush_fields()
-    links = link_lines(reply_markup)
-    if links:
-        out.append({"type": "divider"})
-        out.append({"type": "context", "elements": [{"type": "mrkdwn", "text": "   ".join(links)[:2900]}]})
+    if live:
+        out.extend(buttons(reply_markup))
+    else:
+        links = link_lines(reply_markup)
+        if links:
+            out.append({"type": "divider"})
+            out.append({"type": "context", "elements": [{"type": "mrkdwn", "text": "   ".join(links)[:2900]}]})
     if not out or len(out) > MAX_BLOCKS:
         return None
     return out
@@ -320,6 +359,30 @@ def post(token: str, channel: str, text: str, card: list[dict] | None = None, co
     return call(token, "chat.postMessage", data)
 
 
+def update(token: str, channel: str, ts: str, text: str, card: list[dict] | None, colour: str = DEFAULT_TONE) -> dict:
+    """A message already sent, rewritten in place (a screen that changes, buttons that go)."""
+    data = {"channel": channel, "ts": ts, "text": text}
+    _wait_turn()
+    if card:
+        try:
+            return call(token, "chat.update", {**data, **framed(card, colour)})
+        except SlackError as e:
+            if "block" not in str(e) and "invalid_arguments" not in str(e):
+                raise
+            log.warning("Slack refused the card of an edit (%s) — written as text", e)
+    return call(token, "chat.update", {**data, "blocks": "[]", "attachments": "[]"})
+
+
+def delete(token: str, channel: str, ts: str) -> bool:
+    try:
+        call(token, "chat.delete", {"channel": channel, "ts": ts})
+        return True
+    except SlackError as e:
+        return "message_not_found" in str(e)                 # gone already: what was wanted
+    except requests.RequestException:
+        return False
+
+
 def upload(token: str, channel: str, files: list[tuple[str, bytes]], comment: str = "") -> dict:
     """Files into the conversation, as ONE message with `comment` above them (Slack's upload in two
     steps: an address for each file, then one call that shares them all)."""
@@ -334,7 +397,9 @@ def upload(token: str, channel: str, files: list[tuple[str, bytes]], comment: st
     data = {"files": json.dumps(shared), "channel_id": channel}
     if comment.strip():
         data["initial_comment"] = comment
-    return call(token, "files.completeUploadExternal", data, timeout=UPLOAD_TIMEOUT)
+    answer = call(token, "files.completeUploadExternal", data, timeout=UPLOAD_TIMEOUT)
+    answer["file_ids"] = [f["id"] for f in shared]
+    return answer
 
 
 # ------------------------------------------------------------------ Telegram's calls, said in Slack
@@ -356,17 +421,25 @@ def deliver(method: str, data: dict, file_name: str = "file", file_path: Path | 
     if not found:
         return False
     token, channel = found
+    from uninotifier import slackbot                  # the bot side; it imports this module
+    live, message_id = slackbot.interactive(), None
     try:
         if method == "sendMessage":
-            post(token, channel, compose(data.get("text", ""), data.get("reply_markup")),
-                 blocks(data.get("text", ""), data.get("reply_markup")), tone(data.get("text", "")))
+            if live:                                  # real buttons, and a number to press and edit them by
+                message_id = slackbot.send(data.get("text", ""), data.get("reply_markup"))
+            else:
+                post(token, channel, compose(data.get("text", ""), data.get("reply_markup")),
+                     blocks(data.get("text", ""), data.get("reply_markup")), tone(data.get("text", "")))
         elif method in ("sendDocument", "sendPhoto"):
             one = _file(file_name, file_path, file_bytes)
             if one is None:                           # a Telegram file_id: Slack cannot use it
                 if outcome is not None:
                     outcome.update(status=400, description="file: Slack needs the file itself")
                 return False
-            upload(token, channel, [one], compose(data.get("caption", ""), data.get("reply_markup")))
+            if live:                                  # the card with its buttons, the file right under it
+                message_id = slackbot.send(data.get("caption", ""), data.get("reply_markup"), files=[one])
+            else:
+                upload(token, channel, [one], compose(data.get("caption", ""), data.get("reply_markup")))
         elif method == "sendMediaGroup":
             media = json.loads(data["media"]) if isinstance(data.get("media"), str) else (data.get("media") or [])
             files, captions = [], []
@@ -391,8 +464,8 @@ def deliver(method: str, data: dict, file_name: str = "file", file_path: Path | 
     except (requests.RequestException, OSError) as e:
         log.error("Slack %s failed: %s", method, e)
         return False
-    if outcome is not None:
-        outcome["body"] = None                        # no Telegram message id: nothing to edit later
+    if outcome is not None:                           # as Telegram's answer: the message's number, to edit it
+        outcome["body"] = {"ok": True, "result": {"message_id": message_id}} if message_id else None
     return True
 
 

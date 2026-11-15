@@ -849,3 +849,132 @@ def test_no_screen_is_sent_around_the_menu():
             if "reply_markup" in call or "inline_keyboard" in call:
                 offenders.append(f"{path.name}: {source[:found.start()].count(chr(10)) + 1}")
     assert not offenders, f"screens sent around the menu: {offenders}"
+
+
+def test_the_bot_lives_in_slack():
+    """With Slack's live connection set up (SLACK_APP_TOKEN, SLACK_USER) the whole bot works in Slack
+    through the same code: its screens are cards with real buttons, numbered like Telegram messages and
+    rewritten in place; a button pressed in Slack reaches the bot as Telegram's callback_query; typed
+    words work as the commands; only you are the owner — a stranger's press is dropped by access.py."""
+    from support import OWNER_ID as OWNER, _with_env
+    from uninotifier import slack, slackbot
+
+    bot = _package("uninotifier.bot")
+    calls, stamps = [], iter(f"17000000{n:02d}.0001" for n in range(1, 99))
+
+    class Answer:
+        status_code, ok, headers = 200, True, {}
+
+        def __init__(self, body):
+            self._body = body
+
+        def json(self):
+            return self._body
+
+    def fake_post(url, data=None, timeout=None, headers=None):
+        method = url.rsplit("/", 1)[-1]
+        calls.append((method, data))
+        if method == "chat.postMessage":
+            return Answer({"ok": True, "ts": next(stamps)})
+        if method == "files.getUploadURLExternal":
+            return Answer({"ok": True, "upload_url": "https://files.slack.com/upload/v1/Z", "file_id": "F9"})
+        return Answer({"ok": True})
+
+    def sent_rows(data):
+        frames = json.loads(data.get("attachments") or "[]")
+        return [b for f in frames for b in f["blocks"] if b["type"] == "actions"]
+
+    def no_telegram(*a, **k):
+        raise AssertionError("Telegram must not be used while the bot lives in Slack")
+
+    keep = (slack.requests.post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect)
+    owner = _as_owner(bot)
+    on = {"NOTIFY_VIA": "slack", "SLACK_BOT_TOKEN": "-".join(("xoxb", "1", "2", "made-up")), "SLACK_CHANNEL": "D0123ABCD",
+          "SLACK_APP_TOKEN": "-".join(("xapp", "1", "made-up")), "SLACK_USER": "U0OWNER1", "TELEGRAM_CHAT_ID": OWNER}
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            slack.requests.post, telegram.request, slack.MIN_INTERVAL = fake_post, no_telegram, 0
+            slackbot.STORE, slackbot._connect = Path(tmp) / "slack_messages.json", lambda: None
+
+            def scenario():
+                assert slackbot.interactive()
+                # a screen: a card with real buttons, and a number to edit it by
+                sent = notifier.call_api("T", "sendMessage", {"chat_id": OWNER, "text": "🏠 *Main Menu*",
+                                         "reply_markup": {"inline_keyboard": [[{"text": "⏳ Tasks", "callback_data": "tasks"},
+                                                                               {"text": "🌐 Portal", "url": "https://p.example/"}]]}})
+                assert sent["message_id"] == 1 and sent["chat"]["id"] == int(OWNER)
+                method, data = calls[-1]
+                row = sent_rows(data)[0]["elements"]
+                assert method == "chat.postMessage" and row[0]["value"] == "tasks" and row[1]["url"] == "https://p.example/"
+                first_ts = "1700000001.0001"
+                assert slackbot.entry(1)["ts"] == first_ts
+
+                # rewritten in place — as Telegram, an edit without a keyboard leaves none
+                assert notifier.call_api("T", "editMessageText", {"chat_id": OWNER, "message_id": 1,
+                                                                  "text": "⏳ *Tasks*"})["message_id"] == 1
+                method, data = calls[-1]
+                assert method == "chat.update" and data["ts"] == first_ts and not sent_rows(data)
+                assert notifier.call_api("T", "editMessageText", {"message_id": 99, "text": "x"}) is None, "unknown: as Telegram"
+                assert notifier.call_api("T", "sendChatAction", {"action": "typing"}) is True
+
+                # your press -> Telegram's callback_query, for the message it was on
+                slackbot.take("interactive", {"type": "block_actions", "user": {"id": "U0OWNER1"},
+                                              "container": {"type": "message_attachment", "message_ts": first_ts},
+                                              "actions": [{"action_id": "b0_0", "value": "menu", "action_ts": "1.5"},
+                                                          {"action_id": "u0_1", "url": "https://p.example/"}]})
+                updates = slackbot.get_updates(None, 0)
+                assert len(updates) == 1, "a button that opens a page is Slack's own business"
+                press = updates[0]
+                assert press["callback_query"]["data"] == "menu" and press["callback_query"]["message"]["message_id"] == 1
+                assert access.is_owner(press)
+                # ... and through the bot's own code: the main menu is drawn over that same card
+                calls.clear()
+                bot.dispatch(press)
+                assert any(m == "chat.update" and d["ts"] == first_ts and "UniNotifier System" in d["text"]
+                           for m, d in calls), calls
+                menu = next(d for m, d in calls if m == "chat.update")
+                assert sent_rows(menu), "the menu has its buttons"
+
+                # someone else in the workspace: not the owner
+                slackbot.take("interactive", {"type": "block_actions", "user": {"id": "U0STRANGER"},
+                                              "container": {"message_ts": first_ts},
+                                              "actions": [{"action_id": "b0_0", "value": "menu", "action_ts": "1.6"}]})
+                assert not access.is_owner(slackbot.get_updates(None, 0)[0])
+
+                # typed words: the commands, without Slack's "/"; anything else as typed
+                for typed, read in (("menu", "/start"), ("Tasks", "/tasks"), ("need 85", "/need 85"),
+                                    ("check", "/check"), ("hello there", "hello there"), ("&lt;3", "<3")):
+                    slackbot.take("events_api", {"event": {"type": "message", "channel_type": "im", "user": "U0OWNER1",
+                                                           "text": typed, "ts": "1700000099.1"}})
+                    message = slackbot.get_updates(None, 0)[0]["message"]
+                    assert message["text"] == read and access.is_owner({"message": message}), (typed, message)
+                slackbot.take("events_api", {"event": {"type": "message", "channel_type": "im", "bot_id": "B1",
+                                                       "text": "my own card", "ts": "1.1"}})
+                assert slackbot.get_updates(None, 0) == [], "the app's own messages are not news"
+
+                # a file under its card; deleting the message takes both away
+                calls.clear()
+                pic = notifier.upload("T", "sendPhoto", {"chat_id": OWNER, "caption": "🔑 *Sign in*",
+                                                          "reply_markup": json.dumps({"inline_keyboard": [[{"text": "📱 SMS", "callback_data": "mfa:sms"}]]})},
+                                      "photo", "sign-in.png", b"png")
+                assert [m for m, _ in calls] == ["chat.postMessage", "files.getUploadURLExternal", "Z",
+                                                 "files.completeUploadExternal"]
+                assert slackbot.entry(pic["message_id"])["files"] == ["F9"]
+                calls.clear()
+                assert notifier.call_api("T", "deleteMessage", {"message_id": pic["message_id"]}) is True
+                assert [m for m, _ in calls] == ["files.delete", "chat.delete"] and slackbot.entry(pic["message_id"]) is None
+
+                # a Moodle message from the 15-minute check: real buttons too, and its number handed back
+                reply = {}
+                assert notifier.send_message("T", OWNER, "📢 *New post*", rows=[[{"text": "✅ Mark as done", "callback_data": "done:5"}]],
+                                             reply=reply)
+                assert reply["body"]["result"]["message_id"] == slackbot.number_of("1700000003.0001")
+                button = sent_rows(calls[-1][1])[0]["elements"][0]
+                assert button["value"] == "done:5" and button["style"] == "primary"
+
+            _with_env(on, scenario)
+            # without the live connection's token, the bot stays on Telegram (messages may still go to Slack)
+            assert _with_env({**on, "SLACK_APP_TOKEN": ""}, slackbot.interactive) is False
+        finally:
+            slack.requests.post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect = keep
+            bot.CHAT_ID, access.ADMIN_USER_ID = owner

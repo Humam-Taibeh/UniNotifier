@@ -23,6 +23,7 @@ from dotenv import dotenv_values
 from uninotifier import fileids
 from uninotifier import paths
 from uninotifier import slack
+from uninotifier import slackbot
 from uninotifier import telegram
 
 log = logging.getLogger("uninotifier")
@@ -357,7 +358,10 @@ def call_api(token: str, method: str, data: dict | None = None, timeout: int = 2
              outcome: dict | None = None) -> dict | None:
     """Single-shot Bot API call for the interactive bot; returns the 'result'
     field, or None on any failure. No retry loop: the polling loop retries.
-    `outcome`, when given, receives {"retry_after": seconds} when Telegram asked to slow down."""
+    `outcome`, when given, receives {"retry_after": seconds} when Telegram asked to slow down.
+    With the bot living in Slack (slackbot.interactive) the same call is answered there."""
+    if slackbot.interactive():
+        return slackbot.call(method, data or {}, timeout)
     try:
         resp = telegram.request(token, method, json=data or {}, timeout=timeout)
         body = resp.json()
@@ -479,6 +483,8 @@ def send_png_files(token: str, chat_id: str, pngs: list[bytes], filename: str) -
 def upload(token: str, method: str, data: dict, field: str, file_name: str, payload: bytes) -> dict | None:
     """Single-shot upload that returns Telegram's result (e.g. the message id,
     needed to edit the message later). None on any failure."""
+    if slackbot.interactive():
+        return slackbot.upload(method, data, field, file_name, payload)
     try:
         resp = telegram.request(token, method, data=data, files={field: (file_name, payload)}, timeout=60)
         body = resp.json()
