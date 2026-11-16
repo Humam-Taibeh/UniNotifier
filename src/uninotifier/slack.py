@@ -289,7 +289,8 @@ def _fewer(children: list[dict], kind: str) -> list[dict]:
 
 
 def boxed(card: list[dict], title: str = HOME_TITLE) -> list[dict]:
-    """The card inside a box (Slack's container block): its title as the box's title, a line under
+    """The card inside a box (Slack's container block; emoji:False in its title — Slack turns an emoji
+    into its :name: and the title cannot draw that back, a lone emoji showed as ":hourglass_flowing_sand:"): its title as the box's title, a line under
     it, everything else inside — the words on the box, not on Slack's background, and nothing ever
     folded under "Show more". A card with nothing under its title stays as it is."""
     children = list(card)
@@ -311,7 +312,7 @@ def boxed(card: list[dict], title: str = HOME_TITLE) -> list[dict]:
     for kind in ("actions", "section"):
         if len(children) > BOX_CHILDREN:
             children = _fewer(children, kind)
-    box = {"type": "container", "title": {"type": "plain_text", "text": title[:HEADER_LIMIT], "emoji": True},
+    box = {"type": "container", "title": {"type": "plain_text", "text": title[:HEADER_LIMIT], "emoji": False},
            "has_header_divider": True, "child_blocks": children[:BOX_CHILDREN]}
     if subtitle:
         box["subtitle"] = {"type": "mrkdwn", "text": subtitle}
@@ -377,7 +378,7 @@ def notice(card: list[dict]) -> dict | None:
     if len(buttons) > CARD_BUTTONS or len(body_text) > CARD_TEXT or len(small_text) > CARD_TEXT \
             or len(title) > HEADER_LIMIT or len(subtitle) > HEADER_LIMIT:
         return None
-    out = {"type": "card", "title": {"type": "plain_text", "text": title, "emoji": True}}
+    out = {"type": "card", "title": {"type": "plain_text", "text": title, "emoji": False}}
     if subtitle:
         out["subtitle"] = {"type": "mrkdwn", "text": subtitle}
     if body_text:
