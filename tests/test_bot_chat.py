@@ -1031,6 +1031,14 @@ def test_the_bot_lives_in_slack():
                 assert notifier.call_api("T", "deleteMessage", {"message_id": pic["message_id"]}) is True
                 assert [m for m, _ in calls] == ["files.delete", "chat.delete"] and slackbot.entry(pic["message_id"]) is None
 
+                # a file sent again replaces its older copies in Slack's Files tab (only the same name, never the new one)
+                old = slackbot.remember("1.9", "old", None, ["F1"], ["Weekly.pdf"])
+                other = slackbot.remember("1.8", "other", None, ["F3"], ["Else.pdf"])
+                calls.clear()
+                slackbot._retire_old_copies("T", ["Weekly.pdf"], ["F2"])
+                assert [m for m, _ in calls] == ["files.delete"], calls
+                assert slackbot.entry(old)["files"] == [] and slackbot.entry(other)["files"] == ["F3"]
+
                 # a Moodle message from the 15-minute check: real buttons too, and its number handed back
                 reply = {}
                 assert notifier.send_message("T", OWNER, "📢 *New post*", rows=[[{"text": "✅ Mark as done", "callback_data": "done:5"}]],

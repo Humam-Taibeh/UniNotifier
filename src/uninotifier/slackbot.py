@@ -88,13 +88,15 @@ def _save(data: dict) -> None:
     fileio.write_json_atomic(STORE, data)
 
 
-def remember(ts: str, text: str = "", markup=None, files: list[str] | None = None) -> int:
+def remember(ts: str, text: str = "", markup=None, files: list[str] | None = None,
+             names: list[str] | None = None) -> int:
     """A new message's number (as Telegram would give it), kept with what it shows."""
     with fileio.write_lock(STORE):
         data = _load()
         number = int(data.get("next") or 1)
         data["next"] = number + 1
-        data["messages"][str(number)] = {"ts": ts, "text": text, "markup": _rows_json(markup), "files": files or []}
+        data["messages"][str(number)] = {"ts": ts, "text": text, "markup": _rows_json(markup), "files": files or [],
+                                       "names": names or []}
         _save(data)
     return number
 
@@ -201,7 +203,28 @@ def send(text: str, markup=None, files: list[tuple[str, bytes]] | None = None) -
         except (slack.SlackError, requests.RequestException, OSError):
             slack.delete(token, channel, ts)
             raise
-    return remember(ts, text, markup, file_ids)
+        _retire_old_copies(token, [name for name, _ in files], file_ids)
+    return remember(ts, text, markup, file_ids, [name for name, _ in files] if files else None)
+
+
+def _retire_old_copies(token: str, names: list[str], keep: list[str]) -> None:
+    """A file sent again (the weekly timetable each time it is asked for) replaces its older copies
+    in Slack's Files tab: they only fill the free plan's storage. Best effort — never raises."""
+    try:
+        with fileio.write_lock(STORE):
+            data = _load()
+            for found in data["messages"].values():
+                if not set(found.get("names") or []) & set(names):
+                    continue
+                for file_id in [f for f in found.get("files") or [] if f not in keep]:
+                    try:
+                        slack.call(token, "files.delete", {"file": file_id})
+                    except (slack.SlackError, requests.RequestException):
+                        pass
+                found["files"], found["names"] = [], []
+            _save(data)
+    except Exception as e:                                    # a tidy-up must never fail a send
+        log.warning("Slack: old copies of a file were not removed: %s", e)
 
 
 def _edit(message_id, text: str | None, markup, keep_markup: bool = False) -> dict | None:
