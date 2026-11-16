@@ -42,6 +42,7 @@ MODES = ("telegram", "slack")
 
 _pace = threading.Lock()
 _last_sent = 0.0
+_local = threading.local()
 _LINK_OR_URL = re.compile(r"(?<!\\)\[((?:[^\]\\]|\\.)*)\]\(([^)\s]+)\)|https?://\S+")
 
 
@@ -207,7 +208,8 @@ def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | Non
         out.append({"type": "header", "text": {"type": "plain_text", "text": header[:HEADER_LIMIT], "emoji": True}})
         rest = title.group(3).strip(" •·—-") if title.re is _TITLE_LEAD else ""
         if rest:                                       # "🎓 *UniNotifier System* • First Semester": the rest, small
-            out.append({"type": "context", "elements": [{"type": "mrkdwn", "text": mrkdwn(rest)[:2900]}]})
+            out.append({"type": "context", "block_id": "subtitle",
+                        "elements": [{"type": "mrkdwn", "text": mrkdwn(rest)[:2900]}]})
         lines = lines[1:]
     prose: list[str] = []
     fields: list[dict] = []
@@ -261,20 +263,77 @@ def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | Non
 
 HOME_TITLE = "🎓 UniNotifier"
 HOME_BLOCKS = 100
+BOX_CHILDREN = 10                  # Slack's limit of blocks inside one container
 
 
-def home_view(text: str, reply_markup=None) -> dict:
-    """A screen of the bot as the app's Home page: the whole screen on one page — nothing folded under
-    "Show more", nothing piling up in the conversation — rewritten in place at every press."""
+def _fewer(children: list[dict], kind: str) -> list[dict]:
+    """Neighbouring button rows as one row (Slack wraps it), or neighbouring paragraphs as one — the
+    same card in fewer blocks, so it fits in one box. The way back (block "nav") stays apart."""
+    out: list[dict] = []
+    for block in children:
+        last = out[-1] if out else None
+        if kind == "actions" and last and block["type"] == last["type"] == "actions" \
+                and "nav" not in (block.get("block_id"), last.get("block_id")) \
+                and len(last["elements"]) + len(block["elements"]) <= 25:
+            out[-1] = {**last, "elements": last["elements"] + block["elements"]}
+        elif kind == "section" and last and block["type"] == last["type"] == "section" \
+                and "text" in block and "text" in last \
+                and len(last["text"]["text"]) + len(block["text"]["text"]) + 2 <= SECTION_LIMIT:
+            out[-1] = {"type": "section", "text": {"type": "mrkdwn",
+                                                   "text": last["text"]["text"] + "\n\n" + block["text"]["text"]}}
+        else:
+            out.append(block)
+    return out
+
+
+def boxed(card: list[dict], title: str = HOME_TITLE) -> list[dict]:
+    """The card inside a box (Slack's container block): its title as the box's title, a line under
+    it, everything else inside — the words on the box, not on Slack's background, and nothing ever
+    folded under "Show more". A card with nothing under its title stays as it is."""
+    children = list(card)
+    subtitle = ""
+    if children and children[0]["type"] == "header":
+        title = children.pop(0)["text"]["text"]
+        if children and children[0].get("block_id") == "subtitle":
+            subtitle = children[0]["elements"][0]["text"]
+            if len(subtitle) <= HEADER_LIMIT:
+                children.pop(0)
+            else:
+                subtitle = ""
+    elif children and children[0]["type"] == "section" and "text" in children[0]:
+        first = children[0]["text"]["text"]
+        if "\n" not in first and "<" not in first and len(first) <= HEADER_LIMIT:
+            title = _plain(children.pop(0)["text"]["text"])    # a one-line message: the line is the title
+    if not children:
+        return card
+    for kind in ("actions", "section"):
+        if len(children) > BOX_CHILDREN:
+            children = _fewer(children, kind)
+    box = {"type": "container", "title": {"type": "plain_text", "text": title[:HEADER_LIMIT], "emoji": True},
+           "has_header_divider": True, "child_blocks": children[:BOX_CHILDREN]}
+    if subtitle:
+        box["subtitle"] = {"type": "mrkdwn", "text": subtitle}
+    return [box] + children[BOX_CHILDREN:]
+
+
+def _footer() -> dict:
+    stamp = int(time.time())
+    return {"type": "context", "elements": [{"type": "mrkdwn", "text":
+            f"Updated <!date^{stamp}^{{date_short_pretty}} at {{time}}|just now> · type *menu* in Messages "
+            "for the same screens in the conversation"}]}
+
+
+def home_view(text: str, reply_markup=None, box: bool = True) -> dict:
+    """A screen of the bot as the app's Home page: the whole screen on one page, inside a box —
+    nothing folded under "Show more", nothing piling up in the conversation — rewritten in place at
+    every press. `box` False: the same screen without the box (for a Slack that refuses it)."""
     card = blocks(text, reply_markup, live=True) or [
         {"type": "section", "text": {"type": "mrkdwn", "text": mrkdwn(text)[:SECTION_LIMIT] or " "}}]
-    if card[0]["type"] != "header":
+    if box:
+        card = boxed(card)
+    elif card[0]["type"] != "header":
         card.insert(0, {"type": "header", "text": {"type": "plain_text", "text": HOME_TITLE, "emoji": True}})
-    stamp = int(time.time())
-    card.append({"type": "context", "elements": [{"type": "mrkdwn", "text":
-                 f"Updated <!date^{stamp}^{{date_short_pretty}} at {{time}}|just now> · type *menu* in Messages "
-                 "for the same screens in the conversation"}]})
-    return {"type": "home", "blocks": card[:HOME_BLOCKS]}
+    return {"type": "home", "blocks": card[:HOME_BLOCKS - 1] + [_footer()]}
 
 
 # ------------------------------------------------------------------ the API
@@ -288,6 +347,15 @@ def _wait_turn() -> None:
         _last_sent = time.monotonic()
 
 
+def _post(url: str, **kwargs) -> requests.Response:
+    """One HTTP POST over a connection kept open (one per thread): a fresh connection to Slack costs
+    about a second before the call even starts — kept open, a press is answered in about half."""
+    session = getattr(_local, "session", None)
+    if session is None:
+        session = _local.session = requests.Session()
+    return session.post(url, **kwargs)
+
+
 def call(token: str, method: str, data: dict | None = None, timeout=TIMEOUT) -> dict:
     """One Slack Web API call, tried again on a network failure, a server error or "slow down".
     Returns Slack's answer; raises SlackError when Slack refused it for good, OSError-like
@@ -295,8 +363,8 @@ def call(token: str, method: str, data: dict | None = None, timeout=TIMEOUT) -> 
     for attempt in range(1, MAX_ATTEMPTS + 1):
         delay = None
         try:
-            resp = requests.post(API.format(method=method), data=data or {}, timeout=timeout,
-                                 headers={"Authorization": f"Bearer {token}"})
+            resp = _post(API.format(method=method), data=data or {}, timeout=timeout,
+                         headers={"Authorization": f"Bearer {token}"})
             if resp.status_code == 429:
                 delay = float(resp.headers.get("Retry-After") or 0) or None
                 if delay and delay > MAX_RETRY_WAIT:
@@ -378,34 +446,42 @@ def framed(card: list[dict], colour: str) -> dict:
     return data
 
 
-def post(token: str, channel: str, text: str, card: list[dict] | None = None, colour: str = DEFAULT_TONE) -> dict:
-    """A message: `card` (blocks, framed) when given, `text` as what a notification shows — and the
-    message itself when the card is refused, so a layout Slack does not take never costs the message."""
-    data = {"channel": channel, "text": text, "mrkdwn": "true", "unfurl_links": "false", "unfurl_media": "false"}
-    _wait_turn()
-    if card:
+def refused_layout(error: Exception) -> bool:
+    """Slack refused the look of a message (its blocks), not the message."""
+    return "block" in str(error) or "invalid_arguments" in str(error)
+
+
+def _layouts(card: list[dict], colour: str) -> list[tuple[str, dict]]:
+    """The card's looks, best first: in a box; in a coloured frame (a Slack without boxes)."""
+    return [("box", {"blocks": json.dumps(boxed(card), ensure_ascii=False), "attachments": "[]"}),
+            ("frame", framed(card, colour))]
+
+
+def _send_card(token: str, method: str, data: dict, card: list[dict] | None, colour: str) -> dict:
+    """chat.postMessage / chat.update with the card in its best look Slack takes — and as text when
+    it takes none, so a layout Slack does not take never costs the message."""
+    for name, layout in _layouts(card, colour) if card else []:
         try:
-            return call(token, "chat.postMessage", {**data, **framed(card, colour)})
+            return call(token, method, {**data, **layout})
         except SlackError as e:
-            if "block" not in str(e) and "invalid_arguments" not in str(e):
+            if not refused_layout(e):
                 raise
-            log.warning("Slack refused the card (%s) — sent as text", e)
-            _wait_turn()
-    return call(token, "chat.postMessage", data)
+            log.warning("Slack refused the card's %s (%s)", name, e)
+    if method == "chat.update":
+        data = {**data, "blocks": "[]", "attachments": "[]"}
+    return call(token, method, data)
+
+
+def post(token: str, channel: str, text: str, card: list[dict] | None = None, colour: str = DEFAULT_TONE) -> dict:
+    """A message: `card` (blocks, in a box) when given, `text` as what a notification shows."""
+    _wait_turn()                                       # Slack's pace is for NEW messages only
+    return _send_card(token, "chat.postMessage", {"channel": channel, "text": text, "mrkdwn": "true",
+                                                  "unfurl_links": "false", "unfurl_media": "false"}, card, colour)
 
 
 def update(token: str, channel: str, ts: str, text: str, card: list[dict] | None, colour: str = DEFAULT_TONE) -> dict:
-    """A message already sent, rewritten in place (a screen that changes, buttons that go)."""
-    data = {"channel": channel, "ts": ts, "text": text}
-    _wait_turn()
-    if card:
-        try:
-            return call(token, "chat.update", {**data, **framed(card, colour)})
-        except SlackError as e:
-            if "block" not in str(e) and "invalid_arguments" not in str(e):
-                raise
-            log.warning("Slack refused the card of an edit (%s) — written as text", e)
-    return call(token, "chat.update", {**data, "blocks": "[]", "attachments": "[]"})
+    """A message already sent, rewritten in place (a screen that changes, buttons that go) — at once."""
+    return _send_card(token, "chat.update", {"channel": channel, "ts": ts, "text": text}, card, colour)
 
 
 def delete(token: str, channel: str, ts: str) -> bool:
@@ -424,7 +500,7 @@ def upload(token: str, channel: str, files: list[tuple[str, bytes]], comment: st
     shared = []
     for name, payload in files:
         slot = call(token, "files.getUploadURLExternal", {"filename": name, "length": str(len(payload))})
-        sent = requests.post(slot["upload_url"], data=payload, timeout=UPLOAD_TIMEOUT)
+        sent = _post(slot["upload_url"], data=payload, timeout=UPLOAD_TIMEOUT)
         if not sent.ok:
             raise requests.ConnectionError(f"Slack upload of a file failed (HTTP {sent.status_code})")
         shared.append({"id": slot["file_id"], "title": name})

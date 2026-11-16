@@ -120,8 +120,15 @@ def is_home(message_id) -> bool:
 def show_home(text: str, markup=None) -> dict:
     """A screen drawn on the Home page (views.publish), kept as the Home "message"."""
     token, _ = _settings()
-    slack.call(token, "views.publish", {"user_id": owner(),
-                                        "view": json.dumps(slack.home_view(text, markup), ensure_ascii=False)})
+    for box in (True, False):                        # in a box; plain, for a Slack that refuses the box
+        try:
+            slack.call(token, "views.publish", {"user_id": owner(), "view": json.dumps(
+                slack.home_view(text, markup, box=box), ensure_ascii=False)})
+            break
+        except slack.SlackError as e:
+            if not (box and slack.refused_layout(e)):
+                raise
+            log.warning("Slack refused the Home page's box (%s)", e)
     with fileio.write_lock(STORE):
         data = _load()
         data["messages"][str(HOME_ID)] = {"ts": HOME_TS, "text": text, "markup": _rows_json(markup), "files": []}

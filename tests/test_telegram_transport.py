@@ -843,11 +843,11 @@ def test_messages_go_to_slack_when_chosen():
     def no_telegram(*a, **k):
         raise AssertionError("Telegram must not be used while messages go to Slack")
 
-    keep = (slack.requests.post, telegram.request, slack.MIN_INTERVAL, slack.BACKOFF_SECONDS, slack.SHARE_WAIT)
+    keep = (slack._post, telegram.request, slack.MIN_INTERVAL, slack.BACKOFF_SECONDS, slack.SHARE_WAIT)
     fake = "-".join(("xoxb", "1111", "2222", "abcdefghij"))             # made up, built so no scanner takes it for a key
     on = {"NOTIFY_VIA": "slack", "SLACK_BOT_TOKEN": fake, "SLACK_CHANNEL": "D0123ABCD"}
     try:
-        slack.requests.post, telegram.request = fake_post, no_telegram
+        slack._post, telegram.request = fake_post, no_telegram
         slack.MIN_INTERVAL, slack.BACKOFF_SECONDS, slack.SHARE_WAIT = 0, (0, 0), 0
 
         # Telegram's Markdown in Slack's words
@@ -866,25 +866,37 @@ def test_messages_go_to_slack_when_chosen():
             assert "<https://portal.example/x|🌐 Open in ZUJ Portal ↗️>" in data["text"]
             assert "Mark as done" not in data["text"], "a button that needs a press has no meaning here"
 
-            # ...and it goes as a card: the title a header on top, the rest in a frame whose colour says
-            # what the message is — the label lines side by side, notes small, the links at the bottom
+            # ...and it goes as a card in a box: the title on the box, a line under it, everything else
+            # inside — the label lines side by side, notes small, the links at the bottom. No frame of
+            # attachments: Slack folds those under "Show more"
             def card_of(sent):
-                frames = json.loads(sent.get("attachments") or "[]")
-                assert len({f["color"] for f in frames}) <= 1, "one colour for the whole frame"
-                return (json.loads(sent["blocks"]) + [b for f in frames for b in f["blocks"]],
-                        frames[0]["color"] if frames else None)
+                assert json.loads(sent.get("attachments") or "[]") == [], "nothing that folds"
+                top = json.loads(sent["blocks"])
+                assert top[0]["type"] == "container" and top[0]["has_header_divider"] is True, top
+                return top[0]["title"]["text"], top[0]["child_blocks"] + top[1:]
 
-            card, colour = card_of(data)
-            assert card[0] == {"type": "header", "text": {"type": "plain_text", "text": "📢 New post", "emoji": True}}
+            title, card = card_of(data)
+            assert title == "📢 New post"
             assert card[-1]["type"] == "context" and "<https://teams.example/j|🎥 Join>" in card[-1]["elements"][0]["text"]
-            assert colour == slack.DEFAULT_TONE, "something new on Moodle: the project's green"
             calls.clear()
             assert notifier.send_message("T", "1", "⏰ *Reminder*\n\n📘 *Course:* Big Data\n📋 *Type:* Quiz\n\n"
                                                    "Soon.\n🕒 *Detected:* now\n\n_A note._")
-            card, colour = card_of(calls[-1][1])
-            assert colour == "#e0a020", "time-bound: gold"
+            title, card = card_of(calls[-1][1])
+            assert title == "⏰ Reminder"
             assert [slack.tone(t) for t in ("🚨 *Check In by Hand*", "🎉 *Marks Detected*", "✅ done", "")] == [
                 "#d93f3f", "#3b6fd8", slack.DEFAULT_TONE, slack.DEFAULT_TONE]
+            # a one-line message: the line is the box's title; a long card is made to fit one box
+            one = slack.boxed(slack.blocks("✅ All caught up\n\nNothing new."))
+            assert one[0]["title"]["text"] == "✅ All caught up" and len(one) == 1
+            many = [{"type": "section", "text": {"type": "mrkdwn", "text": f"p{i}"}} for i in range(8)] + [
+                {"type": "actions", "block_id": f"row{i}", "elements": [{"type": "button"}] * 5} for i in range(4)] + [
+                {"type": "divider"}, {"type": "actions", "block_id": "nav", "elements": [{"type": "button"}]}]
+            box = slack.boxed([{"type": "header", "text": {"type": "plain_text", "text": "T"}}] + many)
+            assert len(box) == 1 and len(box[0]["child_blocks"]) <= slack.BOX_CHILDREN, box
+            kids = box[0]["child_blocks"]
+            assert [b.get("block_id") for b in kids if b["type"] == "actions"] == ["row0", "nav"]
+            assert len(kids[-3]["elements"]) == 20 and len(kids[-1]["elements"]) == 1, "the way back stays apart"
+            assert slack.boxed([{"type": "header", "text": {"type": "plain_text", "text": "T"}}])[0]["type"] == "header"
             # the frame comes in short pieces — Slack folds a tall one under "Show more", hiding its links
             six = {"type": "section", "fields": [{"type": "mrkdwn", "text": f"*L{i}*\nv"} for i in range(6)]}
             line = {"type": "section", "text": {"type": "mrkdwn", "text": "one line"}}
@@ -892,16 +904,19 @@ def test_messages_go_to_slack_when_chosen():
             assert slack.pieces([six, line, line, note, {"type": "divider"}, note]) == [[six], [line, line, note, note]]
             assert all(sum(slack._lines(b) for b in p) <= slack.PIECE_LINES or len(p) == 1
                        for p in slack.pieces([six, six, line] * 4))
-            assert [b["type"] for b in card] == ["header", "section", "section", "section", "context"], card
-            assert card[1]["fields"] == [{"type": "mrkdwn", "text": "*📘 Course*\nBig Data"},
+            assert [b["type"] for b in card] == ["section", "section", "section", "context"], card
+            assert card[0]["fields"] == [{"type": "mrkdwn", "text": "*📘 Course*\nBig Data"},
                                          {"type": "mrkdwn", "text": "*📋 Type*\nQuiz"}]
-            assert card[3]["text"]["text"] == "🕒 *Detected:* now", "a lone label line stays as it was"
-            assert card[4]["elements"][0]["text"] == "_A note._"
-            # a card Slack refuses never costs the message: it goes again as text
-            replies["chat.postMessage"] = [{"ok": False, "error": "invalid_blocks"}, {"ok": True}]
+            assert card[2]["text"]["text"] == "🕒 *Detected:* now", "a lone label line stays as it was"
+            assert card[3]["elements"][0]["text"] == "_A note._"
+            # a box Slack refuses: the coloured frame; a frame refused too: the words as text — a
+            # layout Slack does not take never costs the message
+            replies["chat.postMessage"] = [{"ok": False, "error": "invalid_blocks"}] * 2 + [{"ok": True}]
             calls.clear()
             assert notifier.send_message("T", "1", "⏰ *Reminder*\n\nx")
-            assert len(calls) == 2 and "blocks" in calls[0][1] and "blocks" not in calls[1][1]
+            assert len(calls) == 3 and "container" in calls[0][1]["blocks"], calls
+            assert json.loads(calls[1][1]["attachments"])[0]["color"] == "#e0a020", "time-bound: gold"
+            assert "blocks" not in calls[2][1]
             replies["chat.postMessage"] = {"ok": True, "ts": "1.1"}
 
             # a file: uploaded in two steps, its caption above it — a Telegram file Id is never used
@@ -946,4 +961,4 @@ def test_messages_go_to_slack_when_chosen():
         assert "abcdefghij" not in notifier.redact(f"token {fake} used")
         assert "SECRET" not in notifier.redact("https://files.slack.com/upload/v1/SECRET")
     finally:
-        slack.requests.post, telegram.request, slack.MIN_INTERVAL, slack.BACKOFF_SECONDS, slack.SHARE_WAIT = keep
+        slack._post, telegram.request, slack.MIN_INTERVAL, slack.BACKOFF_SECONDS, slack.SHARE_WAIT = keep

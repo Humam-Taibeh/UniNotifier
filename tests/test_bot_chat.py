@@ -881,20 +881,23 @@ def test_the_bot_lives_in_slack():
             return Answer({"ok": True, "upload_url": "https://files.slack.com/upload/v1/Z", "file_id": "F9"})
         return Answer({"ok": True})
 
+    def inside(top):
+        return [b for t in top for b in ([t] + t.get("child_blocks", []))]
+
     def sent_rows(data):
-        frames = json.loads(data.get("attachments") or "[]")
-        return [b for f in frames for b in f["blocks"] if b["type"] == "actions"]
+        assert json.loads(data.get("attachments") or "[]") == [], "no frame: Slack folds one under Show more"
+        return [b for b in inside(json.loads(data.get("blocks") or "[]")) if b["type"] == "actions"]
 
     def no_telegram(*a, **k):
         raise AssertionError("Telegram must not be used while the bot lives in Slack")
 
-    keep = (slack.requests.post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, slack.SHARE_WAIT)
+    keep = (slack._post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, slack.SHARE_WAIT)
     owner = _as_owner(bot)
     on = {"NOTIFY_VIA": "slack", "SLACK_BOT_TOKEN": "-".join(("xoxb", "1", "2", "made-up")), "SLACK_CHANNEL": "D0123ABCD",
           "SLACK_APP_TOKEN": "-".join(("xapp", "1", "made-up")), "SLACK_USER": "U0OWNER1", "TELEGRAM_CHAT_ID": OWNER}
     with tempfile.TemporaryDirectory() as tmp:
         try:
-            slack.requests.post, telegram.request, slack.MIN_INTERVAL, slack.SHARE_WAIT = fake_post, no_telegram, 0, 0
+            slack._post, telegram.request, slack.MIN_INTERVAL, slack.SHARE_WAIT = fake_post, no_telegram, 0, 0
             slackbot.STORE, slackbot._connect = Path(tmp) / "slack_messages.json", lambda: None
 
             def scenario():
@@ -956,8 +959,32 @@ def test_the_bot_lives_in_slack():
                 published = [d for m, d in calls if m == "views.publish"]
                 assert published and not [m for m, _ in calls if m in ("chat.postMessage", "chat.update", "chat.delete")], calls
                 view = json.loads(published[-1]["view"])
-                assert view["type"] == "home" and view["blocks"][0]["type"] == "header" and published[-1]["user_id"] == "U0OWNER1"
-                assert "Show more" not in json.dumps(view) and not [b for b in view["blocks"] if b.get("type") == "attachments"]
+                assert view["type"] == "home" and published[-1]["user_id"] == "U0OWNER1"
+                assert view["blocks"][0]["type"] == "container" and "Tasks" in view["blocks"][0]["title"]["text"], \
+                    "the screen in a box, its title on the box"
+                assert [b for b in inside(view["blocks"]) if b["type"] == "actions"], "its buttons inside"
+                # a Slack that refuses the box: the same screen without it
+                calls.clear()
+                keep_call = slack.call
+                refusals = iter([slack.SlackError("invalid_blocks")])
+
+                def refuse_once(token, method, data=None, timeout=None):
+                    if method == "views.publish":
+                        e = next(refusals, None)
+                        if e:
+                            calls.append((method, data))
+                            raise e
+                    return keep_call(token, method, data)
+                slack.call = refuse_once
+                try:
+                    slackbot.take("interactive", {"type": "block_actions", "user": {"id": "U0OWNER1"},
+                                                  "container": {"type": "view", "view_id": "V1"}, "view": {"type": "home"},
+                                                  "actions": [{"action_id": "b0_2", "value": "menu", "action_ts": "1.8"}]})
+                    bot.dispatch(slackbot.get_updates(None, 0)[0])
+                finally:
+                    slack.call = keep_call
+                tries = [json.loads(d["view"]) for m, d in calls if m == "views.publish"]
+                assert [t["blocks"][0]["type"] for t in tries] == ["container", "header"], tries
                 # opening Home with nothing on it draws the main menu there
                 calls.clear()
                 drawn = threading.Event()
@@ -1013,5 +1040,5 @@ def test_the_bot_lives_in_slack():
             # without the live connection's token, the bot stays on Telegram (messages may still go to Slack)
             assert _with_env({**on, "SLACK_APP_TOKEN": ""}, slackbot.interactive) is False
         finally:
-            slack.requests.post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, slack.SHARE_WAIT = keep
+            slack._post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, slack.SHARE_WAIT = keep
             bot.CHAT_ID, access.ADMIN_USER_ID = owner
