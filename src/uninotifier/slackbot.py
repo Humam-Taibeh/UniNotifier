@@ -120,18 +120,32 @@ def is_home(message_id) -> bool:
 def show_home(text: str, markup=None) -> dict:
     """A screen drawn on the Home page (views.publish), kept as the Home "message"."""
     token, _ = _settings()
-    for box in (True, False):                        # in a box; plain, for a Slack that refuses the box
+    from uninotifier import slackhome
+
+    def looks():                                     # best first: the dashboard (main menu only), a box, plain
+        if slackhome.is_menu(text):
+            yield "dashboard", lambda: slackhome.view(markup)
+        yield "box", lambda: slack.home_view(text, markup, box=True)
+        yield "plain", lambda: slack.home_view(text, markup, box=False)
+
+    tried = list(looks())
+    for n, (name, make) in enumerate(tried):
         try:
-            slack.call(token, "views.publish", {"user_id": owner(), "view": json.dumps(
-                slack.home_view(text, markup, box=box), ensure_ascii=False)})
+            view = make()
+            slack.call(token, "views.publish", {"user_id": owner(), "view": json.dumps(view, ensure_ascii=False)})
             break
         except slack.SlackError as e:
-            if not (box and slack.refused_layout(e)):
+            if n == len(tried) - 1 or not slack.refused_layout(e):
                 raise
-            log.warning("Slack refused the Home page's box (%s)", e)
+            log.warning("Slack refused the Home page's %s (%s)", name, e)
+        except Exception:                            # a dashboard that cannot be built never costs the page
+            if n == len(tried) - 1:
+                raise
+            log.exception("Slack: the Home page's %s could not be built", name)
     with fileio.write_lock(STORE):
         data = _load()
-        data["messages"][str(HOME_ID)] = {"ts": HOME_TS, "text": text, "markup": _rows_json(markup), "files": []}
+        data["messages"][str(HOME_ID)] = {"ts": HOME_TS, "text": text, "markup": _rows_json(markup), "files": [],
+                                          "at": time.time()}
         _save(data)
     return {"message_id": HOME_ID, "chat": {"id": _chat_id()}, "text": text}
 
@@ -392,7 +406,7 @@ def take(kind: str, payload: dict) -> None:
     try:
         event = payload.get("event") or {}
         if kind == "events_api" and event.get("type") == "app_home_opened":
-            if event.get("tab") == "home" and event.get("user") == owner() and not (_load()["messages"].get(str(HOME_ID)) or {}).get("text"):
+            if event.get("tab") == "home" and event.get("user") == owner() and _home_stale():
                 threading.Thread(target=_home_menu_quietly, name="slack-home", daemon=True).start()
             return
         if kind == "interactive":
@@ -430,6 +444,19 @@ def _connect() -> None:
     _client["socket"] = socket
     log.info("Slack: connected — buttons and messages reach the bot")
     threading.Thread(target=_home_menu_quietly, name="slack-home", daemon=True).start()   # Home: fresh at start
+
+
+HOME_FRESH = 60            # seconds a dashboard stays as drawn when Home is opened again
+
+
+def _home_stale() -> bool:
+    """Home is empty, or shows the main menu (the dashboard) drawn a while ago: draw it again, so
+    opening Home always shows today as it is. A screen you were on (tasks, GPA) is left as it is."""
+    from uninotifier import slackhome
+    shown = _load()["messages"].get(str(HOME_ID)) or {}
+    if not shown.get("text"):
+        return True
+    return slackhome.is_menu(shown["text"]) and time.time() - float(shown.get("at") or 0) > HOME_FRESH
 
 
 def _home_menu_quietly() -> None:

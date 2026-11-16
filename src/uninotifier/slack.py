@@ -167,7 +167,7 @@ def _is_nav(label: str) -> bool:
     return label.startswith(NAV_MARKS) or any(label.endswith(word) for word in NAV_WORDS)
 
 
-def buttons(reply_markup) -> list[dict]:
+def buttons(reply_markup, prefix: str = "") -> list[dict]:
     """Telegram's keyboard as Slack's: the buttons side by side (Telegram stacks one per row, which in
     Slack reads as a long list), the way back apart under a line, a button that opens a page opening
     it, any other carrying its Telegram callback data as its value (slackbot hands the press to the
@@ -178,9 +178,9 @@ def buttons(reply_markup) -> list[dict]:
             label = str(button.get("text") or "·")
             element = {"type": "button", "text": {"type": "plain_text", "text": label[:75], "emoji": True}}
             if button.get("url"):
-                element.update(url=str(button["url"])[:3000], action_id=f"u{r}_{c}")
+                element.update(url=str(button["url"])[:3000], action_id=f"{prefix}u{r}_{c}")
             elif button.get("callback_data"):
-                element.update(value=str(button["callback_data"])[:2000], action_id=f"b{r}_{c}")
+                element.update(value=str(button["callback_data"])[:2000], action_id=f"{prefix}b{r}_{c}")
             else:
                 continue
             if label.startswith("✅"):
@@ -188,12 +188,12 @@ def buttons(reply_markup) -> list[dict]:
             elif label.startswith("🗑"):
                 element["style"] = "danger"
             (nav if _is_nav(label) else content).append(element)
-    out = [{"type": "actions", "block_id": f"row{n}", "elements": content[n:n + ROW_SIZE]}
+    out = [{"type": "actions", "block_id": f"{prefix}row{n}", "elements": content[n:n + ROW_SIZE]}
            for n in range(0, len(content), ROW_SIZE)]
     if nav:
         if out:
             out.append({"type": "divider"})
-        out.append({"type": "actions", "block_id": "nav", "elements": nav[:25]})
+        out.append({"type": "actions", "block_id": f"{prefix}nav" if prefix else "nav", "elements": nav[:25]})
     return out
 
 
@@ -393,7 +393,7 @@ def notice(card: list[dict]) -> dict | None:
     return out
 
 
-def _footer() -> dict:
+def footer() -> dict:
     stamp = int(time.time())
     return {"type": "context", "elements": [{"type": "mrkdwn", "text":
             f"Updated <!date^{stamp}^{{date_short_pretty}} at {{time}}|just now> · type *menu* in Messages "
@@ -410,7 +410,7 @@ def home_view(text: str, reply_markup=None, box: bool = True) -> dict:
         card = boxed(card)
     elif card[0]["type"] != "header":
         card.insert(0, {"type": "header", "text": {"type": "plain_text", "text": HOME_TITLE, "emoji": True}})
-    return {"type": "home", "blocks": card[:HOME_BLOCKS - 1] + [_footer()]}
+    return {"type": "home", "blocks": card[:HOME_BLOCKS - 1] + [footer()]}
 
 
 # ------------------------------------------------------------------ the API

@@ -987,7 +987,7 @@ def test_the_bot_lives_in_slack():
                 finally:
                     slack.call = keep_call
                 tries = [json.loads(d["view"]) for m, d in calls if m == "views.publish"]
-                assert [t["blocks"][0]["type"] for t in tries] == ["container", "header"], tries
+                assert [t["blocks"][0]["type"] for t in tries] == ["header", "container"],                     "the main menu is the dashboard first; a Slack that refuses it gets the boxed menu"
                 # opening Home with nothing on it draws the main menu there
                 calls.clear()
                 drawn = threading.Event()
@@ -1045,3 +1045,39 @@ def test_the_bot_lives_in_slack():
         finally:
             slack._post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, slack.SHARE_WAIT = keep
             bot.CHAT_ID, access.ADMIN_USER_ID = owner
+
+def test_the_slack_home_page_is_a_dashboard():
+    """The main menu on Slack's Home page shows today, what is due soon and the next reminders, then
+    the buttons — read from the bot's own files, every button with an id of its own (Slack refuses a
+    page that repeats one), and a page that cannot be built never costs the Home page."""
+    from datetime import datetime
+    from uninotifier import slack, slackhome
+    _package("uninotifier.bot")
+    from uninotifier.bot import views
+
+    monday = datetime(2026, 11, 16, 12, 0)                          # a Monday, noon
+    sch = {"days": {"mon": [
+        {"start": "19:00", "end": "20:30", "course": "Databases & <Big> Data", "mode": "Online"},
+        {"start": "09:00", "end": "10:30", "course": "Calculus", "mode": "In-Person", "place": "Room 9101"},
+        {"start": "11:30", "end": "12:30", "course": "Physics", "mode": "In-Person"}], "tue": []}}
+    lines = slackhome.lecture_lines(monday, sch)
+    assert [("~" in l, "now" in l) for l in lines] == [(True, False), (False, True), (False, False)], lines
+    assert lines[0].startswith("~9:00 AM – 10:30 AM") and "in 7h 0m" in lines[2] and "&lt;Big&gt;" in lines[2], lines
+    assert slackhome.lecture_lines(monday, {"days": {}}) == []
+
+    now = monday.timestamp()
+    card = slackhome.task_card({"kind": "assign", "name": "Assignment 2", "course": "20261-Big Data-AllSec-3-", "url": "https://x.example/a",
+                                "due": now + 3 * 86400 + 7200, "opens": None, "late": False, "progress": ""}, now, 2)
+    assert card["title"]["text"] == "📝 Assignment 2" and card["subtitle"]["text"] == "📘 Big Data"
+    assert "3d 2h left" in card["body"]["text"] and card["actions"][0]["action_id"] == "open2" and len(card["body"]["text"]) <= 200
+
+    text, rows = views.view_menu()
+    assert slackhome.is_menu(text) and not slackhome.is_menu("⏳ *Tasks*")
+    page = slackhome.view({"inline_keyboard": rows}, monday)
+    assert page["type"] == "home" and len(page["blocks"]) <= slack.HOME_BLOCKS and page["blocks"][0]["type"] == "header"
+    ids = [b["block_id"] for b in page["blocks"] if b.get("block_id")]
+    ids += [e["action_id"] for b in page["blocks"] if b["type"] == "actions" for e in b["elements"]]
+    assert len(ids) == len(set(ids)), f"an id repeats: {ids}"
+    assert [e["value"] for b in page["blocks"] if b["type"] == "actions" for e in b["elements"] if e.get("value")] == [
+        "courses", "tasks", "academic", "record", "schedule", "check", "rem:new"]
+    assert "Updated" in page["blocks"][-1]["elements"][0]["text"]
