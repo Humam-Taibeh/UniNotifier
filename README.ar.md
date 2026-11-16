@@ -282,8 +282,9 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1
 **رسائلك على Slack** — إن كانت شبكتك تحجب تيليجرام، أو كنت تفضّل Slack: شغّل
 `.venv\Scripts\python -m uninotifier.setup --slack`. يرشدك خطوة بخطوة إلى مساحة عمل وتطبيق مجانيين على Slack
 (وينسخ لك إعدادات التطبيق لتلصقها)، ويتعرّف عليك هناك بنفسه، ومن بعدها تصل كل رسالة إلى Slack، بما فيها
-الملفات والتذكيرات وتنبيهات المحاضرات والتنبيهات. أما قوائم تيليجرام وأزراره فتبقى تجيب في تيليجرام. للعودة
-إلى تيليجرام: `NOTIFY_VIA=telegram` في `.env`. أما صورة التطبيق فتضعها أنت: *Basic Information ← App icon*
+الملفات والتذكيرات وتنبيهات المحاضرات والتنبيهات، كلٌّ منها بطاقة بأزرارها. ويأتي البوت كله معها: قوائمه في
+صفحة **Home** للتطبيق، تُرسم من جديد في مكانها مع كل ضغطة، والأوامر تُكتب بلا "/" (`menu` و`tasks` و`check`).
+للعودة إلى تيليجرام: `NOTIFY_VIA=telegram` في `.env`. أما صورة التطبيق فتضعها أنت: *Basic Information ← App icon*
 ← `docs\images\uninotifier-icon.png`.
 
 **مراقبة الحالة** — حساب مجاني على [healthchecks.io](https://healthchecks.io) يُعلمك عندما يكون جهازك

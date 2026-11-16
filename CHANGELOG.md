@@ -11,7 +11,18 @@ All notable changes to this project are documented here. The format follows
   `python -m uninotifier.setup --slack` makes the Slack app with you (its settings in
   `docs/slack-app-manifest.json`, copied for pasting), checks its token, finds you and greets you there.
   Every message, file and album then goes to Slack in Slack's format, with retries as before; the
-  Microsoft sign-in picture too. The Telegram menus still answer in Telegram.
+  Microsoft sign-in picture too.
+- The whole bot on Slack (`slackbot.py`), with the app's live connection (Socket Mode: `SLACK_APP_TOKEN`,
+  `SLACK_USER`; the setup asks for both): its screens on the app's Home page, redrawn in place at every
+  press; real buttons, side by side, the way back apart at the bottom; commands typed without the "/".
+  A notification that fits is Slack's card (title, course, details, time, up to three buttons); anything
+  longer, and every screen, sits in a box (Slack's container) — nothing folds under "Show more". A Slack
+  that refuses a layout gets the next one down (box, coloured frame, plain text): no message is lost to
+  its look. Files the bot sends land above the menu that follows them.
+
+### Changed
+- Slack answers a press in about half the time: one connection kept open per thread (a fresh one cost
+  over a second per call), and the one-message-a-second pace applies to new messages only, not edits.
 
 ### Security
 - ⬇️ Update Now refuses to install code from an address without encryption (`http://`, `git://`):

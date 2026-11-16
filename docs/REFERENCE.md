@@ -732,23 +732,53 @@ no roles and no other users' data.
 For a network that blocks Telegram (measured in Jordan in November 2026: the connection is cut as soon
 as it names telegram.org), or a student who prefers Slack. `python -m uninotifier.setup --slack` makes
 it with you: a free workspace, an app made from `docs/slack-app-manifest.json` (copied to the clipboard
-for pasting; scopes `chat:write`, `files:write`, `im:write`, `users:read`), its Bot User OAuth Token
+for pasting; scopes `chat:write`, `files:write`, `im:write`, `im:history`, `users:read`; the Home tab,
+Socket Mode, interactivity and the `app_home_opened` / `message.im` events), its Bot User OAuth Token
 checked with Slack (`auth.test`), you found among the workspace's people, your private conversation
-with the app opened (`conversations.open`) and greeted. It writes `SLACK_BOT_TOKEN`, `SLACK_CHANNEL` and
-`NOTIFY_VIA=slack`.
+with the app opened (`conversations.open`) and greeted, and its App-Level Token checked
+(`apps.connections.open`). It writes `SLACK_BOT_TOKEN`, `SLACK_CHANNEL`, `SLACK_USER`, `SLACK_APP_TOKEN`
+and `NOTIFY_VIA=slack`.
 
 With `NOTIFY_VIA=slack`, `notifier._request` — the one door every message, file and album goes
 through — hands each Telegram call to `slack.deliver`, which says it in Slack's words: Telegram's
 Markdown as mrkdwn (`*bold*`, `_italic_` and `` `code` `` are written the same; `[label](address)` becomes
 `<address|label>`; `& < >` are escaped), the buttons that open a page as links under the message,
 files with Slack's two-step upload (`files.getUploadURLExternal`, then one `files.completeUploadExternal`
-that shares an album as one message). A button that needs a press has no meaning in a message-only app
-and is left out. Telegram's remembered file Ids are not used. Sends are paced to about one a second; a
-network failure, a server error or a "slow down" is tried again, a refusal is not; either way the call
+that shares an album as one message; the next message waits until the files show in the conversation,
+read with `conversations.history`, so a menu never lands above them). Telegram's remembered file Ids
+are not used. New messages are paced to about one a second (edits are not); every call goes over one
+connection kept open per thread (`slack._post`: a fresh HTTPS connection to Slack costs about a second).
+A network failure, a server error or a "slow down" is tried again, a refusal is not; either way the call
 counts as not delivered and is tried again on the next check, as with Telegram. The Microsoft sign-in
-picture goes to Slack too. The Telegram menus (`bot/chat.py`) still answer in Telegram; the bot's
-answers sent as messages (a transcript, the timetable files) go to Slack. The doctor checks the app and,
-while messages go to Slack, a Telegram it cannot reach is only a warning.
+picture goes to Slack too. The doctor checks the app and, while messages go to Slack, a Telegram it
+cannot reach is only a warning.
+
+**How a message looks** (`slack.blocks`, then the first look Slack takes, in `_layouts`). The text
+is read into Block Kit: the first line `emoji *Title*` a header (`emoji *Title* • more`: the rest as
+a subtitle), `*Label:* value` lines in two columns, italic lines small. Then:
+
+1. **a card** (`notice`) — a notification that fits ALL of it into Slack's card: the title, the
+   course as the subtitle, the details as the body (≤ 200 characters), "Detected" and the notes as
+   small print, at most three buttons. Anything that would not fit, or a screen (it has the way back),
+   is never cut down to a card;
+2. **a box** (`boxed`) — Slack's container: the title on it, a line under it, everything else inside
+   (at most 10 blocks: neighbouring button rows, then paragraphs, are joined until it fits);
+3. **a coloured frame** (`framed`: attachments in short pieces, the colour from `tone`), then plain
+   text — for a Slack that refuses the newer blocks.
+
+Nothing is sent as attachments while a box is taken: Slack folds a tall attachment under "Show more".
+
+**The whole bot in Slack** (`slackbot.py`). With `SLACK_APP_TOKEN` (an App-Level Token, scope
+`connections:write`) and `SLACK_USER` as well, the bot opens Slack's Socket Mode — a connection from
+this PC to Slack, so nothing listens to the internet — and `notifier.call_api` / `notifier.upload` hand
+the bot's Telegram calls to it: `sendMessage` / `editMessage*` / `deleteMessage` become cards posted,
+updated in place and deleted, each given a Telegram-like number (kept with its Slack timestamp in
+`data/slack_messages.json`, shared under a lock with the 15-minute check). A press arrives as Telegram's
+`callback_query` carrying the button's callback data; a typed message as a message (`menu`, `tasks`,
+`check` … read as the commands — Slack keeps a leading "/" for itself). Only `SLACK_USER` is the owner;
+anyone else in the workspace is a stranger to `access.py`. The app's **Home** page is the bot's screen
+(message number `HOME_ID`): drawn with the main menu at start and when opened empty, redrawn by
+`views.publish` at every press there. The menu state for Slack is kept apart (`data/ui_state.slack.json`).
 
 ### The bot's heartbeat, and being told when something breaks
 

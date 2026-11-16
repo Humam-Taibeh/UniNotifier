@@ -8,6 +8,8 @@ does not have yet when it tells its owner that a new version is ready (newest fi
 - Telegram is blocked on some networks in Jordan. Your messages can now come on Slack instead —
   free, on your phone, the moment anything changes: run `.venv\Scripts\python -m uninotifier.setup --slack`
   and it walks you through it in five minutes.
+- The whole bot comes with it: open the app's **Home** page for every menu (it changes in place as
+  you tap), real buttons, and each alert as a neat card. Type `menu`, `tasks` or `check` to it.
 - The doctor now says plainly when your network blocks Telegram, instead of "check the internet".
 
 ## 2026-11-15 — Your timetable, read and drawn for you
