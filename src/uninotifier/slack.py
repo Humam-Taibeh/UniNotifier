@@ -124,6 +124,7 @@ def compose(text: str, reply_markup=None) -> str:
 
 _TITLE = re.compile(r"^(\S+\s+)?\*([^*\n]+)\*$")                        # "⏰ *Reminder*"
 _TITLE_LEAD = re.compile(r"^(\S+\s+)\*([^*\n:]+)\*(\s+[•·—-]\s+.+)$")    # "🎓 *UniNotifier System* • First Semester"
+_TITLE_RUN = re.compile(r"^(\S+\s+)\*([^*\n:]+)\*\s+([^\n]+)$")          # "🔧 *The bot stopped* and is back."
 _FIELD = re.compile(r"^(\S+\s+)?\*([^*\n]{1,40}?):\*\s*(.+)$")            # "📘 *Course:* Big Data"
 _NOTE = re.compile(r"^_[^_\n].*_$")                                     # "_A note in italics._"
 HEADER_LIMIT = 150
@@ -204,7 +205,7 @@ def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | Non
     lines = (text or "").split("\n")
     out: list[dict] = []
     first = lines[0].strip() if lines else ""
-    title = _TITLE.match(first) or _TITLE_LEAD.match(first)
+    title = _TITLE.match(first) or _TITLE_LEAD.match(first) or _TITLE_RUN.match(first)
     if title and not _FIELD.match(first):
         header = ((title.group(1) or "") + _plain(title.group(2))).strip()
         out.append({"type": "header", "text": {"type": "plain_text", "text": header[:HEADER_LIMIT], "emoji": True}})
@@ -213,6 +214,8 @@ def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | Non
             out.append({"type": "context", "block_id": "subtitle",
                         "elements": [{"type": "mrkdwn", "text": mrkdwn(rest)[:2900]}]})
         lines = lines[1:]
+        if title.re is _TITLE_RUN:                     # "🔧 *Title* and the words": the words are the card's text
+            lines = [title.group(3)] + lines
     prose: list[str] = []
     fields: list[dict] = []
     field_lines: list[str] = []

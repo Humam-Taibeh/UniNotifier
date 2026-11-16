@@ -891,6 +891,12 @@ def test_messages_go_to_slack_when_chosen():
             assert slack.notice(slack.blocks("📌 *Four*", {"inline_keyboard": [[{"text": str(n), "callback_data": str(n)}
                                                                                 for n in range(4)]]}, live=True)) is None
 
+            # a one-line status ("🔧 *Title* and the words") is a card too, not bare text
+            status = slack.notice(slack.blocks("🔧 *The bot had stopped responding — I restarted it* and it is working again."))
+            assert status["title"]["text"] == "🔧 The bot had stopped responding — I restarted it", status
+            assert status["body"]["text"] == "and it is working again."
+            assert slack.blocks("🕒 *Detected:* now")[0]["type"] == "section", "a label line is not a title"
+
             # the box: the title on it, a line under it, everything else inside — the label lines side
             # by side, notes small
             box = slack.boxed(slack.blocks(reminder))
