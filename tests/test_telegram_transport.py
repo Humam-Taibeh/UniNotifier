@@ -862,8 +862,8 @@ def test_messages_go_to_slack_when_chosen():
             method, data, headers = calls[-1]
             assert method == "chat.postMessage" and data["channel"] == "D0123ABCD", calls[-1]
             assert headers["Authorization"] == f"Bearer {fake}"
-            assert data["text"].startswith("📢 *New post*") and "<https://teams.example/j|🎥 Join>" in data["text"]
-            assert "<https://portal.example/x|🌐 Open in ZUJ Portal ↗️>" in data["text"]
+            assert data["text"].startswith("📢 New post") and "🎥 Join" in data["text"] and "*" not in data["text"], data["text"]
+            assert "Open in ZUJ Portal" in data["text"]
             assert "Mark as done" not in data["text"], "a button that needs a press has no meaning here"
 
             # ...and a notification that fits goes as Slack's card: its title, the course under it, the

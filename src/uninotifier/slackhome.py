@@ -17,6 +17,8 @@ TASK_CARDS = 5                               # tasks shown as cards (Slack allow
 REMINDERS_SHOWN = 3
 CARD_BODY = 200                              # Slack's limit for a card's body
 
+LRM, FSI, PDI = "‎", "⁨", "⁩"       # an Arabic name never turns a line round: the emoji stays first
+
 EXTRA_BUTTONS = [{"text": "📅 Weekly Timetable", "callback_data": "schedule"},
                  {"text": "🔄 Check Now", "callback_data": "check"},
                  {"text": "➕ New Reminder", "callback_data": "rem:new"}]
@@ -61,14 +63,17 @@ def lecture_lines(now: datetime, sch: dict | None = None) -> list[str]:
         mode = lec.get("mode") or ""
         place = f" · {_text(lec['place'])}" if lec.get("place") else ""
         label = f"{schedule.MODE_EMOJI.get(mode, '📘')} {_text(mode)}{place}".strip()
-        what = f"*{_text(lec.get('course'))}*   {label}"
+        course = f"{FSI}{_text(lec.get('course'))}{PDI}"
         when = f"{_clock(lec['start'])} – {_clock(lec['end'])}"
-        if now >= end:
-            lines.append(f"~{when}   {_text(lec.get('course'))}~   ✔️")
+        if mode == "Activity":                       # an activity / assignment slot of a blended course: no lecture
+            tail = "✔️" if now >= end else "_activity — no lecture_"
+            lines.append(f"{LRM}🧩 {when}   *{course}*   {tail}")
+        elif now >= end:
+            lines.append(f"{LRM}~{when}   {course}~   ✔️")
         elif now >= start:
-            lines.append(f"▶️ {when}   {what}   *now*")
+            lines.append(f"{LRM}▶️ {when}   *{course}*   {label}   *now*")
         else:
-            lines.append(f"🕘 {when}   {what}   _in {_span((start - now).total_seconds())}_")
+            lines.append(f"{LRM}🕘 {when}   *{course}*   {label}   _in {_span((start - now).total_seconds())}_")
     return lines
 
 
@@ -87,7 +92,7 @@ def task_card(task: dict, now: float, number: int = 0) -> dict:
     else:
         when = "🕐 No due date set"
     card = {"type": "card",
-            "title": {"type": "plain_text", "text": f"{tasks.KIND[task['kind']]} {task['name']}"[:150], "emoji": False},
+            "title": {"type": "plain_text", "text": f"{LRM}{tasks.KIND[task['kind']]} {FSI}{task['name']}{PDI}"[:150], "emoji": False},
             "subtitle": {"type": "mrkdwn", "text": f"📘 {_text(course)}"[:150]},
             "body": {"type": "mrkdwn", "text": when[:CARD_BODY]}}
     if task.get("url"):
@@ -132,7 +137,7 @@ def blocks(markup, now: datetime | None = None, state: dict | None = None) -> li
         lines = []
         for reminder in mine[:REMINDERS_SHOWN]:
             title = next((l.strip() for l in (reminder.get("note") or "").splitlines() if l.strip()), "Reminder")
-            lines.append(f"📝 {_text(title)[:90]}\n      🕐 {reminders.when_text(reminder['due'])} · ⏱️ {_span(reminder['due'] - stamp)}")
+            lines.append(f"{LRM}📝 {FSI}{_text(title)[:90]}{PDI}\n{LRM}      🕐 {reminders.when_text(reminder['due'])} · ⏱️ {_span(reminder['due'] - stamp)}")
         out.append({"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(lines)}})
         if len(mine) > REMINDERS_SHOWN:
             out.append({"type": "context", "elements": [{"type": "mrkdwn", "text": f"… and {len(mine) - REMINDERS_SHOWN} more"}]})

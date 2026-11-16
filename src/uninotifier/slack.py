@@ -19,6 +19,7 @@ press (Mark as done) cannot work, so it is left out and a button that opens a pa
 with it, slackbot.py gives the whole bot real buttons and the Home page.
 """
 
+import html
 import json
 import logging
 import re
@@ -95,6 +96,17 @@ def mrkdwn(text: str) -> str:
         last = match.end()
     out.append(_escape(_unescape_markers((text or "")[last:])))
     return "".join(out)
+
+
+_PREVIEW_LINK = re.compile(r"<[^|>]+\|([^>]*)>|<([^>|]+)>")
+
+
+def preview(text: str) -> str:
+    """What a notification shows on a lock screen or in the sidebar: the words of the message
+    without the marks of the markup (no *stars*, no <address|label>)."""
+    plain = _PREVIEW_LINK.sub(lambda m: m.group(1) or m.group(2), text or "")
+    plain = html.unescape(plain.replace("*", "").replace("`", ""))
+    return "\n".join(line for line in plain.split("\n") if not re.fullmatch(r"\s*[━─]{6,}\s*", line)).strip()
 
 
 def link_lines(reply_markup) -> list[str]:
@@ -545,7 +557,7 @@ def _send_card(token: str, method: str, data: dict, card: list[dict] | None, col
     it takes none, so a layout Slack does not take never costs the message."""
     for name, layout in _layouts(card, colour) if card else []:
         try:
-            return call(token, method, {**data, **layout})
+            return call(token, method, {**data, "text": preview(data["text"]), **layout})
         except SlackError as e:
             if not refused_layout(e):
                 raise

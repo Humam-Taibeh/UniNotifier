@@ -1062,13 +1062,18 @@ def test_the_slack_home_page_is_a_dashboard():
         {"start": "11:30", "end": "12:30", "course": "Physics", "mode": "In-Person"}], "tue": []}}
     lines = slackhome.lecture_lines(monday, sch)
     assert [("~" in l, "now" in l) for l in lines] == [(True, False), (False, True), (False, False)], lines
-    assert lines[0].startswith("~9:00 AM – 10:30 AM") and "in 7h 0m" in lines[2] and "&lt;Big&gt;" in lines[2], lines
+    assert lines[0].lstrip(slackhome.LRM).startswith("~9:00 AM – 10:30 AM") and "in 7h 0m" in lines[2] and "&lt;Big&gt;" in lines[2], lines
     assert slackhome.lecture_lines(monday, {"days": {}}) == []
+    blended = slackhome.lecture_lines(monday, {"days": {"mon": [{"start": "11:30", "end": "12:30", "course": "Arabic", "mode": "Activity"}]}})
+    assert "no lecture" in blended[0] and "now" not in blended[0] and "▶️" not in blended[0], \
+        "an activity slot of a blended course is not a lecture that is on"
+    assert slack.preview("📢 *New post*\n━━━━━━━━\nSee <https://x.example/a_b|the page> & <https://y.example>  `code` &amp; more") == \
+        "📢 New post\nSee the page & https://y.example  code & more"
 
     now = monday.timestamp()
     card = slackhome.task_card({"kind": "assign", "name": "Assignment 2", "course": "20261-Big Data-AllSec-3-", "url": "https://x.example/a",
                                 "due": now + 3 * 86400 + 7200, "opens": None, "late": False, "progress": ""}, now, 2)
-    assert card["title"]["text"] == "📝 Assignment 2" and card["subtitle"]["text"] == "📘 Big Data"
+    assert card["title"]["text"] == f"{slackhome.LRM}📝 {slackhome.FSI}Assignment 2{slackhome.PDI}" and card["subtitle"]["text"] == "📘 Big Data"
     assert "3d 2h left" in card["body"]["text"] and card["actions"][0]["action_id"] == "open2" and len(card["body"]["text"]) <= 200
 
     text, rows = views.view_menu()
