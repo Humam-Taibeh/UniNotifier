@@ -12,9 +12,11 @@ as messages. Nothing else changes — what could not be sent is tried again exac
 
 notifier._request hands each Telegram call here (deliver) and this module says the same thing in
 Slack's words: Telegram's Markdown becomes Slack's mrkdwn, a [label](address) becomes a Slack link,
-a button that opens a page becomes a link under the message, files are uploaded with Slack's
-two-step upload. A button that needs a press (Mark as done, Add to Reminders) cannot work in a
-message-only app, so it is left out; the Telegram menus stay in Telegram.
+files are uploaded with Slack's two-step upload, and the message is laid out as Slack's card (a
+notification that fits), in a box (anything longer, every screen), or — for a Slack that refuses
+those — a coloured frame, then plain text. Without the app's live connection a button that needs a
+press (Mark as done) cannot work, so it is left out and a button that opens a page becomes a link;
+with it, slackbot.py gives the whole bot real buttons and the Home page.
 """
 
 import json
@@ -316,6 +318,77 @@ def boxed(card: list[dict], title: str = HOME_TITLE) -> list[dict]:
     return [box] + children[BOX_CHILDREN:]
 
 
+CARD_TEXT = 200                    # Slack's limit for a card's body, and for its small print
+CARD_BUTTONS = 3
+_RULE = re.compile(r"^[━─]{6,}$")
+_DETECTED = ("Detected", "Detected:")
+
+
+def _small(line: str) -> str:
+    return line.replace("*", "")
+
+
+def notice(card: list[dict]) -> dict | None:
+    """A notification as Slack's card — its title, the course under it, the details, the time small,
+    up to three buttons on the right — when ALL of it fits one (Slack keeps a card short); None when
+    something would not fit, or when it is a screen (it has the way back), so nothing is ever cut."""
+    if not card or card[0]["type"] != "header":
+        return None
+    title, subtitle, groups, small, buttons = card[0]["text"]["text"], "", [], [], []
+    for block in card[1:]:
+        body: list[str] = []
+        groups.append(body)
+        kind = block["type"]
+        if kind == "divider":
+            continue
+        if kind == "context":
+            words = " ".join(e.get("text", "") for e in block.get("elements") or [])
+            if block.get("block_id") == "subtitle":
+                subtitle = words
+            else:
+                small.append(words)
+        elif kind == "section" and block.get("fields"):
+            for field in block["fields"]:
+                label, _, value = field["text"].partition("\n")
+                label = label.strip("*")
+                if not subtitle and label.endswith("Course"):
+                    subtitle = f"{label[:-len('Course')].strip()} {value}".strip()     # "📘 Big Data"
+                elif label.endswith(_DETECTED):
+                    small.append(f"{label}: {value}")
+                else:
+                    body.append(f"*{label}:* {value}")
+        elif kind == "section" and "text" in block:
+            for line in block["text"]["text"].split("\n"):
+                if _RULE.match(line.strip()):
+                    continue
+                if "Detected:*" in line:
+                    small.append(_small(line))
+                else:
+                    body.append(line)
+        elif kind == "actions" and block.get("block_id") != "nav":
+            buttons += block["elements"]
+        else:
+            return None                                  # the way back, a picture, anything else: a screen
+    groups = ["\n".join(g) for g in groups if g]
+    body_text = "\n\n".join(groups).strip()             # a blank line between the details and the words...
+    if len(body_text) > CARD_TEXT:
+        body_text = "\n".join(groups).strip()           # ...when there is room for it
+    small_text = "\n".join(small).strip()
+    if len(buttons) > CARD_BUTTONS or len(body_text) > CARD_TEXT or len(small_text) > CARD_TEXT \
+            or len(title) > HEADER_LIMIT or len(subtitle) > HEADER_LIMIT:
+        return None
+    out = {"type": "card", "title": {"type": "plain_text", "text": title, "emoji": True}}
+    if subtitle:
+        out["subtitle"] = {"type": "mrkdwn", "text": subtitle}
+    if body_text:
+        out["body"] = {"type": "mrkdwn", "text": body_text}
+    if small_text:
+        out["subtext"] = {"type": "mrkdwn", "text": small_text}
+    if buttons:
+        out["actions"] = buttons
+    return out
+
+
 def _footer() -> dict:
     stamp = int(time.time())
     return {"type": "context", "elements": [{"type": "mrkdwn", "text":
@@ -452,9 +525,15 @@ def refused_layout(error: Exception) -> bool:
 
 
 def _layouts(card: list[dict], colour: str) -> list[tuple[str, dict]]:
-    """The card's looks, best first: in a box; in a coloured frame (a Slack without boxes)."""
-    return [("box", {"blocks": json.dumps(boxed(card), ensure_ascii=False), "attachments": "[]"}),
-            ("frame", framed(card, colour))]
+    """The card's looks, best first: a notification that fits as Slack's card; in a box; in a
+    coloured frame (a Slack without either)."""
+    looks = []
+    short = notice(card)
+    if short:
+        looks.append(("card", {"blocks": json.dumps([short], ensure_ascii=False), "attachments": "[]"}))
+    looks += [("box", {"blocks": json.dumps(boxed(card), ensure_ascii=False), "attachments": "[]"}),
+              ("frame", framed(card, colour))]
+    return looks
 
 
 def _send_card(token: str, method: str, data: dict, card: list[dict] | None, colour: str) -> dict:

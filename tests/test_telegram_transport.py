@@ -866,22 +866,36 @@ def test_messages_go_to_slack_when_chosen():
             assert "<https://portal.example/x|🌐 Open in ZUJ Portal ↗️>" in data["text"]
             assert "Mark as done" not in data["text"], "a button that needs a press has no meaning here"
 
-            # ...and it goes as a card in a box: the title on the box, a line under it, everything else
-            # inside — the label lines side by side, notes small, the links at the bottom. No frame of
-            # attachments: Slack folds those under "Show more"
-            def card_of(sent):
+            # ...and a notification that fits goes as Slack's card: its title, the course under it, the
+            # details, the time and notes small. No frame of attachments: Slack folds those under "Show more"
+            def top_of(sent):
                 assert json.loads(sent.get("attachments") or "[]") == [], "nothing that folds"
-                top = json.loads(sent["blocks"])
-                assert top[0]["type"] == "container" and top[0]["has_header_divider"] is True, top
-                return top[0]["title"]["text"], top[0]["child_blocks"] + top[1:]
+                return json.loads(sent["blocks"])
 
-            title, card = card_of(data)
-            assert title == "📢 New post"
-            assert card[-1]["type"] == "context" and "<https://teams.example/j|🎥 Join>" in card[-1]["elements"][0]["text"]
+            short = top_of(data)
+            assert [b["type"] for b in short] == ["card"] and short[0]["title"]["text"] == "📢 New post"
+            assert "<https://teams.example/j|🎥 Join>" in short[0]["subtext"]["text"], "the links, small"
             calls.clear()
-            assert notifier.send_message("T", "1", "⏰ *Reminder*\n\n📘 *Course:* Big Data\n📋 *Type:* Quiz\n\n"
-                                                   "Soon.\n🕒 *Detected:* now\n\n_A note._")
-            title, card = card_of(calls[-1][1])
+            reminder = "⏰ *Reminder*\n\n📘 *Course:* Big Data\n📋 *Type:* Quiz\n\nSoon.\n🕒 *Detected:* now\n\n_A note._"
+            assert notifier.send_message("T", "1", reminder)
+            short = top_of(calls[-1][1])[0]
+            assert short["type"] == "card" and short["subtitle"]["text"] == "📘 Big Data", short
+            assert short["body"]["text"] == "*📋 Type:* Quiz\n\nSoon.", short
+            assert short["subtext"]["text"] == "🕒 Detected: now\n_A note._"
+            # one that does not fit (or a screen: it has the way back) goes in a box — nothing is cut
+            long_one = reminder.replace("Soon.", "Soon. " + "word " * 50)
+            assert slack.notice(slack.blocks(long_one)) is None
+            assert slack.notice(slack.blocks("⏳ *Tasks*\n\nx", {"inline_keyboard": [[{"text": "🔙 Main Menu",
+                                                                                       "callback_data": "menu"}]]},
+                                             live=True)) is None
+            assert slack.notice(slack.blocks("📌 *Four*", {"inline_keyboard": [[{"text": str(n), "callback_data": str(n)}
+                                                                                for n in range(4)]]}, live=True)) is None
+
+            # the box: the title on it, a line under it, everything else inside — the label lines side
+            # by side, notes small
+            box = slack.boxed(slack.blocks(reminder))
+            assert box[0]["type"] == "container" and box[0]["has_header_divider"] is True and len(box) == 1
+            title, card = box[0]["title"]["text"], box[0]["child_blocks"]
             assert title == "⏰ Reminder"
             assert [slack.tone(t) for t in ("🚨 *Check In by Hand*", "🎉 *Marks Detected*", "✅ done", "")] == [
                 "#d93f3f", "#3b6fd8", slack.DEFAULT_TONE, slack.DEFAULT_TONE]
@@ -909,14 +923,14 @@ def test_messages_go_to_slack_when_chosen():
                                          {"type": "mrkdwn", "text": "*📋 Type*\nQuiz"}]
             assert card[2]["text"]["text"] == "🕒 *Detected:* now", "a lone label line stays as it was"
             assert card[3]["elements"][0]["text"] == "_A note._"
-            # a box Slack refuses: the coloured frame; a frame refused too: the words as text — a
-            # layout Slack does not take never costs the message
-            replies["chat.postMessage"] = [{"ok": False, "error": "invalid_blocks"}] * 2 + [{"ok": True}]
+            # a card Slack refuses: the box; the box refused: the coloured frame; that too: the words
+            # as text — a layout Slack does not take never costs the message
+            replies["chat.postMessage"] = [{"ok": False, "error": "invalid_blocks"}] * 3 + [{"ok": True}]
             calls.clear()
             assert notifier.send_message("T", "1", "⏰ *Reminder*\n\nx")
-            assert len(calls) == 3 and "container" in calls[0][1]["blocks"], calls
-            assert json.loads(calls[1][1]["attachments"])[0]["color"] == "#e0a020", "time-bound: gold"
-            assert "blocks" not in calls[2][1]
+            assert len(calls) == 4 and '"card"' in calls[0][1]["blocks"] and "container" in calls[1][1]["blocks"], calls
+            assert json.loads(calls[2][1]["attachments"])[0]["color"] == "#e0a020", "time-bound: gold"
+            assert "blocks" not in calls[3][1]
             replies["chat.postMessage"] = {"ok": True, "ts": "1.1"}
 
             # a file: uploaded in two steps, its caption above it — a Telegram file Id is never used

@@ -882,7 +882,10 @@ def test_the_bot_lives_in_slack():
         return Answer({"ok": True})
 
     def inside(top):
-        return [b for t in top for b in ([t] + t.get("child_blocks", []))]
+        """Every block, the ones in a box too — a card's buttons as the row they are."""
+        found = [b for t in top for b in ([t] + t.get("child_blocks", []))]
+        return found + [{"type": "actions", "elements": b["actions"]} for b in found
+                        if b["type"] == "card" and b.get("actions")]
 
     def sent_rows(data):
         assert json.loads(data.get("attachments") or "[]") == [], "no frame: Slack folds one under Show more"
