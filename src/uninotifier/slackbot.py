@@ -410,13 +410,23 @@ def from_press(payload: dict) -> list[dict]:
     return out
 
 
+SCHEME = r"(?:https?://|mailto:|tel:)"
+SLACK_LINK = re.compile(rf"<{SCHEME}(?:[^|>]*\|([^>]*)|([^>|]*))>")
+
+
+def unlink(text: str) -> str:
+    """What was typed, without Slack's auto-links: a bare number or address a person types arrives as
+    "<http://202311988|202311988>" — the words they typed are the label (or the link, without its scheme)."""
+    return html.unescape(SLACK_LINK.sub(lambda m: m.group(1) if m.group(1) is not None else m.group(2), text))
+
+
 def from_event(event: dict) -> list[dict]:
     """A Socket Mode event as Telegram updates: a message you typed to the app."""
     if event.get("type") != "message" or event.get("channel_type") != "im":
         return []
     if event.get("bot_id") or event.get("subtype"):
         return []                                         # the app's own messages, edits, joins
-    text = html.unescape(event.get("text") or "")
+    text = unlink(event.get("text") or "")
     sender, chat = _person(event.get("user", ""))
     number = remember(event.get("ts", ""), text) if sender["id"] == _chat_id() else 0
     return [{"update_id": _update_id(),

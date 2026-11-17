@@ -1094,3 +1094,15 @@ def test_the_slack_home_page_is_a_dashboard():
     assert [e["value"] for b in page["blocks"] if b["type"] == "actions" for e in b["elements"] if e.get("value")] == [
         "courses", "tasks", "academic", "record", "schedule", "check", "rem:new"]
     assert "Updated" in page["blocks"][-1]["elements"][0]["text"]
+
+
+def test_slack_autolinks_are_unwrapped():
+    """A student ID typed in Slack arrives as a link ("<http://202311988|202311988>"): the bot reads what was typed."""
+    from uninotifier import slackbot
+    assert slackbot.unlink("<http://202311988|202311988>") == "202311988"
+    assert slackbot.unlink("<http://202311988>") == "202311988"
+    assert slackbot.unlink("id <mailto:a@b.com|a@b.com> &amp; more") == "id a@b.com & more"
+    assert slackbot.unlink("plain 202311988") == "plain 202311988"
+    update = slackbot.from_event({"type": "message", "channel_type": "im", "user": "U1", "ts": "1.0",
+                                  "text": "<http://202311988|202311988>"})
+    assert update[0]["message"]["text"] == "202311988"
