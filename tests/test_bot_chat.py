@@ -1092,7 +1092,7 @@ def test_the_slack_home_page_is_a_dashboard():
     ids += [e["action_id"] for b in page["blocks"] if b["type"] == "actions" for e in b["elements"]]
     assert len(ids) == len(set(ids)), f"an id repeats: {ids}"
     assert [e["value"] for b in page["blocks"] if b["type"] == "actions" for e in b["elements"] if e.get("value")] == [
-        "courses", "tasks", "academic", "record", "schedule", "check", "rem:new"]
+        "courses", "tasks", "academic", "record", "check", "rem:new"]
     assert "Updated" in page["blocks"][-1]["elements"][0]["text"]
 
 

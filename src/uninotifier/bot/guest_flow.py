@@ -22,6 +22,7 @@ from uninotifier import portal
 from uninotifier import portal_pages
 from uninotifier import registration
 from uninotifier import schedule
+from uninotifier import slack
 from uninotifier import transcript
 from uninotifier.bot import chat, portal_flow
 from uninotifier.notifier import escape_md
@@ -82,6 +83,8 @@ def delete_password_message(message_id: int | None) -> bool:
         if chat.api("deleteMessage", chat_id=chat.CHAT_ID, message_id=message_id) is not None:
             return True
     log.error("Could not delete the message with a guest's password (message %s)", message_id)
+    if slack.mode() == "slack":
+        return False                                        # Slack never lets an app delete your message: nothing to ask
     chat.api("sendMessage", chat_id=chat.CHAT_ID, parse_mode="Markdown", reply_parameters={
         "message_id": message_id, "allow_sending_without_reply": True},
         text="⚠️ *I couldn't delete the message with the password* — please delete it yourself "

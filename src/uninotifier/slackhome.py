@@ -19,8 +19,7 @@ CARD_BODY = 200                              # Slack's limit for a card's body
 
 LRM, FSI, PDI = "‎", "⁨", "⁩"       # an Arabic name never turns a line round: the emoji stays first
 
-EXTRA_BUTTONS = [{"text": "📅 Weekly Timetable", "callback_data": "schedule"},
-                 {"text": "🔄 Check Now", "callback_data": "check"},
+EXTRA_BUTTONS = [{"text": "🔄 Check Now", "callback_data": "check"},
                  {"text": "➕ New Reminder", "callback_data": "rem:new"}]
 
 

@@ -140,6 +140,7 @@ _TITLE_RUN = re.compile(r"^(\S+\s+)\*([^*\n:]+)\*\s+([^\n]+)$")          # "🔧
 _FIELD = re.compile(r"^(\S+\s+)?\*([^*\n]{1,40}?):\*\s*(.+)$")            # "📘 *Course:* Big Data"
 _NOTE = re.compile(r"^_[^_\n].*_$")                                     # "_A note in italics._"
 HEADER_LIMIT = 150
+TITLE_SHOWN = 38                   # what a box's title shows on one line; a longer line stays inside the box, whole
 SECTION_LIMIT = 2900
 MAX_BLOCKS = 50
 
@@ -320,7 +321,7 @@ def boxed(card: list[dict], title: str = HOME_TITLE) -> list[dict]:
                 subtitle = ""
     elif children and children[0]["type"] == "section" and "text" in children[0]:
         first = children[0]["text"]["text"]
-        if "\n" not in first and "<" not in first and len(first) <= HEADER_LIMIT:
+        if "\n" not in first and "<" not in first and len(_plain(first)) <= TITLE_SHOWN:
             title = _plain(children.pop(0)["text"]["text"])    # a one-line message: the line is the title
     if not children:
         return card
