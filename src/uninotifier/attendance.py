@@ -180,3 +180,29 @@ def warning(course: str, kind: str, data: dict | None = None) -> str | None:
     if info["state"] == "last":
         return f"⚠️ *{course}* — {info['count']} of {info['allowed']}: ONE absence left before deprivation"
     return None
+
+
+EARLIER = "earlier-"            # an absence from before the bot counted: kept as a count, with no date
+
+
+def adjust(course: str, delta: int) -> int:
+    """One absence more (an earlier one, no date) or one fewer (an earlier one first, else the latest).
+    Never below 0. Returns the new count."""
+    data = load()
+    days = list(data["absences"].get(course, []))
+    if delta > 0:
+        number = 1
+        while f"{EARLIER}{number}" in days:
+            number += 1
+        days.append(f"{EARLIER}{number}")
+    elif days:
+        earlier = [d for d in days if d.startswith(EARLIER)]
+        gone = earlier[-1] if earlier else days[-1]
+        days.remove(gone)
+        data["answered"].pop(gone, None)
+    if days:
+        data["absences"][course] = sorted(days)
+    else:
+        data["absences"].pop(course, None)
+    save(data)
+    return len(days)

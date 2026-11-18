@@ -1258,3 +1258,16 @@ def test_attendance_counts_absences_by_the_rules():
     assert attendance.load()["answered"]["2026-11-15"] == "none"
     attendance.mark_asked(monday, datetime(2026, 11, 16, 12, 0))
     assert "ONE absence left" in attendance.warning("Physics", "normal", {"absences": {"Physics": ["a"] * 4}})
+
+
+def test_attendance_earlier_absences_can_be_entered():
+    from uninotifier import attendance
+    attendance.FILE = Path(tempfile.mkdtemp()) / "attendance.json"
+    assert attendance.adjust("Algebra", 1) == 1 and attendance.adjust("Algebra", 1) == 2
+    assert attendance.count("Algebra") == 2
+    assert attendance.adjust("Algebra", -1) == 1 and attendance.adjust("Algebra", -1) == 0
+    assert attendance.adjust("Algebra", -1) == 0 and "Algebra" not in attendance.load()["absences"]
+    import importlib
+    flow = importlib.import_module("uninotifier.bot.attendance_flow")
+    text, rows = flow.view_set()
+    assert "earlier absences" in text and rows[-1][0]["callback_data"] == "att:home"

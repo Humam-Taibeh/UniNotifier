@@ -3,7 +3,7 @@
 the screen with every course's count and its limit, and the warnings (attendance.py has the rules).
 
 Buttons: att:ask:<date> · att:all:<date> · att:none:<date> · att:pick:<date> · att:t:<date>:<n> ·
-att:save:<date> · att:home · att:today · att:undo:<n>
+att:save:<date> · att:home · att:today · att:undo:<n> · att:set · att:adj:<n>:<up|down>
 """
 
 import logging
@@ -87,7 +87,24 @@ def view_home() -> tuple[str, list]:
         if info["count"]:
             rows.append([{"text": f"↩️ Undo the last absence: {course[:28]}", "callback_data": f"att:undo:{i}"}])
     lines += ["", "Normal course: 5 allowed, the 6th deprives. Blended: 2 allowed, the 3rd deprives."]
-    return "\n".join(lines), [[{"text": "➕ Record today", "callback_data": "att:today"}], *rows, chat.BACK_ROW]
+    return "\n".join(lines), [[{"text": "➕ Record today", "callback_data": "att:today"},
+                               {"text": "📝 Earlier absences", "callback_data": "att:set"}], *rows, chat.BACK_ROW]
+
+
+def view_set() -> tuple[str, list]:
+    """Absences from before the bot counted: − and + on every course."""
+    data = attendance.load()
+    kind = attendance.kinds()
+    lines = ["📝 *Your earlier absences*", media.DIVIDER,
+             "Set each course to the number of absences you have now. − and + change it by one."]
+    rows = []
+    for i, course in enumerate(sorted(kind)):
+        info = attendance.status(course, kind[course], data)
+        rows.append([{"text": "➖", "callback_data": f"att:adj:{i}:down"},
+                     {"text": f"{course[:26]} · {info['count']}/{info['allowed']}", "callback_data": "att:set"},
+                     {"text": "➕", "callback_data": f"att:adj:{i}:up"}])
+    rows.append([{"text": "✅ Done", "callback_data": "att:home"}])
+    return "\n".join(lines), rows
 
 
 # ------------------------------------------------------------------ buttons
@@ -104,6 +121,15 @@ def handle_callback(cb: dict, action: str, message_id: int | None) -> None:
         message_id = None
     if what == "home":
         _show(message_id, view_home())
+        return
+    if what == "set":
+        _show(message_id, view_set())
+        return
+    if what == "adj":
+        names = sorted(attendance.kinds())
+        if len(parts) > 3 and parts[2].isdigit() and int(parts[2]) < len(names) and parts[3] in ("up", "down"):
+            attendance.adjust(names[int(parts[2])], 1 if parts[3] == "up" else -1)
+        _show(message_id, view_set())
         return
     if what == "today":
         day = date.today()
