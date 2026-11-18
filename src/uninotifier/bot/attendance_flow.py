@@ -22,7 +22,6 @@ log = logging.getLogger("uninotifier")
 TICK = 60                                   # seconds between looks at whether the question is due
 MAIN = {"text": "🏠 Main Menu", "callback_data": "menu"}
 ATTENDANCE = {"text": "🔙 Attendance", "callback_data": "att:home"}
-KIND_TAG = {"blended": " · blended", "once": " · once a week", "normal": ""}
 
 
 def _in_slack() -> bool:
@@ -44,7 +43,7 @@ def _course_lines(day: date) -> list[str]:
 
 
 def _course_text(i: int, course: str, kind: str, info: dict) -> str:
-    return (f"{attendance.MARK[info['state']]} *{i + 1}. {course}*{KIND_TAG[kind]}\n"
+    return (f"{attendance.MARK[info['state']]} *{i + 1}. {course}*\n"
             f"{attendance.bar(info['count'], info['allowed'])}  {info['count']} of {info['allowed']} · "
             f"{attendance.state_text(info)}")
 

@@ -1511,3 +1511,13 @@ def test_record_today_says_what_was_already_recorded_and_waits_for_the_day_to_en
         assert "absent from Arabic" in flow.view_today()[0]                              # a changed answer is said as it is now
     finally:
         schedule.load_schedule = keep
+
+
+def test_attendance_lines_do_not_name_the_kind_of_course():
+    """A course line says its absences and what is left — not 'blended' or 'once a week': the limit already says it."""
+    import importlib
+    from uninotifier import attendance
+    flow = importlib.import_module("uninotifier.bot.attendance_flow")
+    for kind in ("normal", "blended", "once"):
+        text = flow._course_text(0, "Big Data", kind, attendance.status("Big Data", kind, {"absences": {}, "limits": {}}))
+        assert "blended" not in text and "once a week" not in text and text.startswith("🟢 *1. Big Data*")
