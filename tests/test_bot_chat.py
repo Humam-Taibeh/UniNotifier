@@ -1569,3 +1569,27 @@ def test_a_new_transcript_replaces_the_old_card_and_a_heading_has_room_above_it(
         assert not blocks[1].get("text", {}).get("text", "").endswith(slack.GAP)
     finally:
         slack.mode = keep
+
+
+def test_the_term_hours_rule_is_small_print_in_one_piece_with_the_overview():
+    """Registration Plan (Slack): Left to take / Open to you / Not yet, and right under them — no gap — the hours the term may have,
+    short and small; the 'Suggest my courses' line comes last, apart."""
+    from uninotifier import registration, slack
+    assert registration.allowed_short({"kind": registration.REGULAR, "graduating": False}) == (
+        "📏 12–18 hrs a term · 21 with an excellent CGPA or in your graduation term")
+    assert registration.allowed_short({"kind": registration.REGULAR, "graduating": True}).startswith("📏 Up to 21 hrs")
+    assert "12 only in your last term" in registration.allowed_short({"kind": registration.SUMMER, "graduating": False})
+    keep = slack.mode
+    try:
+        slack.mode = lambda: "slack"
+        text = "\n".join(["🗓️ *Registration Plan* — Second semester", "━━━━━━━━━━━━━━━━━━",
+                          "🏁 *Left to take* — 58 hrs", "✅ *Open to you* — 30 hrs", "⛔ *Not yet* — 28 hrs",
+                          slack.small(registration.allowed_short({"kind": registration.REGULAR, "graduating": False})),
+                          "", "✨ *Suggest my courses* — choose the hours:"])
+        blocks = slack.blocks(text, None, live=False)
+        kinds = [(b["type"], b.get("block_id", "")[:5]) for b in blocks]
+        assert [k[0] for k in kinds] == ["header", "context", "section", "context", "section"], kinds
+        assert kinds[3][1] == "small" and "12–18 hrs a term" in blocks[3]["elements"][0]["text"]     # small, right under the overview
+        assert "Left to take" in blocks[2]["text"]["text"] and "Not yet" in blocks[2]["text"]["text"]      # the three lines stacked in one block
+    finally:
+        slack.mode = keep

@@ -323,6 +323,16 @@ def allowed_line(advice: dict) -> str:
             "excellent CGPA or in your graduation term")
 
 
+def allowed_short(advice: dict) -> str:
+    """The hours the term may have, in one short line of small print under the overview (the label is the ruler)."""
+    if advice["kind"] == SUMMER:
+        return (f"📏 Up to {SUMMER_HOURS[-1]} hrs · " + (f"{SUMMER_TOP} now, as it is your last term" if advice["graduating"]
+                                                          else f"{SUMMER_TOP} only in your last term"))
+    if advice["graduating"]:
+        return f"📏 Up to {REGULAR_TOP} hrs, fewer than {REGULAR_HOURS[0]} allowed"
+    return f"📏 {REGULAR_HOURS[0]}–{REGULAR_HOURS[-1]} hrs a term · {REGULAR_TOP} with an excellent CGPA or in your graduation term"
+
+
 def overview_lines(advice: dict, term: str) -> list[str]:
     """The Registration screen: where you stand for `term`, before the hours are chosen."""
     entries = advice["entries"]

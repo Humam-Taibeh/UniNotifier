@@ -489,8 +489,9 @@ def test_registration_plan():
         assert rows[1][0]["callback_data"] == "reg:pick" and [b["callback_data"] for b in rows[-2]] == ["reg:open", "reg:held"] and not any(b["callback_data"] == "reg:register" for r in rows for b in r)
         assert rows[-1] == chat.RECORD_ROW and not any("reg:k:" in b["callback_data"] or b["callback_data"] == "portal:transcript" for r in rows for b in r)
         assert "open with the portal's registration period" not in text and "Your plan as read" not in text and "Update My Plan" not in text
-        assert "Regular term* — 12–18 hrs" in text and text.splitlines()[-1].startswith("✨ *Suggest my courses*"), text    # the hours are last
-        assert text.index("Not yet*") < text.index("Regular term*") < text.index("Suggest my courses")
+        assert "📏 12–18 hrs a term · 21 with an excellent CGPA or in your graduation term" in text and text.splitlines()[-1].startswith("✨ *Suggest my courses*"), text    # the hours are last
+        assert text.index("Not yet*") < text.index("📏 12–18") < text.index("Suggest my courses")
+        assert text.splitlines()[text.splitlines().index(next(l for l in text.splitlines() if l.startswith("📏")) ) - 1].startswith("⛔ *Not yet*"), "one piece: no gap"
         suggested, rows = registration_flow.view_screen("h:12")
         assert "✨ *Suggested: 12 hrs*" in suggested and "*Total:* 12 hrs" in suggested and rows[0][0]["callback_data"] == "reg:pick"
         assert [b["callback_data"] for b in rows[0]] == ["reg:pick", "reg:register"], "Register is where the courses are fixed"
