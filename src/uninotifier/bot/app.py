@@ -253,6 +253,7 @@ def handle_callback(cb: dict) -> None:
         pressed, moved = slackbot.PRESS["id"], slackbot.PRESS["moved"]
         slackbot.PRESS.update(id=None, moved=False)
         if leaving and moved and pressed:             # the screen it opened is below: the one it was pressed on is gone
+            log.info("Slack: %s opened a screen below — the one it was pressed on (%s) is taken away", action, pressed)
             chat.retire(pressed)
     chat.answer(cb["id"])                  # a no-op when the route already answered; a raise skips it (update_failed answers)
 

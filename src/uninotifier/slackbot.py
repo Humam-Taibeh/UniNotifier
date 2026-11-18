@@ -218,13 +218,19 @@ def send(text: str, markup=None, files: list[tuple[str, bytes]] | None = None) -
     return remember(answer["ts"], text, markup, file_ids, [name for name, _ in files] if files else None)
 
 
+def channel_of(token: str) -> str:
+    return _settings()[1]
+
+
 def _retire_old_copies(token: str, names: list[str], keep: list[str]) -> None:
-    """A file sent again (the weekly timetable each time it is asked for) replaces its older copies
-    in Slack's Files tab: they only fill the free plan's storage. Best effort — never raises."""
+    """A file sent again (a transcript, a balance, the timetable) replaces what held its older copies: the files
+    leave Slack's Files tab (they only fill the free plan's storage) and so do the cards they were under — the chat
+    keeps one transcript, the newest, never a pile of old ones with their buttons. Best effort — never raises."""
     try:
         with fileio.write_lock(STORE):
             data = _load()
-            for found in data["messages"].values():
+            gone = []
+            for key, found in data["messages"].items():
                 if not set(found.get("names") or []) & set(names):
                     continue
                 for file_id in [f for f in found.get("files") or [] if f not in keep]:
@@ -232,7 +238,11 @@ def _retire_old_copies(token: str, names: list[str], keep: list[str]) -> None:
                         slack.call(token, "files.delete", {"file": file_id})
                     except (slack.SlackError, requests.RequestException):
                         pass
+                if found.get("ts") and found["ts"] != HOME_TS and slack.delete(token, channel_of(token), found["ts"]):
+                    gone.append(key)
                 found["files"], found["names"] = [], []
+            for key in gone:
+                data["messages"].pop(key, None)
             _save(data)
     except Exception as e:                                    # a tidy-up must never fail a send
         log.warning("Slack: old copies of a file were not removed: %s", e)

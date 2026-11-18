@@ -325,6 +325,20 @@ def _one_liner(blocks_: list[dict]) -> bool:
     return "\n" not in words and len(words) <= 60
 
 
+GAP = chr(0x2800)                     # a blank character: a line of empty space that Slack does not trim
+
+
+def _room_before_heading(out: list[dict]) -> None:
+    """A heading never sits against the text above it: the block before it ends with an empty line (no block spent)."""
+    if not out:
+        return
+    last = out[-1]
+    if last["type"] == "context" and last["elements"] and last["elements"][0].get("text"):
+        last["elements"][0]["text"] += chr(10) + GAP
+    elif last["type"] == "section" and "text" in last and "accessory" not in last:
+        last["text"]["text"] += chr(10) + GAP
+
+
 def _only_title(blocks_: list[dict]) -> bool:
     """Nothing yet but the card's title (and its small line): the box already draws a line under it."""
     return all(b["type"] == "header" or b.get("block_id") == "subtitle" for b in blocks_)
@@ -384,6 +398,7 @@ def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | Non
             if fields:
                 flush_fields()
             heading = _plain(line[len(HEAD):])
+            _room_before_heading(out)
             out.append({"type": "header", "text": {"type": "plain_text", "text": heading[:HEADER_LIMIT], "emoji": True}})
             continue
         if line.startswith(SMALL):                             # details of the item above: smaller, inside it

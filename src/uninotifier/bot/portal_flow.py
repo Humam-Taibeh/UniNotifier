@@ -173,7 +173,7 @@ def record_text(kind: str, semesters: list[dict], plan: dict | None, overlay: di
     return "\n".join(["✅ *Courses Taken*", "", *body]).strip() if body else ""
 
 
-TRANSCRIPT_ROW = [{"text": "🔙 Transcript", "callback_data": "portal:transcript:saved"},
+TRANSCRIPT_ROW = [{"text": "🔙 Transcript", "callback_data": "rec:summary"},
                   {"text": "🏠 Main Menu", "callback_data": "menu"}]
 
 
@@ -182,6 +182,16 @@ def handle_record_callback(cb: dict, action: str) -> None:
     was last read (the message the button is on). The list ends with the other list and the way back."""
     kind = action.split(":")[1]
     cached = load_cached("transcript")
+    message_id = (cb.get("message") or {}).get("message_id")
+    in_slack = slack.mode() == "slack" and bool(message_id)
+    if kind == "summary":                            # Slack's Back from a list: the transcript's own words, in place, at once
+        if cached and in_slack:
+            chat.answer(cb["id"])
+            header, _, rows = compose(cached[0], "")
+            chat.edit_in_place(message_id, header, rows)
+        else:
+            chat.answer(cb["id"], "Open 📜 Transcript again first — this one is no longer saved.")
+        return
     data = cached[0].data if cached else {}
     text = record_text(kind, data.get("semesters") or [], data.get("plan"))
     if not text:
@@ -189,8 +199,10 @@ def handle_record_callback(cb: dict, action: str) -> None:
         return
     chat.answer(cb["id"])
     other = [b for b in record_buttons("rec", bool(data.get("plan"))) if b["callback_data"] != action]
-    back = TRANSCRIPT_ROW if slack.mode() == "slack" else chat.RECORD_ROW      # Back is the transcript it came from
-    notifier.send_long_message(chat.BOT_TOKEN, chat.CHAT_ID, text, rows=[r for r in (other, back) if r])
+    if in_slack:                                     # the transcript card becomes the list: one place, no new message
+        chat.edit_in_place(message_id, text, [r for r in (other, TRANSCRIPT_ROW) if r])
+        return
+    notifier.send_long_message(chat.BOT_TOKEN, chat.CHAT_ID, text, rows=[r for r in (other, chat.RECORD_ROW) if r])
     chat.leave_menu()
 
 

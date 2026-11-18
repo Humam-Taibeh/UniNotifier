@@ -559,9 +559,9 @@ def test_study_plan_from_the_portal():
     assert block[0].endswith("· 3h — failed, retake") and "❌" in block[0] and "هياكل البيانات" in block[0]
     assert "▫️" in block[1] and block[2].endswith("· 1h")
     assert "مهارات الدراسة" not in text, "nothing that was passed"
-    # the placement exams are said on their own, never among the plan's hours
-    at = lines.index("*Placement Exams* — nothing added to the plan")
-    assert [l.lstrip(degreeplan.LRM) for l in lines[at + 1:at + 3]] == ["✅ English — exempt", "✅ Computer Skills — exempt"]
+    # exempt in every exam: finished — nothing about them among what is left, no list of finished categories, no legend
+    assert not any("Placement" in l or "exempt" in l or "Complete:" in l or "not taken yet" in l for l in lines), lines
+    assert [l.lstrip(degreeplan.LRM) for l in degreeplan.placement_lines(plan)[2:4]] == ["✅ English — exempt", "✅ Computer Skills — exempt"]
 
     # one that was not passed is a course on top of the plan: its hours are said, apart from the degree's
     owed = [list(c) for c in PLAN_CATEGORIES]

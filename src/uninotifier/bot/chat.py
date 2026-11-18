@@ -375,6 +375,13 @@ def is_file_message(message: dict | None) -> bool:
     return bool(message) and bool(message.get("document") or message.get("photo") or message.get("reply_to_message"))
 
 
+def edit_in_place(message_id: int, text: str, rows: list) -> None:
+    """Slack: the pressed message BECOMES the screen you went to, where it stands (its picture, if it has one, stays
+    above it while you are inside that section). Nothing is sent, nothing is left behind above."""
+    api("editMessageText", chat_id=CHAT_ID, message_id=message_id, text=text, parse_mode="Markdown",
+        disable_web_page_preview=True, reply_markup={"inline_keyboard": rows})
+
+
 def edit_view(message_id: int, text: str, rows: list) -> None:
     """Change a screen in place. A screen with buttons that is not the menu - an old one a
     button was pressed on, a status line that has finished - is not edited where it sits: the

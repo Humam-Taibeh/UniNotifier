@@ -313,8 +313,7 @@ def remaining_lines(plan: dict) -> list[str]:
         choice = " · choose from:" if offered > category["required"] else ""
         lines += ["", f"*{title}* — {_n(category['remaining'])} of {_n(category['required'])} hrs left{choice}"]
         lines += [_course(c) for c in open_courses]
-    lines += placement_lines(plan)
-    if complete:
-        lines += ["", "✅ *Complete:* " + ", ".join(complete)]
-    lines += ["", "_⏳ this term · ❌ failed, retake · ▫️ not taken yet_"]
-    return lines
+    exams = placement(plan)
+    if exams and exams["extra"]:                   # exempt in every exam: finished, nothing to show among what is left
+        lines += placement_lines(plan)
+    return lines                                   # (no list of finished categories, no legend: the marks speak)

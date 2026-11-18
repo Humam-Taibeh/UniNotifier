@@ -1036,8 +1036,8 @@ def test_the_bot_lives_in_slack():
                 other = slackbot.remember("1.8", "other", None, ["F3"], ["Else.pdf"])
                 calls.clear()
                 slackbot._retire_old_copies("T", ["Weekly.pdf"], ["F2"])
-                assert [m for m, _ in calls] == ["files.delete"], calls
-                assert slackbot.entry(old)["files"] == [] and slackbot.entry(other)["files"] == ["F3"]
+                assert [m for m, _ in calls] == ["files.delete", "chat.delete"], calls      # the old file AND the card it was under
+                assert slackbot.entry(old) is None and slackbot.entry(other)["files"] == ["F3"]
 
                 # a Moodle message from the 15-minute check: real buttons too, and its number handed back
                 reply = {}
@@ -1509,7 +1509,62 @@ def test_back_from_the_lists_returns_to_the_transcript_without_reading_the_porta
         portal_flow._portal_lock = type("L", (), {"release": lambda self: log.append("released")})()
         portal_flow.run_portal("transcript", 77, saved=True)
         assert log == [("sent", "transcript", ""), ("settle", "transcript"), ("retire", 77), "released"], log
-        assert portal_flow.TRANSCRIPT_ROW[0]["callback_data"] == "portal:transcript:saved" and portal_flow.TRANSCRIPT_ROW[1]["text"] == "🏠 Main Menu"
+        assert portal_flow.TRANSCRIPT_ROW[0]["callback_data"] == "rec:summary" and portal_flow.TRANSCRIPT_ROW[1]["text"] == "🏠 Main Menu"
     finally:
         (slack.mode, portal_flow.load_cached, portal_flow.send_cached, portal_flow.settle, chat.retire,
          portal.fetch_many, portal_flow._portal_lock) = keep
+
+
+def test_in_slack_a_transcript_list_replaces_the_card_in_place_and_back_restores_it_at_once():
+    """Courses Taken / Remaining Courses (Slack): the pressed card BECOMES the list where it stands — nothing new is sent, no
+    old card is left above; Back restores the transcript's words on the same card from the saved copy, instantly (no read, no
+    upload). Telegram sends the list as before."""
+    from uninotifier import portal, slack
+    from uninotifier.bot import chat, portal_flow
+    log = []
+    keep = (slack.mode, portal_flow.load_cached, portal_flow.record_text, chat.edit_in_place, chat.answer, chat.leave_menu,
+            portal_flow.notifier.send_long_message)
+    try:
+        saved = portal.Result("transcript", True, b"png", [], {}, [], [])
+        saved.data = {"semesters": [{"term": "T", "courses": []}], "plan": {"categories": []}}
+        portal_flow.load_cached = lambda section: (saved, 1.7e9)
+        portal_flow.record_text = lambda kind, semesters, plan, overlay=None: f"✅ *Courses Taken* ({kind})"
+        chat.edit_in_place = lambda mid, text, rows: log.append(("edit", mid, text, [b.get("callback_data") for r in rows for b in r]))
+        chat.answer = lambda *a, **k: True
+        chat.leave_menu = lambda: None
+        portal_flow.notifier.send_long_message = lambda *a, **k: log.append(("sent",))
+        slack.mode = lambda: "slack"
+        portal_flow.handle_record_callback({"id": "1", "message": {"message_id": 21}}, "rec:taken")
+        assert log and log[0][:3] == ("edit", 21, "✅ *Courses Taken* (taken)") and log[0][3][-2:] == ["rec:summary", "menu"], log
+        assert "rec:left" in log[0][3] and "rec:taken" not in log[0][3]              # the other list, the way back
+        log.clear()
+        portal_flow.handle_record_callback({"id": "2", "message": {"message_id": 21}}, "rec:summary")
+        assert log[0][0] == "edit" and log[0][1] == 21 and "Transcript" in log[0][2] and "ZUJ Portal" in log[0][2], log   # its own words again
+        assert [e for e in log if e[0] == "sent"] == []
+        log.clear()
+        slack.mode = lambda: "telegram"
+        portal_flow.handle_record_callback({"id": "3", "message": {"message_id": 21}}, "rec:taken")
+        assert log == [("sent",)]
+    finally:
+        (slack.mode, portal_flow.load_cached, portal_flow.record_text, chat.edit_in_place, chat.answer, chat.leave_menu,
+         portal_flow.notifier.send_long_message) = keep
+
+
+def test_a_new_transcript_replaces_the_old_card_and_a_heading_has_room_above_it():
+    """A transcript sent again takes the older transcript cards (and their pictures) out of the chat — never a pile of old cards with
+    buttons; and a heading never sits against the line above it."""
+    from uninotifier import slack
+    blocks = slack.blocks("⏳ *Tasks*\n" + slack.heading("📚 *Course tasks*", "📚 Course tasks") + "\n" + slack.small("none ahead 🎉") +
+                          "\n" + slack.heading("🔔 *Your reminders*", "🔔 Your reminders"), None, live=False) if False else None
+    keep = slack.mode
+    try:
+        slack.mode = lambda: "slack"
+        text = "\n".join(["⏳ *Tasks*", slack.heading("📚 *Course tasks*", "📚 Course tasks"), slack.small("none ahead 🎉"),
+                          slack.heading("🔔 *Your reminders*", "🔔 Your reminders"), "1. a reminder"])
+        blocks = slack.blocks(text, None, live=False)
+        kinds = [b["type"] for b in blocks]
+        assert kinds == ["header", "header", "context", "header", "section"], kinds
+        assert blocks[2]["elements"][0]["text"].endswith(slack.GAP), "an empty line under 'none ahead', before the next heading"
+        assert not blocks[1].get("text", {}).get("text", "").endswith(slack.GAP)
+    finally:
+        slack.mode = keep
