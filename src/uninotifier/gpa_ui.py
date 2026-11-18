@@ -137,7 +137,8 @@ def view_course(names: list[str], i: int) -> tuple[str, list]:
             + ([{"text": "🧹 Clear", "callback_data": f"gpa:wx:{i}"}] if work else []),
             [{"text": "✏️ Final Grade", "callback_data": f"gpa:g:{i}"}]
             + ([{"text": "🧹 Clear", "callback_data": f"gpa:x:{i}"}] if c["grade"] is not None else []),
-            [{"text": "🔙 Back", "callback_data": "gpa:home"}, NEED_BUTTON]]
+            [NEED_BUTTON],
+            [{"text": "🔙 Back", "callback_data": "gpa:home"}, MENU_BUTTON]]
     return "\n".join(lines), rows
 
 
@@ -351,7 +352,7 @@ def on_callback(names: list[str], action: str):
         if not c["syllabus"]:
             return (f"⚠️ Set the syllabus of *{escape_md(name)}* first.",
                     [[{"text": "📊 Set Syllabus", "callback_data": f"gpa:s:{i}"}],
-                     [{"text": "🔙 Back", "callback_data": f"gpa:c:{i}"}]])
+                     [{"text": "🔙 Back", "callback_data": f"gpa:c:{i}"}, MENU_BUTTON]])
         parts_text = ", ".join(f"{n} ({fmt(w)})" for n, w in c["syllabus"])
         return Prompt("marks", i, f"📝 *Marks — {escape_md(name)}*\n\n"
                       f"Send the marks you have so far, as points out of each part's weight:\n{escape_md(parts_text)}\n"

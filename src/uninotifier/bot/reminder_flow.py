@@ -25,6 +25,8 @@ _reminder_wait: str | None = None    # "note" | "time": the next plain message a
 
 
 REMINDER_CANCEL_ROW = chat.cancel_row("tasks")
+TASKS_ROW = [{"text": "🔙 Tasks & Reminders", "callback_data": "tasks"}, {"text": "🏠 Main Menu", "callback_data": "menu"}]
+MANAGE_ROW = [{"text": "🔙 Manage Reminders", "callback_data": "rem:list"}, {"text": "🏠 Main Menu", "callback_data": "menu"}]
 
 
 def view_when(draft: dict) -> tuple[str, list]:
@@ -75,7 +77,7 @@ def schedule_draft(due: datetime) -> tuple[str, list]:
         _reminder_draft.clear()
         if reminders.update(item_id, due=due.timestamp()):
             return view_reminder(item_id, "✅ *Time changed*")
-        return "That reminder is already gone.", [[{"text": "🔙 Tasks & Reminders", "callback_data": "tasks"}]]
+        return "That reminder is already gone.", [TASKS_ROW]
     item = reminders.add(_reminder_draft["note"], due.timestamp(), _reminder_draft.get("course"),
                          _reminder_draft.get("url"), _reminder_draft.get("message_id"))
     _reminder_draft.clear()
@@ -85,12 +87,27 @@ def schedule_draft(due: datetime) -> tuple[str, list]:
     return text, [[{"text": "⏳ Tasks & Reminders", "callback_data": "tasks"}], chat.BACK_ROW]
 
 
+MANAGE_SHOWN = 6                                  # in Slack a reminder is a line of its own, and a box holds so many
+LRM, FSI, PDI = chr(0x200e), chr(0x2068), chr(0x2069)      # an Arabic note beside a time never reorders the line
+
+
 def view_manage_reminders() -> tuple[str, list]:
+    """In Slack every reminder is a line with its whole title and its time, and an Open button beside it — a button
+    label would cut it. Elsewhere a button per reminder."""
     mine = reminders.pending()
+    in_slack = slack.mode() == "slack"
     lines = ["✏️ *Manage Reminders*", "", "Tap one to read it, change it or delete it." if mine else "No reminders left."]
-    rows = [[{"text": f"{chat._short(_first_line(r), 30)} · {reminders.when_text(r['due'])}",
-              "callback_data": f"rem:open:{r['id']}"}] for r in mine]
-    return "\n".join(lines), rows + [[{"text": "🔙 Tasks & Reminders", "callback_data": "tasks"}]]
+    rows = []
+    for n, r in enumerate(mine, 1):
+        when = reminders.when_text(r["due"])
+        if in_slack and n <= MANAGE_SHOWN:
+            rows.append([{"text": "Open", "callback_data": f"rem:open:{r['id']}", "line": {
+                "text": f"{LRM}*{n}. 📝 {FSI}{escape_md(_first_line(r))}{PDI}*" + chr(10) + f"🕐 {when}"}}])
+        elif not in_slack:
+            rows.append([{"text": f"{chat._short(_first_line(r), 30)} · {when}", "callback_data": f"rem:open:{r['id']}"}])
+    if in_slack and len(mine) > MANAGE_SHOWN:
+        lines.append(f"… and {len(mine) - MANAGE_SHOWN} more — finish or delete one to see the next")
+    return "\n".join(lines), rows + [TASKS_ROW]
 
 
 def _first_line(reminder: dict) -> str:
@@ -101,7 +118,7 @@ def view_reminder(reminder_id: int, header: str = "📝 *Reminder*") -> tuple[st
     """One reminder in full, with what can be done to it: change its text, its day, its time, or delete it."""
     item = reminders.get(reminder_id)
     if not item:
-        return "That reminder is already gone.", [[{"text": "🔙 Manage Reminders", "callback_data": "rem:list"}]]
+        return "That reminder is already gone.", [MANAGE_ROW]
     lines = [header, "", escape_md(item["note"])]
     if item.get("course"):
         lines.append(f"\n📘 *Course:* {escape_md(item['course'])}")
@@ -112,7 +129,7 @@ def view_reminder(reminder_id: int, header: str = "📝 *Reminder*") -> tuple[st
     if item.get("message_id"):
         rows.append([{"text": "🔗 View Original Post", "callback_data": f"rem:view:{reminder_id}"}])
     rows += [[{"text": "🗑️ Delete", "callback_data": f"rem:del:{reminder_id}"}],
-             [{"text": "🔙 Manage Reminders", "callback_data": "rem:list"}]]
+             MANAGE_ROW]
     return "\n".join(lines), rows
 
 
@@ -122,7 +139,7 @@ def view_confirm_delete(reminder_id: int) -> tuple[str, list]:
         return view_reminder(reminder_id)
     return (f"🗑️ *Delete this reminder?*\n\n{escape_md(item['note'])}\n\n🕐 {reminders.when_text(item['due'])}",
             [[{"text": "🗑️ Yes, Delete", "callback_data": f"rem:yes:{reminder_id}"},
-              {"text": "🔙 Keep It", "callback_data": f"rem:open:{reminder_id}"}]])
+              {"text": "🔙 Keep It", "callback_data": f"rem:open:{reminder_id}"}], MANAGE_ROW])
 
 
 def _edit_draft(reminder_id: int) -> dict | None:

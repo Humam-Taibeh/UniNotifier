@@ -391,6 +391,7 @@ def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | Non
         else:
             flush_prose()
     flush_prose()
+    flush_small()                                              # the last item's small details are an item too
     if fields:
         flush_fields()
     if live:
@@ -413,17 +414,21 @@ HOME_BLOCKS = 100
 BOX_CHILDREN = 10                  # Slack's limit of blocks inside one container
 
 
+def _foldable(children: list[dict]) -> bool:
+    return any(str(b.get("block_id", "")).startswith("small") and i and children[i - 1]["type"] == "section"
+               and "text" in children[i - 1] for i, b in enumerate(children))
+
+
 def _fold_small(children: list[dict]) -> list[dict]:
-    """Small details (block "small") as part of the line above them: one block for the item instead of two."""
-    out: list[dict] = []
-    for block in children:
-        last = out[-1] if out else None
-        if str(block.get("block_id", "")).startswith("small") and last and last["type"] == "section" and "text" in last:
-            out[-1] = {"type": "section", "text": {"type": "mrkdwn", "text":
-                       last["text"]["text"] + "\n" + block["elements"][0]["text"]}}
-        else:
-            out.append(block)
-    return out
+    """The last item's small details as part of the line above them: one block for that item instead of two (the
+    earlier items keep their hierarchy as long as the box can hold it)."""
+    for i in range(len(children) - 1, 0, -1):
+        block, last = children[i], children[i - 1]
+        if str(block.get("block_id", "")).startswith("small") and last["type"] == "section" and "text" in last:
+            words = last["text"]["text"] + "\n" + block["elements"][0]["text"]
+            joined = {"type": "section", "text": {"type": "mrkdwn", "text": words}}
+            return children[:i - 1] + [joined] + children[i + 1:]
+    return children
 
 
 def _fewer(children: list[dict], kind: str) -> list[dict]:
@@ -437,7 +442,7 @@ def _fewer(children: list[dict], kind: str) -> list[dict]:
                 and len(last["elements"]) + len(block["elements"]) <= 25:
             out[-1] = {**last, "elements": last["elements"] + block["elements"]}
         elif kind == "section" and last and block["type"] == last["type"] == "section" \
-                and "text" in block and "text" in last \
+                and "text" in block and "text" in last and "accessory" not in block and "accessory" not in last \
                 and len(last["text"]["text"]) + len(block["text"]["text"]) + 2 <= SECTION_LIMIT:
             out[-1] = {"type": "section", "text": {"type": "mrkdwn",
                                                    "text": last["text"]["text"] + "\n\n" + block["text"]["text"]}}
@@ -479,7 +484,7 @@ def boxed(card: list[dict], title: str = HOME_TITLE, flat: bool = False) -> list
 
     if over():                                             # too many for a box: the lines between parts go first,
         children = [b for i, b in enumerate(children) if b["type"] != "divider" or above_buttons(i)]
-    if over():                                             # then an item's small details join its line
+    while over() and _foldable(children):                  # then the LAST items' small details join their lines, one at a time
         children = _fold_small(children)
     for kind in ("actions", "section"):
         if over():

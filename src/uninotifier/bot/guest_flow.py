@@ -136,7 +136,7 @@ def handle_guest_text(text: str, message_id: int | None) -> None:
             value = None
         if value is None or not 40 <= value <= 100:
             guest_send("⚠️ Send a number between 40 and 100 — for example 78.",
-                       [[{"text": "🔙 Back", "callback_data": "guest:target"}]])
+                       [[{"text": "🔙 Back", "callback_data": "guest:target"}, {"text": "🏠 Main Menu", "callback_data": "menu"}]])
             return
         _guest["step"] = "done"
         show_target(_guest.get("panel"), value)
@@ -269,7 +269,7 @@ def _target_callback(cb: dict, action: str) -> None:
     elif kind == "tcustom":
         _guest.update(step="target", at=time.time())
         edit_panel(message_id, "✏️ *Custom target*\n\nSend it as a number between 40 and 100 — for example 78.",
-                   [[{"text": "🔙 Back", "callback_data": "guest:target"}]])
+                   [[{"text": "🔙 Back", "callback_data": "guest:target"}, {"text": "🏠 Main Menu", "callback_data": "menu"}]])
     elif kind == "t" and len(parts) > 2:
         try:
             show_target(message_id, float(parts[2]))

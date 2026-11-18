@@ -1317,3 +1317,42 @@ def test_in_slack_a_portal_answer_is_read_when_asked_and_says_no_time():
         assert not portal_flow.fresh_in_slack("balance")
     finally:
         slack.mode = keep
+
+
+def test_reminder_screens_show_whole_titles_and_always_have_back_and_main_menu():
+    """Manage Reminders in Slack: every reminder a line with its whole title and time and an Open button (a button label
+    cut it: '…Thu 19 Nov · 9:00 A'). Every reminder screen — the list, one reminder, the delete question, the prompts that
+    wait for your words — ends with Back and Main Menu."""
+    from uninotifier import reminders, slack
+    from uninotifier.bot import chat, reminder_flow
+    items = [{"id": n, "note": note, "course": None, "due": 1900000000 + n, "message_id": None}
+             for n, note in ((1, "امتحان منتصف الفصل"), (2, "Submit the long report about the database design project"))]
+    keep = (slack.mode, reminders.pending, reminders.get)
+    try:
+        reminders.pending = lambda now=None: list(items)
+        reminders.get = lambda rid: next((i for i in items if i["id"] == rid), None)
+        for mode in ("slack", "telegram"):
+            slack.mode = lambda mode=mode: mode
+            screens = {"list": reminder_flow.view_manage_reminders(), "one": reminder_flow.view_reminder(1),
+                       "gone": reminder_flow.view_reminder(99), "delete": reminder_flow.view_delete(1) if hasattr(reminder_flow, "view_delete") else None,
+                       "prompt": ("✏️ *Type a time*", [reminder_flow.REMINDER_CANCEL_ROW]),
+                       "reading": ("⏳ Reading…", [chat.cancel_row("record")])}
+            for name, view in screens.items():
+                if view is None:
+                    continue
+                text, rows = view
+                last = rows[-1]
+                assert len(last) == 2 and last[0]["text"].startswith("🔙") and last[1]["text"] == "🏠 Main Menu", (mode, name, last)
+            text, rows = screens["list"]
+            if mode == "slack":
+                blocks = slack.blocks(text, {"inline_keyboard": rows}, live=True)
+                lines = [b for b in blocks if b["type"] == "section" and "accessory" in b]
+                assert len(lines) == 2 and "Submit the long report about the database design project" in lines[1]["text"]["text"]
+                assert [b["accessory"]["text"]["text"] for b in lines] == ["Open", "Open"]
+                assert len(slack.boxed(blocks)) == 1
+            else:
+                assert not [r for r in rows[:-1] if "line" in r[0]]
+        # the prompts drop what is waiting: nothing is left to answer later
+        assert reminder_flow.REMINDER_CANCEL_ROW[0]["callback_data"] == "cancel:tasks" and reminder_flow.REMINDER_CANCEL_ROW[1]["callback_data"] == "cancel:menu"
+    finally:
+        slack.mode, reminders.pending, reminders.get = keep
