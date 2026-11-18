@@ -123,8 +123,10 @@ def view_tasks() -> tuple[str, list]:
     now = time.time()
     upcoming = tasks.open_tasks(chat.load_state(), now)
 
-    lines = ["⏳ *Upcoming Tasks & Reminders*", media.DIVIDER, slack.heading("📚 *Course tasks*", "📚 Course tasks")]
-    if not upcoming:
+    in_slack = slack.mode() == "slack"
+    lines = ["⏳ *Upcoming Tasks & Reminders*", media.DIVIDER,
+             slack.heading("📚 *Course tasks*", "📚 Course tasks" + (" · none ahead 🎉" if in_slack and not upcoming else ""))]
+    if not upcoming and not in_slack:                    # Slack says it in the heading: one block less
         lines.append("🎉 No assignments or quizzes ahead.")
     for n, task in enumerate(upcoming, 1):
         lines += tasks.task_lines(n, task, now)
@@ -153,9 +155,6 @@ def view_tasks() -> tuple[str, list]:
             continue
         rows.append([{"text": f"🔗 View Original Post ({n})", "callback_data": f"rem:view:{r['id']}"}])
     rows[first_post:] = slack.grouped(rows[first_post:], "items")        # the course's tasks and the posts: one group
-    last = chat.load_last_run().get("finished")
-    if last:
-        lines += ["", media.DIVIDER, f"🕒 *Last Checked:* {notifier.audit_timestamp(last)}"]       # apart from the reminders above it
 
     rows.append([{"text": "➕ New Custom Reminder", "callback_data": "rem:new"}]
                 + ([{"text": "🗑️ Manage Reminders", "callback_data": "rem:list"}] if mine else []))

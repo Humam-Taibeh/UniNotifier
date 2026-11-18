@@ -24,7 +24,7 @@ _reminder_draft: dict = {}           # the reminder being scheduled: note, cours
 _reminder_wait: str | None = None    # "note" | "time": the next plain message answers it
 
 
-REMINDER_CANCEL_ROW = [{"text": "✖️ Cancel", "callback_data": "rem:cancel"}]
+REMINDER_CANCEL_ROW = chat.cancel_row("tasks")
 
 
 def view_when(draft: dict) -> tuple[str, list]:
@@ -192,6 +192,13 @@ def handle_reminder_text(text: str) -> None:
         return
     _reminder_wait = None
     chat.send_view(*schedule_draft(due))
+
+
+def drop_pending() -> None:
+    """A question that was waiting for your text (a reminder's words, its time) is dropped."""
+    global _reminder_wait
+    _reminder_wait = None
+    _reminder_draft.clear()
 
 
 def show_original(reminder_id: int, answer) -> None:

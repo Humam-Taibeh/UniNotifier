@@ -191,36 +191,26 @@ def _rows_json(markup) -> str:
 # ------------------------------------------------------------------ out: what the bot sends
 
 def send(text: str, markup=None, files: list[tuple[str, bytes]] | None = None) -> int:
-    """A card with its buttons. With files (a screenshot): the card, then the files, then the buttons
-    under them — the controls are always the last thing in the chat, never left above a picture — all
-    as one thing: if a file cannot follow, the card is taken back, so a retry never leaves a card twice.
-    Its number (the buttons' message when there are files: it is the one that is pressed and changed)."""
+    """A card with its buttons. With files (a screenshot): the files first, the card with its buttons under them —
+    the controls are on the message itself, never left above a picture. If the card cannot follow, the files are
+    taken back, so a retry never leaves a picture twice. The card's number."""
     token, channel = _settings()
-    controls = slack.buttons(markup, width=slack.ROW_WIDTH) if files and markup else []
-    if not controls:
+    file_ids: list[str] = []
+    if files:
+        file_ids = slack.upload(token, channel, files).get("file_ids", [])
+    try:
         answer = slack.post(token, channel, slack.compose(text, markup), slack.blocks(text, markup, live=True),
                             slack.tone(text))
-        ts, file_ids = answer["ts"], []
-        if files:
-            try:
-                file_ids = slack.upload(token, channel, files).get("file_ids", [])
-            except (slack.SlackError, requests.RequestException, OSError):
-                slack.delete(token, channel, ts)
-                raise
-            _retire_old_copies(token, [name for name, _ in files], file_ids)
-        return remember(ts, text, markup, file_ids, [name for name, _ in files] if files else None)
-    head = slack.post(token, channel, slack.compose(text, None), slack.blocks(text, None, live=True),
-                      slack.tone(text))["ts"]
-    try:
-        file_ids = slack.upload(token, channel, files).get("file_ids", [])
-        tail = slack.post_controls(token, channel, text, controls)["ts"]
     except (slack.SlackError, requests.RequestException, OSError):
-        slack.delete(token, channel, head)
+        for file_id in file_ids:
+            try:
+                slack.call(token, "files.delete", {"file": file_id})
+            except (slack.SlackError, requests.RequestException):
+                pass
         raise
-    _retire_old_copies(token, [name for name, _ in files], file_ids)
-    number = remember(tail, text, markup, file_ids, [name for name, _ in files])
-    _change(number, head=head)                                 # the card above the files goes with the message
-    return number
+    if files:
+        _retire_old_copies(token, [name for name, _ in files], file_ids)
+    return remember(answer["ts"], text, markup, file_ids, [name for name, _ in files] if files else None)
 
 
 def _retire_old_copies(token: str, names: list[str], keep: list[str]) -> None:
@@ -252,28 +242,9 @@ def _edit(message_id, text: str | None, markup, keep_markup: bool = False) -> di
     markup = found.get("markup") if keep_markup else markup
     if found.get("ts") == HOME_TS:                   # a screen on the Home page: the page is redrawn
         return show_home(text, markup)
-    if found.get("head"):                            # a card with files and its buttons under them (see send)
-        return _edit_with_files(message_id, found, text, markup)
     slack.update(token, channel, found["ts"], slack.compose(text, markup), slack.blocks(text, markup, live=True),
                  slack.tone(text))
     _change(message_id, text=text, markup=_rows_json(markup))
-    return {"message_id": int(message_id), "chat": {"id": _chat_id()}, "text": text}
-
-
-def _edit_with_files(message_id, found: dict, text: str, markup) -> dict:
-    """A message made of a card, its files and the buttons under them: the words change ON THE CARD (it never stays
-    stale above a new copy), the buttons change where they are; with no buttons left their message goes and the card
-    is the message."""
-    token, channel = _settings()
-    controls = slack.buttons(markup, width=slack.ROW_WIDTH) if markup else []
-    slack.update(token, channel, found["head"], slack.compose(text, None), slack.blocks(text, None, live=True),
-                 slack.tone(text))
-    if controls:
-        slack.update_controls(token, channel, found["ts"], text, controls)
-        _change(message_id, text=text, markup=_rows_json(markup))
-    else:
-        slack.delete(token, channel, found["ts"])
-        _change(message_id, text=text, markup="", ts=found["head"], head=None)
     return {"message_id": int(message_id), "chat": {"id": _chat_id()}, "text": text}
 
 
@@ -287,8 +258,6 @@ def _delete(message_id) -> bool:
             slack.call(token, "files.delete", {"file": file_id})
         except (slack.SlackError, requests.RequestException):
             pass
-    if found.get("head"):
-        slack.delete(token, channel, found["head"])
     if not slack.delete(token, channel, found["ts"]):
         return False
     _forget(message_id)
@@ -442,6 +411,8 @@ def from_press(payload: dict) -> list[dict]:
                    "text": (found or {}).get("text", "")}
         if found and found.get("markup"):
             message["reply_markup"] = json.loads(found["markup"])
+        if found and found.get("files"):
+            message["document"] = {"file_id": found["files"][0]}          # a card with a picture: the bot treats it as a file message
         out.append({"update_id": _update_id(),
                     "callback_query": {"id": f"slack-{action.get('action_ts') or time.time()}", "from": sender,
                                        "message": message, "chat_instance": "slack", "data": value}})

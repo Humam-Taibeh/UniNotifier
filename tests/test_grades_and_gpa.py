@@ -378,9 +378,8 @@ def test_gpa_screens_and_flow():
         assert "What are you aiming for?" in text and "/need" not in text
         assert [r[0]["callback_data"] for r in rows[:3]] == ["gpa:t:s", "gpa:t:c", "gpa:home"]
         text, rows = gpa_ui.on_callback(names, "gpa:t:c")
-        assert [b["text"] for r in rows[:3] for b in r] == ["50", "60", "70", "75", "80", "85",
-                                                            "90", "✏️ Custom Value"]
-        assert rows[0][1]["callback_data"] == "gpa:n:c:60"
+        assert [b["text"] for b in rows[0]] == ["70", "75", "80", "85", "90", "✏️ Custom Value"], "one row, with the pencil"
+        assert "50 = pass mark" not in text and rows[0][1]["callback_data"] == "gpa:n:c:75"
         gpa_ui.on_callback(names, "gpa:x:0")                     # Arabic: no grade any more, its syllabus marks stay
         text, rows = gpa_ui.on_callback(names, "gpa:n:s:60")
         # open: Arabic (2h, marks 41/60) and Database Systems (3h); locked: Big Data 40 (3h)
@@ -451,14 +450,14 @@ def test_gpa_screens_and_flow():
         # the GPA & Grade Hub: Grade Needed and Finals Watch only (Course Adjustments lives inside Grade Needed,
         # this term's grades inside Finals Watch)
         buttons = [b["callback_data"] for row in bot.view_academic()[1] for b in row if "callback_data" in b]
-        assert buttons == ["gpa:need", "finals:status", "menu"], buttons
+        assert buttons == ["gpa:need", "finals:status", "menu", "menu"], buttons
         from uninotifier import gpa_ui as _gpa_ui
         need_buttons = [b["callback_data"] for row in _gpa_ui.view_need_picker()[1] for b in row if "callback_data" in b]
         assert "gpa:home" in need_buttons, "Course Adjustments sits inside Grade Needed"
         hub_text = bot.view_academic()[0]
         assert "This Term" not in hub_text and "Course Adjustments" not in hub_text.split("Grade Needed")[0]
         record = [b["callback_data"] for row in bot.view_record()[1] for b in row if "callback_data" in b]
-        assert record == ["portal:transcript", "portal:balance", "reg:home", "guest:start", "menu"], "no combined button"
+        assert record == ["portal:transcript", "portal:balance", "reg:home", "guest:start", "menu", "menu"], "no combined button"
         record_text = bot.view_record()[0]
         assert "verification code" not in record_text and "re-syncs" not in record_text
         assert {"gpa", "need", "grades", "transcript", "balance"} <= {c for c, _ in bot.COMMANDS}

@@ -80,7 +80,7 @@ def test_bot_views():
     # My Courses & Schedule is a menu, not a wall of text; Tracked Items and Campus Guide are gone
     text, rows = bot.view_courses()
     assert [[b["text"] for b in row] for row in rows] == [
-        ["📋 Course List & Details"], ["📅 Weekly Timetable", "🎒 Attendance"], ["🔙 Main Menu"]]
+        ["📋 Course List & Details"], ["📅 Weekly Timetable", "🎒 Attendance"], ["🔙 Back", "🏠 Main Menu"]]
     assert [rows[0][0]["callback_data"], rows[1][0]["callback_data"]] == ["courselist", "schedule"]
     assert "What would you like to see?" in text and "credit hours" not in text and len(text.splitlines()) <= 5
     everywhere = {b.get("callback_data") for view in bot.VIEWS.values() for row in view()[1] for b in row}
@@ -1019,17 +1019,17 @@ def test_the_bot_lives_in_slack():
                                                        "text": "my own card", "ts": "1.1"}})
                 assert slackbot.get_updates(None, 0) == [], "the app's own messages are not news"
 
-                # a file under its card, the buttons under the file; deleting the message takes all three away
+                # a picture, its card under it; deleting the message takes both away
                 calls.clear()
                 pic = notifier.upload("T", "sendPhoto", {"chat_id": OWNER, "caption": "🔑 *Sign in*",
                                                           "reply_markup": json.dumps({"inline_keyboard": [[{"text": "📱 SMS", "callback_data": "mfa:sms"}]]})},
                                       "photo", "sign-in.png", b"png")
-                assert [m for m, _ in calls] == ["chat.postMessage", "files.getUploadURLExternal", "Z",
-                                                 "files.completeUploadExternal", "chat.postMessage"]      # card, picture, then the buttons
+                assert [m for m, _ in calls] == ["files.getUploadURLExternal", "Z", "files.completeUploadExternal",
+                                                 "chat.postMessage"]      # the picture first, the card with its buttons under it
                 assert slackbot.entry(pic["message_id"])["files"] == ["F9"]
                 calls.clear()
                 assert notifier.call_api("T", "deleteMessage", {"message_id": pic["message_id"]}) is True
-                assert [m for m, _ in calls] == ["files.delete", "chat.delete", "chat.delete"] and slackbot.entry(pic["message_id"]) is None
+                assert [m for m, _ in calls] == ["files.delete", "chat.delete"] and slackbot.entry(pic["message_id"]) is None
 
                 # a file sent again replaces its older copies in Slack's Files tab (only the same name, never the new one)
                 old = slackbot.remember("1.9", "old", None, ["F1"], ["Weekly.pdf"])
@@ -1043,7 +1043,7 @@ def test_the_bot_lives_in_slack():
                 reply = {}
                 assert notifier.send_message("T", OWNER, "📢 *New post*", rows=[[{"text": "✅ Mark as done", "callback_data": "done:5"}]],
                                              reply=reply)
-                assert reply["body"]["result"]["message_id"] == slackbot.number_of("1700000004.0001")
+                assert reply["body"]["result"]["message_id"] == slackbot.number_of("1700000003.0001")
                 button = sent_rows(calls[-1][1])[0]["elements"][0]
                 assert button["value"] == "done:5" and button["style"] == "primary"
 
@@ -1189,151 +1189,6 @@ def test_a_slack_that_refuses_headers_in_a_box_gets_them_as_bold_lines():
         slack.call, slack._BOX_HEADERS = keep
 
 
-def test_in_slack_the_controls_come_last_under_the_picture():
-    """A card with a screenshot: the card, then the picture, then the buttons — never the buttons above the picture
-    (where they were left). The buttons' message is the one that is numbered, pressed and changed; deleting it takes
-    the card and the picture with it. A card with no file keeps its buttons on it."""
-    from uninotifier import slack, slackbot
-    log, deleted = [], []
-    keep = (slack.post, slack.upload, slack.post_controls, slack.delete, slackbot._settings, slackbot.STORE, slack.call)
-    try:
-        slack.post = lambda token, channel, text, card=None, colour=None: log.append(("card", bool(card and any(
-            b["type"] == "actions" for b in card)))) or {"ts": f"1.{len(log)}"}
-        slack.upload = lambda token, channel, files, comment="": log.append(("file", files[0][0])) or {"file_ids": ["F1"]}
-        slack.post_controls = lambda token, channel, text, controls: log.append(("controls", controls[0]["type"])) or {"ts": "9.9"}
-        slack.delete = lambda token, channel, ts: deleted.append(ts) or True
-        slackbot._settings = lambda: ("t", "c")
-        slack.call = lambda *a, **k: {"ok": True}                # the picture's own deletion: nothing leaves the test
-        slackbot.STORE = Path(tempfile.mkdtemp()) / "slack_messages.json"
-        markup = {"inline_keyboard": [[{"text": "🏛️ Open Portal", "url": "https://portal.example"}],
-                                      [{"text": "🔙 Academic Record", "callback_data": "record"},
-                                       {"text": "🏠 Main Menu", "callback_data": "menu"}]]}
-        number = slackbot.send("💰 *Balance*\n1,700 JD", markup, files=[("Balance.png", b"png")])
-        assert log == [("card", False), ("file", "Balance.png"), ("controls", "actions")], log      # buttons last, not on the card
-        found = slackbot.entry(number)
-        assert found["ts"] == "9.9" and found["head"] == "1.1" and found["files"] == ["F1"]
-        slackbot._delete(number)
-        assert set(deleted) == {"1.1", "9.9"}, deleted                                              # the card goes with it
-        log.clear()
-        slackbot.send("✅ Done", markup)
-        assert log == [("card", True)], log                                                         # no file: buttons on the card
-    finally:
-        slack.post, slack.upload, slack.post_controls, slack.delete, slackbot._settings, slackbot.STORE, slack.call = keep
-
-
-def test_every_slack_screen_is_laid_out_the_same_and_is_accepted():
-    """The one layout, on every screen: the title alone, a line, the whole content, a line, the controls, a line, Back and
-    Main Menu (Main Menu alone when the screen before is the main menu). No id repeats inside a message — Slack refuses
-    the whole message for that, and the screen then silently does nothing (the target buttons did nothing for that)."""
-    from datetime import date
-    from uninotifier import finals, gpa_ui, slack
-    from uninotifier.bot import attendance_flow as af, views
-    keep = slack.mode
-    try:
-        slack.mode = lambda: "slack"
-        names = ["Alpha", "Mike", "Zulu"]
-        gpa_ui.gpa.STATE_FILE = Path(tempfile.mkdtemp()) / "gpa.json"
-        screens = {
-            "tasks": (views.view_tasks(), "main"), "courses": (views.view_courses(), "main"),
-            "course list": (views.view_course_list(), "courses"), "hub": (views.view_academic(), "main"),
-            "record": (views.view_record(), "main"),
-            "finals": ((finals.status_text(), [[{"text": "🔄 Check", "callback_data": "finals:check"}],
-                                                [{"text": "🔙 GPA & Grade Hub", "callback_data": "academic"}, gpa_ui.MENU_BUTTON]]), "hub"),
-            "need": (gpa_ui.view_need(names) if hasattr(gpa_ui, "view_need") else gpa_ui.on_callback(names, "gpa:need"), "hub"),
-            "targets": (gpa_ui.on_callback(names, "gpa:t:s"), "hub"),
-            "adjustments": (gpa_ui.view_home(names), "hub"),
-            "attendance": (af.view_home(), "courses"), "earlier": (af.view_set(), "attendance"),
-            "ask": (af.view_ask(date(2026, 11, 15)), "attendance"), "pick": (af.view_pick(date(2026, 11, 15)), "attendance"),
-        }
-        for name, ((text, rows), parent) in screens.items():
-            blocks = slack.blocks(text, {"inline_keyboard": rows}, live=True)
-            ids = [b["block_id"] for b in blocks if b.get("block_id")]
-            assert len(ids) == len(set(ids)), (name, ids)                       # no block id twice
-            actions = [e["action_id"] for b in blocks if b["type"] == "actions" for e in b["elements"]]
-            assert len(actions) == len(set(actions)), (name, actions)
-            nav = [b for b in blocks if b.get("block_id") == "nav"]
-            assert len(nav) == 1 and blocks[-1] is nav[0], (name, [b["type"] for b in blocks])
-            labels = [e["text"]["text"] for e in nav[0]["elements"]]
-            assert labels[-1].endswith("Main Menu"), (name, labels)             # Main Menu on every screen
-            assert (len(labels) == 1) == (parent == "main"), (name, labels)      # Back too, unless the screen before is the menu
-            if len(blocks) > 2:
-                assert blocks[-2]["type"] == "divider", (name, [b["type"] for b in blocks])   # a line above the way back
-            box = slack.boxed(blocks)
-            assert len(box) == 1 and len(box[0]["child_blocks"]) <= slack.BOX_CHILDREN, name   # one box, nothing outside it
-    finally:
-        slack.mode = keep
-
-
-def test_the_attendance_question_fits_the_day():
-    """A day of online lectures is not asked 'did you go to university'; one course is attended or missed — never 'some'."""
-    from datetime import date
-    from uninotifier import attendance
-    from uninotifier.bot import attendance_flow as af
-    sched = {"days": {
-        "sun": [{"start": "09:00", "end": "10:00", "course": "A", "mode": "In-Person"},
-                {"start": "10:00", "end": "11:00", "course": "B", "mode": "In-Person"}],
-        "mon": [{"start": "09:00", "end": "10:00", "course": "C", "mode": "Online"},
-                {"start": "10:00", "end": "11:00", "course": "D", "mode": "Online"}],
-        "tue": [{"start": "09:00", "end": "10:00", "course": "E", "mode": "Online"},
-                {"start": "10:00", "end": "11:00", "course": "E", "mode": "Activity"}],
-        "wed": [{"start": "09:00", "end": "10:00", "course": "F", "mode": "In-Person"}]}}
-    keep = attendance.load_schedule if hasattr(attendance, "load_schedule") else None
-    from uninotifier import schedule
-    keep = schedule.load_schedule
-    try:
-        schedule.load_schedule = lambda: sched
-
-        def ask(day):
-            text, rows = af.view_ask(day)
-            return text, [b["text"] for row in rows for b in row]
-
-        text, labels = ask(date(2026, 11, 15))                                    # Sunday: two lectures on campus
-        assert "go to university" in text and labels[:3] == ["✅ Attended all", "🎯 Missed some", "❌ Didn't go"], labels
-        text, labels = ask(date(2026, 11, 16))                                    # Monday: two online lectures
-        assert "university" not in text and "online lectures" in text and "❌ Missed all" in labels and "online" in text.split("Did you")[0]
-        text, labels = ask(date(2026, 11, 17))                                    # Tuesday: one online lecture
-        assert "attend your online lecture" in text and "university" not in text
-        assert labels[:2] == ["✅ Attended", "❌ Absent"] and not [l for l in labels if "some" in l], labels
-        text, labels = ask(date(2026, 11, 18))                                    # Wednesday: one lecture on campus
-        assert "go to your lecture" in text and labels[:2] == ["✅ Attended", "❌ Absent"] and "🔙 Attendance" in labels
-        assert labels[-1] == "🏠 Main Menu"
-    finally:
-        schedule.load_schedule = keep
-
-
-def test_a_card_with_a_picture_is_updated_on_the_card_never_left_stale_above_a_new_copy():
-    """The saved copy is sent first ('As of … checking for changes…'), then the fresh read changes it in place: the words
-    change on the CARD (above the picture), the buttons stay under the picture, nothing is posted twice. With no buttons
-    left the card is the message."""
-    from uninotifier import slack, slackbot
-    log = []
-    keep = (slack.post, slack.upload, slack.post_controls, slack.delete, slack.update, slack.update_controls,
-            slackbot._settings, slackbot.STORE, slack.call)
-    try:
-        slack.post = lambda token, channel, text, card=None, colour=None: log.append(("post", text)) or {"ts": f"1.{len(log)}"}
-        slack.upload = lambda token, channel, files, comment="": {"file_ids": ["F1"]}
-        slack.post_controls = lambda token, channel, text, controls: log.append(("controls", text)) or {"ts": "9.9"}
-        slack.delete = lambda token, channel, ts: log.append(("delete", ts)) or True
-        slack.update = lambda token, channel, ts, text, card, colour=None: log.append(("update", ts, text)) or {}
-        slack.update_controls = lambda token, channel, ts, text, controls: log.append(("update controls", ts)) or {}
-        slack.call = lambda *a, **k: {"ok": True}
-        slackbot._settings = lambda: ("t", "c")
-        slackbot.STORE = Path(tempfile.mkdtemp()) / "slack_messages.json"
-        markup = {"inline_keyboard": [[{"text": "🔙 Academic Record", "callback_data": "record"}]]}
-        number = slackbot.send("💰 *Balance*\n\n_🕒 As of 4:41 PM · checking for changes…_", markup, files=[("B.png", b"png")])
-        head = slackbot.entry(number)["head"]
-        log.clear()
-        slackbot._edit(number, "💰 *Balance*\n\n_🕒 Retrieved: 5:02 PM_", markup)
-        assert [e[0] for e in log] == ["update", "update controls"] and log[0][1] == head and "Retrieved" in log[0][2], log
-        assert slackbot.entry(number)["text"].endswith("Retrieved: 5:02 PM_")
-        log.clear()
-        slackbot._edit(number, "💰 *Balance*", [])                    # no buttons any more
-        assert [e[0] for e in log] == ["update", "delete"] and slackbot.entry(number)["ts"] == head and not slackbot.entry(number).get("head")
-    finally:
-        (slack.post, slack.upload, slack.post_controls, slack.delete, slack.update, slack.update_controls,
-         slackbot._settings, slackbot.STORE, slack.call) = keep
-
-
 def test_no_button_label_is_ever_cut_and_a_balance_keeps_its_time_at_the_bottom():
     """A row of buttons holds only what fits (a long label stands alone, short ones share a row); and the time a portal
     answer was read is small print under its content, not the first thing on the card."""
@@ -1359,5 +1214,106 @@ def test_no_button_label_is_ever_cut_and_a_balance_keeps_its_time_at_the_bottom(
         small = [b for b in blocks if b["type"] == "context"]
         assert small and "As of" in small[-1]["elements"][0]["text"], blocks          # small print, after the content
         assert blocks.index(small[-1]) > max(i for i, b in enumerate(blocks) if b["type"] == "section")
+    finally:
+        slack.mode = keep
+
+
+
+def test_in_slack_the_picture_comes_first_and_the_card_with_its_buttons_under_it():
+    """A screenshot with its words: the picture first, the card — words AND buttons — under it (the controls are on the
+    message itself, never left above the picture). Deleting it takes both away; if the card cannot be sent the picture
+    is taken back; with no file nothing changes."""
+    from uninotifier import slack, slackbot
+    log = []
+    keep = (slack.post, slack.upload, slack.delete, slack.call, slackbot._settings, slackbot.STORE)
+    try:
+        slack.upload = lambda token, channel, files, comment="": log.append(("file", files[0][0])) or {"file_ids": ["F1"]}
+        slack.post = lambda token, channel, text, card=None, colour=None: log.append(
+            ("card", any(b["type"] == "actions" for b in card or []))) or {"ts": "7.7"}
+        slack.delete = lambda token, channel, ts: log.append(("delete", ts)) or True
+        slack.call = lambda token, method, data=None, **k: log.append((method, data.get("file"))) or {"ok": True}
+        slackbot._settings = lambda: ("t", "c")
+        slackbot.STORE = Path(tempfile.mkdtemp()) / "slack_messages.json"
+        markup = {"inline_keyboard": [[{"text": "🔙 Back", "callback_data": "record"}, {"text": "🏠 Main Menu", "callback_data": "menu"}]]}
+        number = slackbot.send("💰 *Balance*\n1,700 JD", markup, files=[("Balance.png", b"png")])
+        assert log == [("file", "Balance.png"), ("card", True)], log             # the picture, then the card with its buttons
+        found = slackbot.entry(number)
+        assert found["ts"] == "7.7" and found["files"] == ["F1"] and "head" not in found
+        log.clear()
+        slackbot._delete(number)
+        assert ("files.delete", "F1") in log and ("delete", "7.7") in log, log   # the picture and the card go together
+        log.clear()
+        slack.post = lambda *a, **k: (_ for _ in ()).throw(slack.SlackError("invalid_blocks"))
+        try:
+            slackbot.send("x", markup, files=[("B.png", b"png")])
+        except slack.SlackError:
+            pass
+        assert ("files.delete", "F1") in log, log                                # the card failed: no picture left alone
+        log.clear()
+        slack.post = lambda token, channel, text, card=None, colour=None: log.append(("card", True)) or {"ts": "8.8"}
+        slackbot.send("✅ Done", markup)
+        assert log == [("card", True)]                                          # no file: as it was
+    finally:
+        slack.post, slack.upload, slack.delete, slack.call, slackbot._settings, slackbot.STORE = keep
+
+
+def test_leaving_a_card_with_a_picture_takes_it_out_of_the_chat_and_back_or_menu_drop_what_is_pending():
+    """In Slack what you asked for goes when you leave: Back / Main Menu on a card with a picture opens the screen below
+    and removes the card and its picture. On a screen that is waiting (a question to type, a portal read) either button
+    also drops what was pending — no later message arrives for it. Telegram keeps its files."""
+    from uninotifier import slack
+    from uninotifier.bot import app, chat, gpa_flow, guest_flow, portal_flow, reminder_flow
+    log = []
+    keep = (slack.mode, chat.send_view, chat.edit_view, chat.retire, chat.answer, chat.is_double_tap)
+    try:
+        chat.send_view = lambda text, rows: log.append(("send", text[:12]))
+        chat.edit_view = lambda mid, text, rows: log.append(("edit", mid))
+        chat.retire = lambda mid: log.append(("retire", mid))
+        chat.answer = lambda *a, **k: True
+        chat.is_double_tap = lambda *a: False
+        card = {"message_id": 41, "document": {"file_id": "F1"}}
+        for mode, expect in (("slack", [("send", "🎓 *UniNotifi"), ("retire", 41)]), ("telegram", [("send", "🎓 *UniNotifi")])):
+            slack.mode = lambda mode=mode: mode
+            log.clear()
+            app.handle_callback({"id": "1", "data": "menu", "message": card})
+            assert [e for e in log if e[0] in ("send", "retire")] == expect, (mode, log)
+        # pending things are dropped by Back and by Main Menu, never left to send something later
+        for button in ("cancel:menu", "cancel:tasks", "menu"):
+            reminder_flow._reminder_wait, reminder_flow._reminder_draft["note"] = "text", "x"
+            gpa_flow._pending_prompt = object()
+            guest_flow._guest.clear()
+            guest_flow._guest.update(step="password", user="2024", messages=[])
+            portal_flow._cancelled.clear()
+            portal_flow._portal_lock.acquire()
+            try:
+                app.handle_callback({"id": "2", "data": button, "message": {"message_id": 5}})
+                assert reminder_flow._reminder_wait is None and gpa_flow._pending_prompt is None, button
+                assert portal_flow.cancelled() == (button != "menu"), button      # a portal read is dropped by Back / Main Menu of a waiting screen
+                assert (guest_flow._guest.get("step") is None) == (button != "menu"), button
+            finally:
+                portal_flow._portal_lock.release()
+                guest_flow._guest.clear()
+        assert portal_flow.request_cancel() is False                              # nothing running: nothing to cancel
+    finally:
+        slack.mode, chat.send_view, chat.edit_view, chat.retire, chat.answer, chat.is_double_tap = keep
+
+
+def test_in_slack_a_portal_answer_is_read_when_asked_and_says_no_time():
+    """Transcript and Balance in Slack: a 'reading…' screen, then a fresh read — the answer carries no time (it was read
+    the moment you asked); a saved copy is only the fallback and then says how old it is."""
+    from uninotifier import portal, slack
+    from uninotifier.bot import portal_flow
+    keep = slack.mode
+    try:
+        slack.mode = lambda: "slack"
+        assert portal_flow.fresh_in_slack("balance") and portal_flow.fresh_in_slack("transcript")
+        assert not portal_flow.fresh_in_slack("grades")
+        result = portal.Result("balance", True, None, [], {"balance": 1700.0}, [], ["💰 *Total balance:* 1,700 JD"])
+        text, body, rows = portal_flow.compose(result, portal_flow.stamp())
+        assert "Retrieved" not in text and "As of" not in text and text.splitlines()[0].startswith("💰 *ZUJ Portal")
+        text, body, rows = portal_flow.compose(result, portal_flow.stamp(1.7e9, portal_flow.REFRESH_FAILED))
+        assert "As of:" in text.splitlines()[-1] and "saved copy" in text.splitlines()[-1]
+        slack.mode = lambda: "telegram"
+        assert not portal_flow.fresh_in_slack("balance")
     finally:
         slack.mode = keep

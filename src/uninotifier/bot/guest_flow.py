@@ -47,7 +47,7 @@ GUEST_TIMEOUT = 10 * 60                  # an unanswered student ID / password p
 _guest: dict = {}                        # step (user | password | running | done), user, at, messages
 
 
-GUEST_CANCEL_ROW = [{"text": "✖️ Cancel", "callback_data": "guest:cancel"}]
+GUEST_CANCEL_ROW = chat.cancel_row("record")
 
 
 def guest_send(text: str, rows: list | None = None) -> dict | None:
@@ -90,6 +90,15 @@ def delete_password_message(message_id: int | None) -> bool:
         text="⚠️ *I couldn't delete the message with the password* — please delete it yourself "
              "(long-press it → Delete).")
     return False
+
+
+def drop_pending() -> None:
+    """A guest look-up still asking for the ID or the password is dropped, what was typed taken out of the chat
+    (a finished look-up stays until Sign Out)."""
+    if _guest.get("step") in ("user", "password", "target"):
+        for message_id in _guest.get("messages", []):
+            chat.api("deleteMessage", chat_id=chat.CHAT_ID, message_id=message_id)
+        _guest.clear()
 
 
 def handle_expired_prompt(text: str, message_id: int | None) -> bool:
@@ -181,7 +190,7 @@ def run_guest(user: str, password: str) -> None:
 
 # ------------------------------------------------------- the panel and the target calculator
 
-TARGET_PRESETS = (60, 65, 70, 75, 80, 85, 90)
+TARGET_PRESETS = (70, 75, 80, 85, 90)
 
 
 def panel_text() -> str:
@@ -198,9 +207,8 @@ def panel_rows(with_target: bool = True) -> list:
 
 def target_picker() -> tuple[str, list]:
     buttons = [{"text": f"{t}%", "callback_data": f"guest:t:{t}"} for t in TARGET_PRESETS]
-    rows = [buttons[i:i + 4] for i in range(0, len(buttons), 4)]
-    rows += [[{"text": "✏️ Custom Value", "callback_data": "guest:tcustom"}],
-             [{"text": "🔙 Back", "callback_data": "guest:back"}]]
+    rows = [buttons + [{"text": "✏️ Custom Value", "callback_data": "guest:tcustom"}],
+            [{"text": "🔙 Back", "callback_data": "guest:back"}, {"text": "🏠 Main Menu", "callback_data": "menu"}]]
     return "🎯 *Target GPA*\n\nWhich cumulative GPA do they want to reach?", rows
 
 
@@ -295,7 +303,7 @@ def send_guest_results(user: str, results: dict) -> None:
     plan = record.data.get("plan")
     summary = transcript.summary_lines(semesters, record.figures, status, major, remaining, plan=plan,
                                        retakes=len(record.data.get("retakes") or {}))
-    caption = "\n".join([f"{head} — 📜 Transcript", "", *summary, "", f"_🕒 Retrieved: {notifier.audit_timestamp()}_"])
+    caption = "\n".join([f"{head} — 📜 Transcript", "", *summary])
     rows = [portal_flow.record_buttons("guest", bool(plan))]       # the courses are a button away
     if plan:
         rows.append([{"text": "🗓️ Registration Plan", "callback_data": "guest:reg"}])

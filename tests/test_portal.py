@@ -285,7 +285,7 @@ def test_finals_check_ends_on_the_grades_screen():
             assert len(announced) == 1 and "Finals Watch" in announced[0]
             kind, mid, text, rows = shown[-1]
             assert kind == "send" and len(shown) == 1, "announcements landed first: the screen returns under them"
-            assert "0 of 3 published" in text and "Published:* none yet" in text and "Not published yet*" in text and "Linear Algebra (1)" in text and "Term:" not in text and "While it's on" not in text
+            assert "0 of 3 published" in text and "Published" not in text.replace("published", "") and "Not published yet*" in text and "Linear Algebra (1)" in text and "Term:" not in text and "While it's on" not in text
             assert rows[0][0]["callback_data"] == "finals:check"
 
             # a grade appears: announced, then the screen shows the mark
@@ -298,7 +298,7 @@ def test_finals_check_ends_on_the_grades_screen():
             # nothing new: no announcement, the screen is updated WHERE IT IS (the pressed message), nothing else is sent
             check()
             assert announced == [] and len(shown) == 1 and shown[0][:2] == ("edit", 7), shown
-            assert "1 of 3 published" in shown[0][2] and "Last check:" in shown[0][2]
+            assert "1 of 3 published" in shown[0][2] and "Last check" not in shown[0][2]
             check(None)                                                 # typed (/grades): the screen goes to the bottom
             assert shown[0][0] == "send" and "Finals Watch" in shown[0][2]
             assert [c["code"] for c in finals.load()["courses"]] == ["0101221", "0101272", "0135220"]
@@ -323,7 +323,7 @@ def test_finals_check_ends_on_the_grades_screen():
                                                                                   bot._portal_lock.release())
             try:
                 bot.handle_finals("check", 9)
-                assert shown == [("edit", 9, "🏁 *Finals Watch*\n\n⏳ Reading your grades from the portal… usually about 10 seconds, up to a minute if the portal is slow", [])], shown
+                assert [s[:3] for s in shown] == [("edit", 9, "🏁 *Finals Watch*\n\n⏳ Reading your grades from the portal… usually about 10 seconds, up to a minute if the portal is slow")] and [b["callback_data"] for r in shown[0][3] for b in r] == ["cancel:finals:status", "cancel:menu"], shown
                 for _ in range(100):
                     if started:
                         break
@@ -714,7 +714,7 @@ def test_portal_answer_is_one_message():
             assert screens and screens[-1].startswith("📜 *Academic Record & Balance*"), screens
             assert not any("retrieved" in t for t in screens) and len(screens) == 1, "no status message, just the hub"
             if message_id:
-                assert [e[0] for e in edits] == [5] and "signing in" in edits[0][1] and edits[0][2] == []
+                assert [e[0] for e in edits] == [5] and "Reading your transcript from the portal" in edits[0][1] and [b["callback_data"] for r in edits[0][2] for b in r] == ["cancel:record", "cancel:menu"]
             else:
                 assert edits == [] and screens == [screens[-1]], "typed: nothing but the answer and the hub"
             assert "sendChatAction" in api_calls and len(sent_files) == 1
@@ -1319,7 +1319,7 @@ def test_guest_lookup_in_telegram():
         edit = press("guest:target")[-1]
         assert edit["message_id"] == panel and "Target GPA" in edit["text"]
         picks = [b["callback_data"] for row in edit["reply_markup"]["inline_keyboard"] for b in row]
-        assert picks[:7] == [f"guest:t:{t}" for t in (60, 65, 70, 75, 80, 85, 90)] and picks[-2:] == ["guest:tcustom", "guest:back"]
+        assert picks[:5] == [f"guest:t:{t}" for t in (70, 75, 80, 85, 90)] and picks[5:7] == ["guest:tcustom", "guest:back"]
         edit = press("guest:t:75")[-1]
         assert "Target GPA — Guest 202400001" in edit["text"] and "To reach *75%* cumulative" in edit["text"]
         assert "This term (3h)" in edit["text"] and "+ the next one (6h)" in edit["text"] and "+ the next two (9h)" in edit["text"]
@@ -1585,7 +1585,7 @@ def test_portal_answers_from_the_saved_copy():
         assert bot.REFRESHING in sent[0][2] and reads == [["balance"]]
         assert [c[0] for c in calls] == ["editMessageCaption"], calls
         caption = calls[0][1]["caption"]
-        assert "🕒 Retrieved:" in caption and bot.UPDATED not in caption
+        assert "Retrieved" not in caption and bot.UPDATED not in caption          # read when you asked: no time to tell
         assert calls[0][1]["message_id"] == sent[0][3], "the message that was sent is the one updated"
         assert json.loads((bot.CACHE_DIR / "balance.json").read_text(encoding="utf-8"))["at"] > time.time() - 60
 

@@ -269,14 +269,13 @@ def grades_lines(state: dict) -> list[str]:
     lines = [f"📊 *This term's grades* — {state['published']} of {state['total']} published", ""]
     released = [c for c in courses if c["mark"] is not None]          # the courses are saved in the timetable's order
     waiting = [c for c in courses if c["mark"] is None]
-    if released:
+    if released:                                                       # (none yet: the line above already says so)
         lines.append("✅ *Published*")
         lines += [f"• {'✅' if c['mark'] >= gpa.PASS_MARK else '❌'} *{fmt(c['mark'])}* · "
                   f"{escape_md(display_name(c['code'], c['name']))}" for c in released]
-    else:
-        lines.append("✅ *Published:* none yet")
+        lines.append("")
     if waiting:
-        lines += ["", "⏳ *Not published yet*"]
+        lines.append("⏳ *Not published yet*")
         lines += [f"• {escape_md(display_name(c['code'], c['name']))}" for c in waiting]
     return lines
 
@@ -294,6 +293,4 @@ def status_text(state: dict | None = None, sch: dict | None = None) -> str:
     if w.get("from") and w.get("to"):
         lines.append(f"🗓️ Switches on by itself from {w['from']} to {w['to']}")
     lines += ["", *grades_lines(state)]
-    if state["last_check"]:
-        lines += ["", f"_🕒 Last check: {notifier.audit_timestamp(state['last_check'])}_"]      # small print, apart
     return "\n".join(lines)

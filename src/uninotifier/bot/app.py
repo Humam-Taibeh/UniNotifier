@@ -29,6 +29,7 @@ from uninotifier import probe
 from uninotifier import cambridge          # temporary (this semester): remove with its thread below
 from uninotifier import reminders
 from uninotifier import schedule
+from uninotifier import slack
 from uninotifier import tasks
 from uninotifier import telegram
 from uninotifier.bot import (attendance_flow, chat, checks, finals_flow, gpa_flow, guest_flow, portal_flow, registration_flow,
@@ -242,7 +243,22 @@ def handle_callback(cb: dict) -> None:
     chat.answer(cb["id"])                  # a no-op when the route already answered; a raise skips it (update_failed answers)
 
 
+def cancel_pending() -> None:
+    """Back or Main Menu pressed on a screen that is waiting — a question to type, a portal request in progress:
+    what was pending is dropped, and nothing more is sent for it."""
+    reminder_flow.drop_pending()
+    gpa_flow._pending_prompt = None
+    guest_flow.drop_pending()
+    portal_flow.request_cancel()
+
+
 def route_callback(cb: dict, action: str, message_id: int | None) -> None:
+    if action.startswith("cancel:"):               # "cancel:<where to go>": drop what is pending, then go there
+        cancel_pending()
+        action = action[len("cancel:"):] or "menu"
+    elif action == "menu":                         # Main Menu from anywhere also drops a question that was open
+        reminder_flow.drop_pending()
+        gpa_flow._pending_prompt = None
     if action.startswith("done:"):
         handle_done_toggle(cb, action)
         return
@@ -298,6 +314,8 @@ def route_callback(cb: dict, action: str, message_id: int | None) -> None:
     if action in views.VIEWS and message_id:
         if chat.is_file_message(cb.get("message")):          # the menu opens under the file, which is kept
             chat.send_view(*views.VIEWS[action]())
+            if slack.mode() == "slack":                      # in Slack you asked for it and you are leaving: it goes
+                chat.retire(message_id)
         else:
             chat.edit_view(message_id, *views.VIEWS[action]())
 

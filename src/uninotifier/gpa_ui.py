@@ -36,7 +36,7 @@ from uninotifier.notifier import escape_md
 DIVIDER = "━━━━━━━━━━━━━━━━━━"
 MENU_BUTTON = {"text": "🏠 Main Menu", "callback_data": "menu"}
 NAV_ROW = [{"text": "🔙 GPA & Grade Hub", "callback_data": "academic"}, MENU_BUTTON]     # the way back, on every screen under the hub
-CANCEL_ROW = [{"text": "✖️ Cancel", "callback_data": "gpa:cancel"}]
+CANCEL_ROW = [{"text": "🔙 Back", "callback_data": "cancel:gpa:need"}, {"text": "🏠 Main Menu", "callback_data": "cancel:menu"}]
 
 
 @dataclass
@@ -168,7 +168,7 @@ def _coursework_lines(c: dict) -> list[str]:
 
 SCOPES = {"s": ("📊", "Target Semester GPA", "semester average"),
           "c": ("🎓", "Target Cumulative CGPA", "cumulative GPA")}
-PRESETS = (50, 60, 70, 75, 80, 85, 90)
+PRESETS = (70, 75, 80, 85, 90)                 # nobody aims at 50 or 60: the choices that matter, with the pencil, in one row
 ADJUST_BUTTON = {"text": "⚙️ Course Adjustments", "callback_data": "gpa:home"}
 NEED_BUTTON = {"text": "🎯 Grade Needed", "callback_data": "gpa:need"}
 
@@ -200,12 +200,10 @@ def view_need_picker(names: list[str] | None = None) -> tuple[str, list]:
 def view_targets(scope: str) -> tuple[str, list]:
     """Step 2: the target value."""
     emoji, title, what = SCOPES[scope]
-    text = "\n".join([f"{emoji} *{title}*", DIVIDER, f"Pick the {what} you want to reach:",
-                       "", "50 = pass mark"])
+    text = "\n".join([f"{emoji} *{title}*", DIVIDER, f"Pick the {what} you want to reach:"])
     buttons = [{"text": f"{t}", "callback_data": f"gpa:n:{scope}:{t}"} for t in PRESETS]
     buttons.append({"text": "✏️ Custom Value", "callback_data": f"gpa:v:{scope}"})
-    return text, [buttons[:3], buttons[3:6], buttons[6:],
-                  [{"text": "🔙 Back", "callback_data": "gpa:need"}, MENU_BUTTON]]
+    return text, [buttons, [{"text": "🔙 Back", "callback_data": "gpa:need"}, MENU_BUTTON]]
 
 
 def view_plan(names: list[str], scope: str, target: float) -> tuple[str, list]:

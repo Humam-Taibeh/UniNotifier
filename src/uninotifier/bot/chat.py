@@ -100,7 +100,16 @@ def monitor_status() -> str:
 # Each view returns (text, keyboard rows). Rows are lists of inline buttons.
 
 
-BACK_ROW = [{"text": "🔙 Main Menu", "callback_data": "menu"}]
+# The way back is always the same two buttons — Back and Main Menu — even when Back is the main menu.
+BACK_ROW = [{"text": "🔙 Back", "callback_data": "menu"}, {"text": "🏠 Main Menu", "callback_data": "menu"}]
+
+
+def cancel_row(back: str) -> list[dict]:
+    """The way back of a screen that is waiting for you (a question to type, a portal request in progress):
+    Back (to `back`) and Main Menu — pressing either drops what was pending (app.cancel_pending), so no
+    later message arrives for it."""
+    return [{"text": "🔙 Back", "callback_data": f"cancel:{back}"},
+            {"text": "🏠 Main Menu", "callback_data": "cancel:menu"}]
 
 
 RECORD_ROW = [{"text": "🔙 Academic Record", "callback_data": "record"},

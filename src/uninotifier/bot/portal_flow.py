@@ -25,6 +25,7 @@ from uninotifier import paths
 from uninotifier import portal
 from uninotifier import portal_pages
 from uninotifier import schedule
+from uninotifier import slack
 from uninotifier import transcript
 from uninotifier.bot import chat, guest_flow
 from uninotifier.notifier import escape_md
@@ -92,6 +93,8 @@ def ask_portal_code(attempt: int, rejected: bool, for_guest: bool = False) -> st
 
 def stamp(at: float | None = None, note: str = "") -> str:
     """🕒 Retrieved: <now> for a fresh read, 🕒 As of: <then> for a cached one — small print, at the bottom."""
+    if at is None and not note:
+        return ""                                         # read the moment you asked: the time is now, nothing to say
     head = "Retrieved" if at is None else "As of"
     return f"_🕒 {head}: {notifier.audit_timestamp(at)}" + (f" · {note}" if note else "") + "_"
 
@@ -132,7 +135,8 @@ def compose(result: portal.Result, when: str) -> tuple[str, list[str], list]:
             else:
                 lines += ["", total]
                 body = rest
-    lines += ["", when]                                   # when it was read: small print under the content
+    if when:
+        lines += ["", when]                               # a saved copy says how old it is: small print under the content
     if own_way_back(result.section):
         rows = rows + [chat.RECORD_ROW]
     return "\n".join(lines), body, rows
@@ -326,6 +330,8 @@ def refresh(section: str, old: portal.Result, at: float, sent: dict) -> None:
             header, _, rows = compose(old, stamp(at, REFRESH_FAILED))
             _edit_caption(sent["doc"], header, rows)
         return
+    if cancelled():                                        # Back / Main Menu pressed: the saved copy stays, nothing is edited
+        return
     apply_syncs(new)
     save_cached(new)
     changed = _content(new) != _content(old)
@@ -417,7 +423,8 @@ def read_and_answer(section: str, message_id: int | None) -> None:
     emoji, title = PORTAL_TITLES[section]
     log.info("Portal request: %s", section)
     if message_id:
-        chat.edit_view(message_id, f"{emoji} *{title}* — signing in to the ZUJ registration portal…", [])
+        chat.edit_view(message_id, f"{emoji} *{title}*\n\n⏳ Reading your {title.lower()} from the portal… "
+                                   "usually about 10 seconds, up to a minute if the portal is slow", [chat.cancel_row("record")])
     failure, answered = None, False
     try:
         results = portal.fetch_many([section], ask_portal_code)
@@ -429,10 +436,19 @@ def read_and_answer(section: str, message_id: int | None) -> None:
         log.exception("Portal request failed")
         failure = f"❌ *{title}* — the portal couldn't be read. See `data/logs/bot.log` for the reason."
     else:
+        if cancelled():                                    # Back / Main Menu was pressed: no answer, no message
+            return
         for result in results.values():
             send_portal_result(result)
             save_cached(result)
         answered = True
+    if failure and cancelled():
+        return
+    saved = load_cached(section) if fresh_in_slack(section) else None
+    if failure and saved:                                  # it could not be read: the saved copy, saying how old it is
+        send_cached(saved[0], stamp(saved[1], REFRESH_FAILED))
+        settle(section)
+        return
     if failure:
         rows = [[{"text": "🔄 Try Again", "callback_data": f"portal:{section}"}], chat.BACK_ROW]
         chat.edit_view(message_id, failure, rows) if message_id else chat.send_view(failure, rows)
@@ -442,11 +458,34 @@ def read_and_answer(section: str, message_id: int | None) -> None:
         chat.send_view(*return_view(section))
 
 
+_cancelled = threading.Event()          # Back / Main Menu was pressed while a portal request was running
+
+
+def request_cancel() -> bool:
+    """Back or Main Menu pressed while a portal request is running: its answer is dropped, silently — nothing more
+    is sent or edited for it. False when no request is running."""
+    if _portal_lock.locked():
+        _cancelled.set()
+        return True
+    return False
+
+
+def cancelled() -> bool:
+    return _cancelled.is_set()
+
+
+def fresh_in_slack(section: str) -> bool:
+    """In Slack Transcript and Balance are read when you ask (a "reading…" screen, then the picture with the
+    answer under it) — never answered from a saved copy first; the copy is only the fallback."""
+    return section in SWR_SECTIONS and slack.mode() == "slack"
+
+
 def run_portal(section: str, message_id: int | None) -> None:
     """Worker thread: one on-demand portal request — from the saved answer when there is one
     (Transcript, Balance), else read now."""
+    _cancelled.clear()
     try:
-        cached = load_cached(section)
+        cached = None if fresh_in_slack(section) else load_cached(section)
         if cached:
             answer_from_cache(section, *cached)
         else:

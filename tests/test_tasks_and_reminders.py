@@ -595,7 +595,7 @@ def test_tasks_and_reminders_planner():
             cb("rem:s:p101")
             text, rows = views[-1]
             assert text.startswith("📌 *Add to Reminders*") and "Install Hadoop" in text and "Big Data" in text
-            assert [r[0]["callback_data"] for r in rows] == ["rem:q:campus", "rem:q:lecture", "rem:q:custom", "rem:cancel"]
+            assert [r[0]["callback_data"] for r in rows] == ["rem:q:campus", "rem:q:lecture", "rem:q:custom", "cancel:tasks"]
             assert rows[0][0]["text"].startswith("🏫 Next Campus Day · ") and rows[1][0]["text"].startswith("⏰ Before Next Lecture · ")
             cb("rem:q:custom")
             assert edits[-1][0].startswith("🗓️ *Pick a day*")

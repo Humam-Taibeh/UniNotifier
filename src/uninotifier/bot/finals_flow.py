@@ -62,6 +62,7 @@ def run_finals_check(manual: bool, message_id: int | None = None) -> None:
     """One reading of the portal for the finals watcher. The caller holds
     _portal_lock; it is released here. A manual check ends on the Finals Watch screen
     (this term's grades), in the message the button was pressed on."""
+    portal_flow._cancelled.clear()
     try:
         state = finals.load()
         ask = portal_flow.ask_portal_code if manual else auto_ask_code
@@ -77,6 +78,8 @@ def run_finals_check(manual: bool, message_id: int | None = None) -> None:
             problem = "the portal couldn't be read — see data/logs/bot.log"
         else:
             problem = None
+        if manual and portal_flow.cancelled():             # Back / Main Menu was pressed: nothing more is sent for this check
+            return
         if problem:
             state["last_check"] = time.time()               # try again after the interval
             if manual or time.time() - state["failure_notice"] > finals.FAILURE_NOTICE_SECONDS:
@@ -132,7 +135,8 @@ def handle_finals(arg: str, message_id: int | None = None) -> None:
             chat.send_view(portal_flow.portal_setup_text(), [chat.BACK_ROW])
         elif portal_flow._portal_lock.acquire(blocking=False):
             if message_id:                                   # the button's own message shows the progress: no extra message
-                chat.edit_view(message_id, "🏁 *Finals Watch*\n\n⏳ Reading your grades from the portal… usually about 10 seconds, up to a minute if the portal is slow", [])
+                chat.edit_view(message_id, "🏁 *Finals Watch*\n\n⏳ Reading your grades from the portal… usually about 10 seconds, up to a minute if the portal is slow",
+                               [chat.cancel_row("finals:status")])
             threading.Thread(target=run_finals_check, args=(True, message_id), daemon=True).start()
         else:
             chat.send_view("⏳ *A portal request is already running.*", [chat.BACK_ROW])
