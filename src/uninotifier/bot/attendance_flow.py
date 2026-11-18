@@ -70,6 +70,36 @@ def view_ask(day: date) -> tuple[str, list]:
     return "\n".join(lines), [*rows, [ATTENDANCE, MAIN]]
 
 
+def view_recorded(day: date) -> tuple[str, list]:
+    """Opened again after you answered: what was recorded (and when), and the way to change it."""
+    data = attendance.load()
+    stamp = day.isoformat()
+    absent = [c for c in attendance.courses_on(day) if stamp in data["absences"].get(c, [])]
+    said = (f"absent from {', '.join(absent)}" if absent else "present in everything")
+    at = data["answered_at"].get(stamp)
+    when = f" at {notifier.clock12(*datetime.fromtimestamp(at).timetuple()[3:5])}" if at else ""
+    lines = [f"🎒 *Attendance* — {_day_name(day)}", media.DIVIDER, *_course_lines(day), "",
+             f"✅ *Already recorded{when}:* {said}", "", "Do you want to change it?"]
+    return "\n".join(lines), [[{"text": "✏️ Change it", "callback_data": f"att:ask:{stamp}"}], [ATTENDANCE, MAIN]]
+
+
+def view_today() -> tuple[str, list]:
+    """Record today: what was already answered (and a way to change it); before the day's last lecture ends, when the question comes;
+    after it, the question itself."""
+    day = date.today()
+    if not attendance.courses_on(day):
+        return "🎒 *Attendance*\nYou have no lectures today, so there is nothing to record.", [[ATTENDANCE, MAIN]]
+    if day.isoformat() in attendance.load()["answered"]:
+        return view_recorded(day)
+    over = attendance.day_over_at(day)
+    if over and datetime.now() < over:
+        lines = [f"🎒 *Attendance* — {_day_name(day)}", media.DIVIDER, *_course_lines(day), "",
+                 f"⏳ Your last lecture today ends at {_clock(over.strftime('%H:%M'))}, so I'll ask you then.",
+                 "Record it now anyway?"]
+        return "\n".join(lines), [[{"text": "✅ Record now", "callback_data": f"att:ask:{day.isoformat()}"}], [ATTENDANCE, MAIN]]
+    return view_ask(day)
+
+
 def view_pick(day: date) -> tuple[str, list]:
     stamp = day.isoformat()
     courses = attendance.courses_on(day)
@@ -196,9 +226,7 @@ def handle_callback(cb: dict, action: str, message_id: int | None) -> None:
         attendance.adjust(names[index], 1 if parts[3] == "up" else -1)
         _show(message_id, view_set())
     elif what == "today":
-        day = date.today()
-        _show(message_id, view_ask(day) if attendance.courses_on(day)
-              else ("🎒 *Attendance*\nYou have no lectures today, so there is nothing to record.", [[ATTENDANCE, MAIN]]))
+        _show(message_id, view_today())
     elif what in ("ask", "pick", "t", "all", "none", "save"):
         try:
             day = date.fromisoformat(parts[2])
@@ -244,6 +272,7 @@ def tick(now: datetime | None = None) -> bool:
         return False
     chat.send_view(*view_ask(day))
     attendance.mark_asked(day, now)
+    log.info("Attendance: asked about %s (time %s)", day, attendance.load()["asked"][day.isoformat()]["times"])
     return True
 
 

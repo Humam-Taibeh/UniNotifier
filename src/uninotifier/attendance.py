@@ -41,7 +41,7 @@ def load() -> dict:
         data = {}
     if not isinstance(data, dict):
         data = {}
-    for key in ("absences", "answered", "asked", "pick", "limits"):
+    for key in ("absences", "answered", "answered_at", "asked", "pick", "limits"):
         if not isinstance(data.get(key), dict):
             data[key] = {}
     return data
@@ -177,6 +177,7 @@ def record_day(day: date, absent: list[str], sched: dict | None = None) -> list[
     data["answered"][stamp] = ("none" if absent and len(absent) >= len(today_courses)
                                else "some" if absent else "all")
     data["pick"].pop(stamp, None)
+    data["answered_at"][stamp] = datetime.now().timestamp()           # when you told it: said back when you open it again
     save(data)
     return added
 

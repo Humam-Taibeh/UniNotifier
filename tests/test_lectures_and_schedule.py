@@ -1479,3 +1479,35 @@ def test_a_lecture_alert_does_not_repeat_what_a_recorded_check_in_already_told_a
     finally:
         (lectures.STATE_FILE, checkin.STATE_FILE, daily.CLAIM_DIR, lecturelinks.entry, lecturelinks.shot_bytes, lecturelinks.join_rows,
          checkin.covers, notifier.send_png_file, notifier.send_message) = keep
+
+
+def test_record_today_says_what_was_already_recorded_and_waits_for_the_day_to_end():
+    """Record today (Attendance): before the last lecture ends it says when the question comes (and offers to record now);
+    once answered it says what was recorded and when and asks if you want to change it; after the day the question itself."""
+    import importlib
+    from datetime import date
+    from uninotifier import attendance, schedule
+    flow = importlib.import_module("uninotifier.bot.attendance_flow")
+    attendance.FILE = Path(tempfile.mkdtemp()) / "attendance.json"
+    key = schedule.DAY_KEYS[date.today().weekday()]
+    keep = schedule.load_schedule
+    try:
+        def day_with(start, end):
+            schedule.load_schedule = lambda: {"days": {key: [{"start": start, "end": end, "course": "Arabic", "course_ar": "ع", "mode": "Online"}]}}
+
+        schedule.load_schedule = lambda: {"days": {}}
+        assert "no lectures today" in flow.view_today()[0]
+        day_with("23:00", "23:59")                                                       # not over yet
+        text, rows = flow.view_today()
+        assert "ends at 11:59 PM" in text and "I'll ask you then" in text and rows[0][0]["text"] == "✅ Record now"
+        day_with("00:00", "00:01")                                                       # over: the question itself
+        text, rows = flow.view_today()
+        assert "Did you attend your online lecture?" in text
+        attendance.record_day(date.today(), [])
+        text, rows = flow.view_today()
+        assert "Already recorded at" in text and "present in everything" in text and "Do you want to change it?" in text
+        assert rows[0][0]["text"] == "✏️ Change it" and rows[0][0]["callback_data"].startswith("att:ask:") and rows[-1][-1]["text"] == "🏠 Main Menu"
+        attendance.record_day(date.today(), ["Arabic"])
+        assert "absent from Arabic" in flow.view_today()[0]                              # a changed answer is said as it is now
+    finally:
+        schedule.load_schedule = keep
