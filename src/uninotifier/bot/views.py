@@ -124,10 +124,12 @@ def view_tasks() -> tuple[str, list]:
     upcoming = tasks.open_tasks(chat.load_state(), now)
 
     in_slack = slack.mode() == "slack"
-    lines = ["⏳ *Upcoming Tasks & Reminders*", media.DIVIDER,
-             slack.heading("📚 *Course tasks*", "📚 Course tasks" + (" · none ahead 🎉" if in_slack and not upcoming else ""))]
-    if not upcoming and not in_slack:                    # Slack says it in the heading: one block less
-        lines.append("🎉 No assignments or quizzes ahead.")
+    if in_slack and not upcoming:             # nothing from the course: said once, under the title — apart from your reminders
+        lines = ["⏳ *Upcoming Tasks & Reminders* • 📚 Course tasks · none ahead 🎉", media.DIVIDER]
+    else:
+        lines = ["⏳ *Upcoming Tasks & Reminders*", media.DIVIDER, slack.heading("📚 *Course tasks*", "📚 Course tasks")]
+        if not upcoming:
+            lines.append("🎉 No assignments or quizzes ahead.")
     for n, task in enumerate(upcoming, 1):
         lines += tasks.task_lines(n, task, now)
     rows = slack.grouped(tasks.open_buttons(upcoming), "items")

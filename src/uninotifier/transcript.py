@@ -13,6 +13,8 @@ portal publishes them (often Arabic); each is wrapped in a Unicode isolate and e
 with a left-to-right mark, so an Arabic name cannot reorder the mark and hours around it.
 """
 
+import re
+
 from uninotifier import degreeplan, gpa, gradebook
 from uninotifier.notifier import escape_md
 
@@ -54,6 +56,19 @@ def standing(semesters: list[dict]) -> dict:
             "retaken": retaken, "courses_passed": len(passed)}
 
 
+# The summary is a grid of two columns, read left to right: the plan and what is left, the hours attempted and
+# passed, what failed and what was repeated, this term and the placement exams.
+GRID_ORDER = ("Degree Plan", "Remaining", "Total Attempted Hours", "Passed", "Failed, Not Retaken Yet",
+              "Repeated Courses", "This Term", "Placement Exams")
+
+
+def _in_grid_order(lines: list[str]) -> list[str]:
+    def rank(line: str) -> int:
+        label = re.search(r"\*([^*:]+):\*", line)
+        return GRID_ORDER.index(label.group(1)) if label and label.group(1) in GRID_ORDER else len(GRID_ORDER)
+    return sorted(lines, key=rank)             # a line with no known label (an unrecognised category) stays last, in order
+
+
 def summary_lines(semesters: list[dict], figures: dict, status: str | None = None,
                   major: str | None = None, remaining: float | None = None,
                   plan: dict | None = None, retakes: int = 0) -> list[str]:
@@ -79,10 +94,10 @@ def summary_lines(semesters: list[dict], figures: dict, status: str | None = Non
     if plan:
         if status:
             lines.append(f"📌 *Academic Status:* {escape_md(status)}")
-        lines += ["", *degreeplan.progress_lines(plan, retakes, state["retaken"] if state else 0)]
+        progress = degreeplan.progress_lines(plan, retakes, state["retaken"] if state else 0)
         if "record_hours" in figures:
-            lines.append(f"📚 *Total Attempted Hours:* {gpa.fmt(figures['record_hours'])} hrs")
-        return lines
+            progress.append(f"📚 *Total Attempted Hours:* {gpa.fmt(figures['record_hours'])} hrs")
+        return lines + ["", *_in_grid_order(progress)]
     passed = figures.get("passed_hours", state["passed"] if state else None)
     if passed is not None:
         lines.append(f"⏱️ *Passed Hours:* {gpa.fmt(passed)} hrs")

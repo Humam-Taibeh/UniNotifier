@@ -293,7 +293,8 @@ def route_callback(cb: dict, action: str, message_id: int | None) -> None:
         finals_flow.handle_finals("check", message_id)
         return
     if action.startswith("portal:"):
-        started = portal_flow.start_portal(action.split(":")[1], None)
+        shown = None if chat.is_file_message(cb.get("message")) else message_id    # the pressed screen says "reading…" while it works
+        started = portal_flow.start_portal(action.split(":")[1], shown)
         chat.answer(cb["id"], "🏛️ Contacting the portal…" if started else "⏳ A portal request is already running")
         return
     if action == mfa.SMS_CALLBACK:

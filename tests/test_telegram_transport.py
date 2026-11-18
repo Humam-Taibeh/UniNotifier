@@ -914,8 +914,9 @@ def test_messages_go_to_slack_when_chosen():
             box = slack.boxed([{"type": "header", "text": {"type": "plain_text", "text": "T"}}] + many)
             assert len(box) == 1 and len(box[0]["child_blocks"]) <= slack.BOX_CHILDREN, box
             kids = box[0]["child_blocks"]
-            assert [b.get("block_id") for b in kids if b["type"] == "actions"] == ["row0", "nav"]
-            assert len(kids[-3]["elements"]) == 20 and len(kids[-1]["elements"]) == 1, "the way back stays apart"
+            assert [b.get("block_id") for b in kids if b["type"] == "actions"] == ["row0", "row1", "row2", "row3", "nav"]
+            assert all(len(b["elements"]) == 5 for b in kids if b.get("block_id", "").startswith("row")), "Slack shows five a row: never more"
+            assert len(kids[-1]["elements"]) == 1 and kids[-2]["type"] == "divider", "the way back stays apart, under a line"
             assert slack.boxed([{"type": "header", "text": {"type": "plain_text", "text": "T"}}])[0]["type"] == "header"
             # the frame comes in short pieces — Slack folds a tall one under "Show more", hiding its links
             six = {"type": "section", "fields": [{"type": "mrkdwn", "text": f"*L{i}*\nv"} for i in range(6)]}

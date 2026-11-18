@@ -1377,10 +1377,11 @@ def test_slack_button_groups_never_run_into_each_other():
         text, rows = gpa_ui.view_home(["Alpha", "Mike", "Zulu"])
         blocks = slack.buttons({"inline_keyboard": rows})
         kinds = [b["type"] for b in blocks]
-        assert kinds == ["actions", "divider", "actions", "divider", "actions"], kinds      # a line between the groups and above the way back
-        courses, tools, back = (b["elements"] for b in blocks if b["type"] == "actions")
+        assert kinds == ["actions"] * 3 + ["divider", "actions", "divider", "actions"], kinds   # the courses one under the other, a line, the tools, a line, the way back
+        *courses, tools, back = (b["elements"] for b in blocks if b["type"] == "actions")
         assert [e["text"]["text"] for e in back] == ["🔙 GPA & Grade Hub", "🏠 Main Menu"]       # Back and Main Menu, always both
-        assert len(courses) == 3 and [e["text"]["text"] for e in tools] == ["⚙️ CGPA & Record Hours", "🎯 Grade Needed"]
+        assert [len(c) for c in courses] == [1, 1, 1], "a course on a line of its own"
+        assert [e["text"]["text"] for e in tools] == ["⚙️ CGPA & Record Hours", "🎯 Grade Needed"]
         slack.mode = lambda: "telegram"
         assert [len(r) for r in gpa_ui.view_home(["Alpha", "Mike", "Zulu"])[1]] == [1, 1, 1, 2, 2]     # Telegram: the same rows, the way back now Back + Main Menu
     finally:

@@ -1356,3 +1356,76 @@ def test_reminder_screens_show_whole_titles_and_always_have_back_and_main_menu()
         assert reminder_flow.REMINDER_CANCEL_ROW[0]["callback_data"] == "cancel:tasks" and reminder_flow.REMINDER_CANCEL_ROW[1]["callback_data"] == "cancel:menu"
     finally:
         slack.mode, reminders.pending, reminders.get = keep
+
+
+def test_slack_lists_and_headings_have_room_and_never_hide_a_button():
+    """The two parts of the tasks screen are apart (nothing from the course: said once under the title, then 'Your reminders');
+    the course buttons of Course Adjustments are one under the other, none behind a '+3 more' (Slack shows five a row);
+    the screen says nothing about an empty start; a box that cannot hold everything is not sent with blocks outside it."""
+    from uninotifier import reminders, slack, tasks
+    from uninotifier import gpa, gpa_ui
+    from uninotifier.bot import chat, views
+    items = [{"id": 1, "note": "امتحان", "course": None, "due": 1900000000, "message_id": None}]
+    keep = (slack.mode, reminders.pending, tasks.open_tasks, chat.load_state)
+    try:
+        reminders.pending = lambda now=None: list(items)
+        tasks.open_tasks = lambda state, now: []
+        chat.load_state = lambda: {}
+        slack.mode = lambda: "slack"
+        text, rows = views.view_tasks()
+        blocks = slack.blocks(text, {"inline_keyboard": rows}, live=True)
+        assert blocks[0]["type"] == "header" and blocks[1].get("block_id") == "subtitle", [b["type"] for b in blocks]
+        assert "none ahead" in blocks[1]["elements"][0]["text"]                      # said once, in the title area
+        assert [b["type"] for b in blocks[2:4]] == ["header", "section"] and "Your reminders" in blocks[2]["text"]["text"]
+        assert not [b for b in blocks if b["type"] == "header" and "Course tasks" in b["text"]["text"]]   # no heading beside "Your reminders"
+        # Course Adjustments: eight courses, each on its own line; nothing hidden, nothing outside the box
+        gpa.STATE_FILE = Path(tempfile.mkdtemp()) / "gpa.json"
+        names = [f"Course {n}" for n in range(1, 9)]
+        text, rows = gpa_ui.view_home(names)
+        assert "enter a grade" not in text and "Tap a course" not in text and "Semester Average" not in text
+        blocks = slack.blocks(text, {"inline_keyboard": rows}, live=True)
+        assert all(len(b["elements"]) <= 5 for b in blocks if b["type"] == "actions"), "five a row at most: Slack hides the rest"
+        box = slack.boxed(blocks)
+        assert len(box) == 1 and (box[0]["type"] != "container" or len(box[0]["child_blocks"]) <= slack.BOX_CHILDREN), [b["type"] for b in box]
+        names = names[:6]                                                      # six courses fit the box, one under the other
+        gpa.STATE_FILE = Path(tempfile.mkdtemp()) / "gpa.json"
+        gpa.set_base(70.0, 60.0, "test")                                       # (no base set: a warning line would take a block)
+        text, rows = gpa_ui.view_home(names)
+        box = slack.boxed(slack.blocks(text, {"inline_keyboard": rows}, live=True))
+        courses = [b for b in box[0]["child_blocks"] if b["type"] == "actions" and len(b["elements"]) == 1]
+        assert box[0]["type"] == "container" and len(courses) == 6
+    finally:
+        slack.mode, reminders.pending, tasks.open_tasks, chat.load_state = keep
+
+
+def test_a_portal_button_shows_reading_on_the_screen_it_was_pressed_on():
+    """Transcript and Balance used to answer nothing for ten seconds: the pressed screen now says it is reading (the
+    message it came from), except when pressed under a picture."""
+    from uninotifier.bot import app, chat, portal_flow
+    seen = []
+    keep = (portal_flow.start_portal, chat.answer, chat.is_double_tap)
+    try:
+        portal_flow.start_portal = lambda section, message_id=None: seen.append((section, message_id)) or True
+        chat.answer = lambda *a, **k: True
+        chat.is_double_tap = lambda *a: False
+        app.handle_callback({"id": "1", "data": "portal:transcript", "message": {"message_id": 12}})
+        app.handle_callback({"id": "2", "data": "portal:balance", "message": {"message_id": 13, "document": {"file_id": "F"}}})
+        assert seen == [("transcript", 12), ("balance", None)], seen
+    finally:
+        portal_flow.start_portal, chat.answer, chat.is_double_tap = keep
+
+
+def test_the_transcript_summary_is_a_grid_in_the_order_you_read_it():
+    """GPA and status on top, then a gap; the plan beside what is left; attempted beside passed; failed beside repeated;
+    this term and the placement exams last."""
+    from uninotifier import slack, transcript
+    lines = ["🎓 *Cumulative GPA:* 69.86%", "📌 *Academic Status:* Regular", "",
+             "📊 *Degree Plan:* 133 hrs", "✅ *Passed:* 57 hrs", "⏳ *This Term:* 18 hrs", "❌ *Failed, Not Retaken Yet:* 3 hrs",
+             "🔁 *Repeated Courses:* 2", "🏁 *Remaining:* 76 hrs", "📝 *Placement Exams:* all 3 exempt", "📚 *Total Attempted Hours:* 66 hrs"]
+    head, rest = lines[:3], transcript._in_grid_order(lines[3:])
+    labels = [line.split(":*")[0].split("*")[-1] for line in rest]
+    assert labels == ["Degree Plan", "Remaining", "Total Attempted Hours", "Passed", "Failed, Not Retaken Yet",
+                      "Repeated Courses", "This Term", "Placement Exams"], labels
+    blocks = slack.blocks("📜 *Transcript*\n" + "\n".join(head + rest), None, live=False)
+    fields = [b for b in blocks if b["type"] == "section" and "fields" in b]
+    assert len(fields) == 2 and len(fields[0]["fields"]) == 2 and len(fields[1]["fields"]) == 8     # a gap under GPA and status

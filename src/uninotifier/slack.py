@@ -190,7 +190,7 @@ def _by_width(elements: list[dict], limit: int) -> list[list[dict]]:
     """The buttons in rows that each fit `limit`: a long label stands alone, short ones share a row."""
     rows: list[list[dict]] = []
     for element in elements:
-        if rows and sum(_width(e) for e in rows[-1]) + _width(element) <= limit:
+        if rows and len(rows[-1]) < ROW_SIZE and sum(_width(e) for e in rows[-1]) + _width(element) <= limit:
             rows[-1].append(element)
         else:
             rows.append([element])
@@ -238,12 +238,13 @@ def heading(text: str, plain: str) -> str:
     return HEAD + plain if mode() == "slack" else text
 
 
-def grouped(rows: list[list[dict]], name: str) -> list[list[dict]]:
+def grouped(rows: list[list[dict]], name: str, stack: bool = False) -> list[list[dict]]:
     """In Slack: these rows are one group of buttons (a list of courses, a list of tasks), apart from
-    the rows around them by a light line. Elsewhere the rows as they are."""
+    the rows around them by a light line; `stack`: each row on a line of its own (a list of courses, one under
+    the other). Elsewhere the rows as they are."""
     if mode() != "slack":
         return rows
-    return [[{**row[0], "group": name}, *row[1:]] if row else row for row in rows]
+    return [[{**row[0], "group": name, "stack": stack}, *row[1:]] if row else row for row in rows]
 
 
 def buttons(reply_markup, prefix: str = "", width: int | None = None) -> list[dict]:
@@ -251,13 +252,14 @@ def buttons(reply_markup, prefix: str = "", width: int | None = None) -> list[di
     Slack reads as a long list), the way back apart under a line, a button that opens a page opening
     it, any other carrying its Telegram callback data as its value (slackbot hands the press to the
     bot exactly as Telegram would). ✅ is Slack's green button, 🗑 its red one."""
-    groups: list[tuple[str | None, list]] = []       # the buttons, in groups (a row's first button may name its "group")
+    groups: list[tuple[tuple, list]] = []            # the buttons, in groups (a row's first button may name its "group")
     nav, cards = [], []
     for r, row in enumerate(_markup(reply_markup)):
         if row and row[0].get("line"):
             cards.append(row)
             continue
-        group = row[0].get("group") if row else None
+        group = (row[0].get("group"), bool(row[0].get("stack"))) if row else (None, False)
+        mine: list[dict] = []
         for c, button in enumerate(row[:25]):
             label = str(button.get("text") or "·")
             element = {"type": "button", "text": {"type": "plain_text", "text": label[:75], "emoji": True}}
@@ -274,17 +276,24 @@ def buttons(reply_markup, prefix: str = "", width: int | None = None) -> list[di
             if _is_nav(label):
                 nav.append(element)
                 continue
+            mine.append(element)
+        if mine:
             if not groups or groups[-1][0] != group:
                 groups.append((group, []))
-            groups[-1][1].append(element)
+            groups[-1][1].append(mine)
     out: list[dict] = []
     numbers = itertools.count()                          # every row has an id of its own (Slack refuses a message that repeats one)
-    for group, content in groups:
+    for (group, stack), rows_ in groups:
         if out:
             out.append({"type": "divider"})              # a group of buttons never runs into the one before it
-        size = 25 if group else ROW_SIZE                 # a named group is one block: Slack wraps it by the width
-        rows = _by_width(content, width) if width else [content[n:n + size] for n in range(0, len(content), size)]
-        for row in rows:                                 # `width`: a message's buttons, none of them with its label cut
+        flat = [e for row in rows_ for e in row]
+        if stack:                                        # a list: each row on a line of its own, one under the other
+            rows = [part for row in rows_ for part in (_by_width(row, width or ROW_WIDTH))]
+        elif width:                                      # a message's buttons: none of them with its label cut
+            rows = _by_width(flat, width)
+        else:                                            # the Home page: a row of five
+            rows = [flat[n:n + ROW_SIZE] for n in range(0, len(flat), ROW_SIZE)]
+        for row in rows:
             out.append({"type": "actions", "block_id": f"{prefix}row{next(numbers)}", "elements": row})
     if cards:
         out[:0] = _row_lines(cards)
@@ -439,7 +448,8 @@ def _fewer(children: list[dict], kind: str) -> list[dict]:
         last = out[-1] if out else None
         if kind == "actions" and last and block["type"] == last["type"] == "actions" \
                 and "nav" not in (block.get("block_id"), last.get("block_id")) \
-                and len(last["elements"]) + len(block["elements"]) <= 25:
+                and len(last["elements"]) + len(block["elements"]) <= ROW_SIZE \
+                and sum(_width(e) for e in last["elements"] + block["elements"]) <= ROW_WIDTH:
             out[-1] = {**last, "elements": last["elements"] + block["elements"]}
         elif kind == "section" and last and block["type"] == last["type"] == "section" \
                 and "text" in block and "text" in last and "accessory" not in block and "accessory" not in last \
@@ -489,6 +499,8 @@ def boxed(card: list[dict], title: str = HOME_TITLE, flat: bool = False) -> list
     for kind in ("actions", "section"):
         if over():
             children = _fewer(children, kind)
+    if over():                                             # nothing more can go: no box rather than blocks outside it
+        return card
     box = {"type": "container", "title": {"type": "plain_text", "text": title[:HEADER_LIMIT], "emoji": False},
            "has_header_divider": True, "child_blocks": children[:BOX_CHILDREN]}
     if subtitle:

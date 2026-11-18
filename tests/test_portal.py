@@ -586,7 +586,10 @@ def test_study_plan_from_the_portal():
     figures = {"record_cgpa": 71.26, "cgpa": 71.3, "passed_hours": 8.0, "record_hours": 14.0}
     summary = transcript.summary_lines(sems, figures, "Regular / Good Standing", remaining=124.0, plan=plan, retakes=1)
     assert summary[:2] == ["🎓 *Cumulative GPA:* 71.26% (Portal display: 71.3%)", "📌 *Academic Status:* Regular / Good Standing"]
-    assert summary[2] == "" and summary[3] == "📊 *Degree Plan:* 22 hrs" and summary[-1] == "📚 *Total Attempted Hours:* 14 hrs"
+    assert summary[2] == "" and summary[3] == "📊 *Degree Plan:* 22 hrs"
+    labels = [line.split(":*")[0].split("*")[-1] for line in summary[3:] if ":*" in line]
+    assert labels[:4] == ["Degree Plan", "Remaining", "Total Attempted Hours", "Passed"], labels     # the grid, read left to right
+    assert "📚 *Total Attempted Hours:* 14 hrs" in summary
     assert "🏁 *Remaining:* 16 hrs · 10 after this term" in summary and not any("124" in line for line in summary)
 
 

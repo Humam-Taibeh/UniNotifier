@@ -67,40 +67,35 @@ def view_home(names: list[str]) -> tuple[str, list]:
     gpa.save(state)
     courses = state["courses"]
 
+    in_slack = slack.mode() == "slack"
     lines = ["⚙️ *Course Adjustments*", DIVIDER]
-    for n, name in enumerate(order, 1):
-        c = courses[name]
-        retake = f' · 🔁 retake, was {fmt(c["old_grade"])}' if c["retake"] else ""
-        lines.append(f"{n}. 📘 *{escape_md(name)}* · {fmt(c['hours'])}h · {_course_mark(c)}{retake}")
+    if not in_slack:                       # in Slack the course buttons say it all, one under the other: no list twice
+        for n, name in enumerate(order, 1):
+            c = courses[name]
+            retake = f' · 🔁 retake, was {fmt(c["old_grade"])}' if c["retake"] else ""
+            lines.append(f"{n}. 📘 *{escape_md(name)}* · {fmt(c['hours'])}h · {_course_mark(c)}{retake}")
+        lines.append(DIVIDER)
     if not order:
         lines.append("No courses saved yet — run a check first.")
-    lines.append(DIVIDER)
 
     rows = gpa.graded(courses)
     hours_done = sum(c["hours"] for _, c, _ in rows)
     hours_all = sum(c["hours"] for c in courses.values())
     average = gpa.semester_average(courses)
-    if average is None:
-        lines.append("📊 *Semester Average:* — (enter a grade to start)")
-    else:
+    cgpa, passed = state["cgpa"], state["passed_hours"]
+    if average is not None:                # what is only there once a grade is entered; nothing about an empty start
         lines.append(f"📊 *Semester Average:* {fmt(average)}%  ({fmt(hours_done)} of {fmt(hours_all)} hours graded)")
         failing = [n for n, c, g in rows if g < gpa.PASS_MARK]
         if failing:
             lines.append(f"❌ *Below the 50% pass mark:* {escape_md(', '.join(failing))}")
-
-    cgpa, passed = state["cgpa"], state["passed_hours"]
     projected = gpa.cumulative(courses, cgpa, passed) if average is not None else None
     if passed is None:
         lines.append("🎓 *Projected CGPA:* set your current CGPA and record hours first")
     elif projected is not None:
         lines.append(f"🎓 *Projected CGPA:* {fmt(projected)}%  (from {fmt(cgpa)}% over {fmt(passed)} record hours)")
-    else:
-        lines.append(f"🎓 *Current CGPA:* {fmt(cgpa)}% over {fmt(passed)} record hours")
-    lines += ["", "Tap a course for its hours, retake, coursework total and final grade. "
-              "Grades marked 🔒 come from the portal."]
 
     buttons = slack.grouped([[{"text": f"{n}. {_label(name, courses[name])}", "callback_data": f"gpa:c:{n - 1}"}]
-                             for n, name in enumerate(order, 1)], "courses")
+                             for n, name in enumerate(order, 1)], "courses", stack=True)
     buttons += slack.grouped([[{"text": "⚙️ CGPA & Record Hours", "callback_data": "gpa:cg"}, NEED_BUTTON]], "tools")
     buttons += [NAV_ROW]
     return "\n".join(lines), buttons
