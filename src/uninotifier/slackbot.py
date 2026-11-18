@@ -397,7 +397,8 @@ def from_press(payload: dict) -> list[dict]:
     sender, chat = _person(user)
     out = []
     for action in payload.get("actions") or []:
-        if action.get("url") or not action.get("value"):
+        value = action.get("value") or (action.get("selected_option") or {}).get("value")    # a button, or a drop-down's pick
+        if action.get("url") or not value:
             continue                                      # a button that opens a page: Slack opens it
         message = {"message_id": number or 0, "chat": chat,
                    "date": int(time.time()) if ts == HOME_TS else int(float(ts or 0)),
@@ -406,7 +407,7 @@ def from_press(payload: dict) -> list[dict]:
             message["reply_markup"] = json.loads(found["markup"])
         out.append({"update_id": _update_id(),
                     "callback_query": {"id": f"slack-{action.get('action_ts') or time.time()}", "from": sender,
-                                       "message": message, "chat_instance": "slack", "data": action["value"]}})
+                                       "message": message, "chat_instance": "slack", "data": value}})
     return out
 
 

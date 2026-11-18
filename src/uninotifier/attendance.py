@@ -8,6 +8,8 @@ The rules (ZUJ, as given by the owner):
     on campus (Online / Activity) another, or it is a FREE elective (the study plan's "حرة" category,
     found by its course number): only the campus day counts — the other day is never asked about —
     2 absences are allowed, the 3rd deprives;
+  - a course attended once a week (one counted day, e.g. an online course with an Activity day): the
+    same as a blended one — 2 allowed, the 3rd deprives;
   - an Activity slot is never counted.
 
 The timetable comes from schedule.load_schedule() (your schedule.json or the portal's), so this works
@@ -22,7 +24,7 @@ from datetime import date, datetime, timedelta
 from uninotifier import fileio, paths, schedule
 
 FILE = paths.DATA / "attendance.json"
-ALLOWED = {"normal": 5, "blended": 2}            # absences allowed; one more deprives
+ALLOWED = {"normal": 5, "blended": 2, "once": 2}   # absences allowed; one more deprives (حرمان)
 CAMPUS_MODES = ("In-Person", "Blended")           # "Blended" is the portal's own mark (م) for a blended course's campus day
 COUNTED_MODES = CAMPUS_MODES + ("Online",)
 ASK_AFTER_MINUTES = 60                           # asked this long after the day's last lecture ends
@@ -61,8 +63,12 @@ def kinds(sched: dict | None = None) -> dict[str, str]:
     for _, lec in _slots(sched):
         modes.setdefault(lec["course"], set()).add(lec.get("mode"))
     free = free_courses(sched)
-    return {course: "blended" if ("Blended" in found or "In-Person" in found and len(found) > 1 or course in free)
-            else "normal"
+    days: dict[str, set] = {}
+    for day, lec in _slots(sched):
+        if lec.get("mode") in COUNTED_MODES:
+            days.setdefault(lec["course"], set()).add(day)
+    return {course: ("blended" if ("Blended" in found or "In-Person" in found and len(found) > 1 or course in free)
+                     else "once" if len(days.get(course, ())) == 1 else "normal")
             for course, found in modes.items() if found & set(COUNTED_MODES)}
 
 
@@ -202,13 +208,33 @@ def mark_asked(day: date, now: datetime | None = None) -> None:
 
 def warning(course: str, kind: str, data: dict | None = None) -> str | None:
     info = status(course, kind, data)
+    if info["state"] == "ok":
+        return None
+    return f"{MARK[info['state']]} *{course}* — {info['count']} of {info['allowed']} · {state_text(info)}"
+
+
+MARK = {"ok": "🟢", "last": "🟠", "limit": "🔴", "deprived": "🚫"}
+
+
+def state_text(info: dict) -> str:
+    """The state in words, the Arabic term beside the English one."""
     if info["state"] == "deprived":
-        return f"🚫 *{course}* — you are over the limit ({info['count']} of {info['allowed']}): deprivation"
+        return "*Deprived (حرمان)* — over the limit"
     if info["state"] == "limit":
-        return f"🚨 *{course}* — {info['count']} of {info['allowed']}: no absences left, the next one deprives you"
+        return "no absences left — the next one means *حرمان* (deprivation)"
     if info["state"] == "last":
-        return f"⚠️ *{course}* — {info['count']} of {info['allowed']}: ONE absence left before deprivation"
-    return None
+        return "ONE absence left before *حرمان* (deprivation)"
+    return f"{info['left']} left"
+
+
+def set_count(course: str, number: int) -> int:
+    """Make the course's absences `number` (earlier, undated ones are added or removed first)."""
+    number = max(int(number), 0)
+    while count(course) < number:
+        adjust(course, 1)
+    while count(course) > number:
+        adjust(course, -1)
+    return count(course)
 
 
 EARLIER = "earlier-"            # an absence from before the bot counted: kept as a count, with no date

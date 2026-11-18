@@ -1229,7 +1229,8 @@ def test_attendance_counts_absences_by_the_rules():
                 {"start": "12:00", "end": "13:00", "course": "Club", "mode": "Activity"},
                 {"start": "13:00", "end": "14:00", "course": "Data", "mode": "In-Person"}],
         "mon": [{"start": "09:00", "end": "10:00", "course": "Physics", "mode": "Online"}],
-        "tue": [{"start": "09:00", "end": "10:00", "course": "Data", "mode": "Activity"}]}}
+        "tue": [{"start": "09:00", "end": "10:00", "course": "Data", "mode": "Activity"},
+                {"start": "10:00", "end": "11:00", "course": "Algebra", "mode": "In-Person"}]}}
     assert attendance.kinds(sched) == {"Algebra": "normal", "Physics": "blended", "Data": "blended"}
     sunday, monday = date(2026, 11, 15), date(2026, 11, 16)
     assert attendance.courses_on(sunday, sched) == ["Algebra", "Physics", "Data"]
@@ -1280,13 +1281,14 @@ def test_attendance_blended_mark_and_free_electives():
     sched = {"course_codes": {"0101": "Painting", "0202": "Maths"}, "days": {
         "sun": [{"start": "09:00", "end": "10:00", "course": "Painting", "mode": "In-Person"},
                 {"start": "10:00", "end": "11:00", "course": "Maths", "mode": "Blended"}],
-        "tue": [{"start": "10:00", "end": "11:00", "course": "Maths", "mode": "Activity"}]}}
+        "tue": [{"start": "10:00", "end": "11:00", "course": "Maths", "mode": "Activity"},
+                {"start": "12:00", "end": "13:00", "course": "Painting", "mode": "In-Person"}]}}
     keep = attendance.free_codes
     try:
         attendance.free_codes = lambda: {"0101"}
         assert attendance.kinds(sched) == {"Painting": "blended", "Maths": "blended"}
         assert attendance.courses_on(date(2026, 11, 15), sched) == ["Painting", "Maths"]
-        assert attendance.courses_on(date(2026, 11, 17), sched) == []
+        assert attendance.courses_on(date(2026, 11, 17), sched) == ["Painting"]     # the Maths Activity day is not counted
         attendance.free_codes = lambda: set()
         assert attendance.kinds(sched) == {"Painting": "normal", "Maths": "blended"}
     finally:
@@ -1311,6 +1313,26 @@ def test_attendance_courses_follow_the_week_and_slack_draws_cards():
     finally:
         slack.mode = keep
     blocks = slack.buttons({"inline_keyboard": rows})
-    assert blocks[0]["type"] == "carousel" and all(c["type"] == "card" for c in blocks[0]["elements"])
-    assert [b["text"]["text"] for b in blocks[0]["elements"][0]["actions"]] == ["➖ Remove", "➕ Add"] if blocks[0]["elements"] else True
-    assert blocks[-1]["block_id"] == "nav"
+    lines = [b for b in blocks if b["type"] == "section"]
+    assert len(lines) == len(attendance.ordered()) and all(b["accessory"]["type"] == "static_select" for b in lines)    # one line per course, all shown
+    assert lines[0]["accessory"]["initial_option"]["value"].startswith("att:to:0:")
+    assert blocks[-1]["block_id"] == "nav" and [e["text"]["text"] for e in blocks[-1]["elements"]] == ["🔙 Attendance", "🏠 Main Menu"]
+
+
+
+def test_attendance_once_a_week_course_and_wording():
+    """A course attended one day a week (an online course with an Activity day) has 2 absences, like a blended one;
+    over the limit the screen says حرمان, with a way back."""
+    import importlib
+    from uninotifier import attendance
+    attendance.FILE = Path(tempfile.mkdtemp()) / "attendance.json"
+    sched = {"days": {"mon": [{"start": "19:00", "end": "20:30", "course": "Arabic", "mode": "Activity"}],
+                      "wed": [{"start": "19:00", "end": "20:30", "course": "Arabic", "mode": "Online"}]}}
+    assert attendance.kinds(sched) == {"Arabic": "once"} and attendance.ALLOWED["once"] == 2
+    assert attendance.set_count("Arabic", 3) == 3 and attendance.status("Arabic", "once")["state"] == "deprived"
+    assert attendance.set_count("Arabic", 1) == 1
+    assert "حرمان" in attendance.state_text(attendance.status("Arabic", "once", {"absences": {"Arabic": ["a", "b"]}}))
+    flow = importlib.import_module("uninotifier.bot.attendance_flow")
+    for view in (flow.view_home(), flow.view_set(), flow.view_ask(__import__('datetime').date(2026, 11, 18)), flow.view_pick(__import__('datetime').date(2026, 11, 18))):
+        labels = [b["text"] for row in view[1] for b in row]
+        assert any(l.startswith("🏠") for l in labels) or view is None, labels

@@ -180,21 +180,31 @@ def _is_nav(label: str) -> bool:
     return label.startswith(NAV_MARKS) or any(label.endswith(word) for word in NAV_WORDS)
 
 
-def _course_cards(rows: list[list[dict]]) -> dict:
-    """The rows whose first button carries a "card" ({"title", "subtitle", "body", "labels"}) as Slack's
-    carousel of cards: the title, the lines under it, and the row's buttons (their `labels`) on the card.
-    Telegram and a layout without cards just see ordinary rows (the extra key is ignored)."""
-    cards = []
+def _row_lines(rows: list[list[dict]]) -> list[dict]:
+    """The rows whose first button carries a "line" as Slack's section blocks, one per row: the line's
+    words (mrkdwn, always whole) with, at its right, either a drop-down list ("options": [[label, value]],
+    "initial": value — the person picks the number) or the row's first button (a toggle). Telegram and
+    any layout that knows no lines just see ordinary rows (the extra key is ignored)."""
+    out = []
     for n, row in enumerate(rows):
-        info = row[0]["card"]
-        card = {"type": "card", "title": {"type": "plain_text", "text": str(info["title"])[:150], "emoji": False},
-                "subtitle": {"type": "mrkdwn", "text": str(info.get("subtitle", ""))[:150] or " "},
-                "body": {"type": "mrkdwn", "text": str(info.get("body", ""))[:CARD_TEXT] or " "},
-                "actions": [{"type": "button", "text": {"type": "plain_text", "text": label[:75], "emoji": True},
-                             "value": str(button["callback_data"])[:2000], "action_id": f"card{n}_{c}"}
-                            for c, (button, label) in enumerate(zip(row, info.get("labels") or [b["text"] for b in row]))]}
-        cards.append(card)
-    return {"type": "carousel", "elements": cards[:10]}
+        info, button = row[0]["line"], row[0]
+        block = {"type": "section", "block_id": f"line{n}",
+                 "text": {"type": "mrkdwn", "text": str(info.get("text", ""))[:SECTION_LIMIT] or " "}}
+        if info.get("options"):
+            options = [{"text": {"type": "plain_text", "text": str(label)[:75], "emoji": True}, "value": str(value)[:150]}
+                       for label, value in info["options"][:100]]
+            block["accessory"] = {"type": "static_select", "action_id": f"line{n}", "options": options,
+                                  "placeholder": {"type": "plain_text", "text": "Choose", "emoji": True}}
+            chosen = [o for o in options if o["value"] == str(info.get("initial"))]
+            if chosen:
+                block["accessory"]["initial_option"] = chosen[0]
+        else:
+            block["accessory"] = {"type": "button", "action_id": f"line{n}", "value": str(button["callback_data"])[:2000],
+                                  "text": {"type": "plain_text", "text": str(button["text"])[:75], "emoji": True}}
+            if info.get("style") in ("primary", "danger"):
+                block["accessory"]["style"] = info["style"]
+        out.append(block)
+    return out
 
 
 def buttons(reply_markup, prefix: str = "") -> list[dict]:
@@ -204,7 +214,7 @@ def buttons(reply_markup, prefix: str = "") -> list[dict]:
     bot exactly as Telegram would). ✅ is Slack's green button, 🗑 its red one."""
     content, nav, cards = [], [], []
     for r, row in enumerate(_markup(reply_markup)):
-        if row and row[0].get("card"):
+        if row and row[0].get("line"):
             cards.append(row)
             continue
         for c, button in enumerate(row[:25]):
@@ -224,7 +234,7 @@ def buttons(reply_markup, prefix: str = "") -> list[dict]:
     out = [{"type": "actions", "block_id": f"{prefix}row{n}", "elements": content[n:n + ROW_SIZE]}
            for n in range(0, len(content), ROW_SIZE)]
     if cards:
-        out.insert(0, _course_cards(cards))
+        out[:0] = _row_lines(cards)
     if nav:
         if out:
             out.append({"type": "divider"})

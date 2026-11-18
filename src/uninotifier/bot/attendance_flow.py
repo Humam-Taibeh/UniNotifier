@@ -2,8 +2,12 @@
 🎒 Attendance & Absences in the chat: the question after your last lecture ("did you go today?"),
 the screen with every course's count and its limit, and the warnings (attendance.py has the rules).
 
+Every screen ends with the way back (the screen before it, then 🏠 Main Menu). In Slack the courses are
+lines — a section each, its words whole — with a drop-down to set the number or a button to toggle;
+anywhere else they are numbered, with ordinary buttons.
+
 Buttons: att:ask:<date> · att:all:<date> · att:none:<date> · att:pick:<date> · att:t:<date>:<n> ·
-att:save:<date> · att:home · att:today · att:undo:<n> · att:set · att:adj:<n>:<up|down>
+att:save:<date> · att:home · att:today · att:set · att:to:<n>:<count> · att:adj:<n>:<up|down>
 """
 
 import logging
@@ -16,8 +20,15 @@ from uninotifier.bot import chat
 log = logging.getLogger("uninotifier")
 
 TICK = 60                                   # seconds between looks at whether the question is due
-_MARK = {"ok": "🟢", "last": "🟠", "limit": "🔴", "deprived": "🚫"}
-HOME_ROW = [{"text": "🎒 Attendance", "callback_data": "att:home"}, {"text": "🏠 Main Menu", "callback_data": "menu"}]
+MAIN = {"text": "🏠 Main Menu", "callback_data": "menu"}
+ATTENDANCE = {"text": "🔙 Attendance", "callback_data": "att:home"}
+RULES = ("*Absences allowed:* 5 for a course you attend 2 days or more a week; 2 for a blended, a free or a "
+         "once-a-week course. One more than that means *حرمان* (deprivation).")
+KIND_TAG = {"blended": " · blended", "once": " · once a week", "normal": ""}
+
+
+def _in_slack() -> bool:
+    return slack.mode() == "slack"
 
 
 def _day_name(day: date) -> str:
@@ -33,6 +44,12 @@ def _course_lines(day: date) -> list[str]:
     return [f"• {lec['course']} · {_clock(lec['start'])}–{_clock(lec['end'])}" for lec in attendance.classes_on(day)]
 
 
+def _course_text(i: int, course: str, kind: str, info: dict) -> str:
+    return (f"{attendance.MARK[info['state']]} *{i + 1}. {course}*{KIND_TAG[kind]}\n"
+            f"{attendance.bar(info['count'], info['allowed'])}  {info['count']} of {info['allowed']} · "
+            f"{attendance.state_text(info)}")
+
+
 # ------------------------------------------------------------------ the question
 
 def view_ask(day: date) -> tuple[str, list]:
@@ -40,21 +57,30 @@ def view_ask(day: date) -> tuple[str, list]:
     lines = [f"🎒 *Attendance* — {_day_name(day)}", media.DIVIDER, *_course_lines(day), "",
              "Did you go to university today?"]
     return "\n".join(lines), [
-        [{"text": "✅ I attended everything", "callback_data": f"att:all:{stamp}"}],
-        [{"text": "🎯 I missed some", "callback_data": f"att:pick:{stamp}"}],
-        [{"text": "❌ I didn't go today", "callback_data": f"att:none:{stamp}"}]]
+        [{"text": "✅ Attended", "callback_data": f"att:all:{stamp}"}],
+        [{"text": "🎯 Missed some", "callback_data": f"att:pick:{stamp}"}],
+        [{"text": "❌ Didn't go", "callback_data": f"att:none:{stamp}"}],
+        [MAIN]]
 
 
 def view_pick(day: date) -> tuple[str, list]:
     stamp = day.isoformat()
     courses = attendance.courses_on(day)
     chosen = set(attendance.load()["pick"].get(stamp, []))
+    times = {lec["course"]: f"{_clock(lec['start'])}–{_clock(lec['end'])}" for lec in reversed(attendance.classes_on(day))}
     lines = [f"🎯 *Which did you miss?* — {_day_name(day)}", media.DIVIDER,
-             "Tap the courses you were absent from, then 💾 Save."]
-    rows = [[{"text": ("❌ " if course in chosen else "✅ ") + course[:40], "callback_data": f"att:t:{stamp}:{i}"}]
-            for i, course in enumerate(courses)]
-    rows.append([{"text": "💾 Save", "callback_data": f"att:save:{stamp}"},
-                 {"text": "🔙 Back", "callback_data": f"att:ask:{stamp}"}])
+             "Tap a course to switch it between present and absent, then save."]
+    rows = []
+    for i, course in enumerate(courses):
+        absent = course in chosen
+        button = {"text": "❌ Absent" if absent else "✅ Present", "callback_data": f"att:t:{stamp}:{i}"}
+        if _in_slack():
+            button["line"] = {"text": f"*{i + 1}. {course}*\n{times.get(course, '')}", "style": "danger" if absent else None}
+        else:
+            button["text"] = ("❌ " if absent else "✅ ") + course
+        rows.append([button])
+    rows.append([{"text": "✅ Save", "callback_data": f"att:save:{stamp}"}])
+    rows.append([{"text": "🔙 Back", "callback_data": f"att:ask:{stamp}"}, MAIN])
     return "\n".join(lines), rows
 
 
@@ -66,58 +92,49 @@ def view_result(day: date) -> tuple[str, list]:
     lines = [f"🎒 {head}", media.DIVIDER]
     lines += [w for c in absent if (w := attendance.warning(c, kind[c], data))] or ["No warnings."]
     return "\n".join(lines), [[{"text": "✏️ Change today's answer", "callback_data": f"att:ask:{day.isoformat()}"}],
-                              HOME_ROW]
+                              [ATTENDANCE, MAIN]]
 
 
-# ------------------------------------------------------------------ the screen
+# ------------------------------------------------------------------ the screens
 
 def view_home() -> tuple[str, list]:
     kind = attendance.kinds()
     data = attendance.load()
     if not kind:
         return ("🎒 *Attendance & Absences*\n" + media.DIVIDER + "\nNo timetable yet, so there is nothing to count. "
-                "It appears once your timetable is read.", [chat.BACK_ROW])
-    names = attendance.ordered()
+                "It appears once your timetable is read.", [chat.COURSES_ROW])
     lines = ["🎒 *Attendance & Absences*", media.DIVIDER]
-    rows = []
-    for i, course in enumerate(names):
-        info = attendance.status(course, kind[course], data)
-        mark = _MARK[info["state"]]
-        tag = " · blended: in-person days only" if kind[course] == "blended" else ""
-        lines.append(f"{mark} *{course}*{tag}")
-        lines.append(f"      {attendance.bar(info['count'], info['allowed'])}  {info['count']} of {info['allowed']}")
-        if info["count"]:
-            rows.append([{"text": f"↩️ Undo the last absence: {course[:28]}", "callback_data": f"att:undo:{i}"}])
-    lines += ["", "Normal course: 5 allowed, the 6th deprives. Blended: 2 allowed, the 3rd deprives."]
+    for i, course in enumerate(attendance.ordered()):
+        lines += [_course_text(i, course, kind[course], attendance.status(course, kind[course], data)), ""]
+    lines.append(RULES)
     return "\n".join(lines), [[{"text": "➕ Record today", "callback_data": "att:today"},
-                               {"text": "📝 Earlier absences", "callback_data": "att:set"}], *rows, chat.BACK_ROW]
+                               {"text": "📝 Earlier absences", "callback_data": "att:set"}], chat.COURSES_ROW]
 
 
 def view_set() -> tuple[str, list]:
-    """Absences from before the bot counted, the courses in the order of the week. In Slack each course is a
-    card of its own (its bar and count, ➖ and ➕ on it); anywhere else a numbered list with a ➕ row and
-    a ➖ row (the cards' buttons are ordinary rows there, labelled with the course's number)."""
+    """Absences from before the bot counted, the courses in the order of the week. In Slack every course
+    is a line with a drop-down: pick the number you have now. Elsewhere a numbered list with a ➕ row and a
+    ➖ row."""
     data = attendance.load()
     kind = attendance.kinds()
     names = attendance.ordered()
-    cards = slack.mode() == "slack"
-    lines = ["📝 *Your earlier absences*", media.DIVIDER, "Set each course to the absences you have now — "
-             + ("swipe the cards, ➖ removes one, ➕ adds one." if cards else "➕ adds one, ➖ removes one, by the number.")]
+    lines = ["📝 *Your earlier absences*", media.DIVIDER, "Set each course to the number of absences you have now."]
     rows = []
     for i, course in enumerate(names):
         info = attendance.status(course, kind[course], data)
-        mark = _MARK[info["state"]]
-        if not cards:
+        if _in_slack():
+            top = max(info["allowed"] + 2, info["count"])
+            options = [[f"{k} of {info['allowed']}" if k <= info["allowed"] else f"🚫 {k} — حرمان", f"att:to:{i}:{k}"]
+                       for k in range(top + 1)]
+            rows.append([{"text": "Set", "callback_data": f"att:to:{i}:{info['count']}",
+                          "line": {"text": _course_text(i, course, kind[course], info), "options": options,
+                                   "initial": f"att:to:{i}:{info['count']}"}}])
+        else:
             lines.append(f"*{i + 1}.* {course} — {info['count']} of {info['allowed']}")
-        card = {"title": f"{i + 1}. {course}", "subtitle": f"{mark} {attendance.bar(info['count'], info['allowed'])}",
-                "body": f"*{info['count']} of {info['allowed']}* absences" + (" · blended" if kind[course] == "blended" else ""),
-                "labels": ["➖ Remove", "➕ Add"]}
-        rows.append([{"text": f"➖ {i + 1}", "callback_data": f"att:adj:{i}:down", "card": card},
-                     {"text": f"➕ {i + 1}", "callback_data": f"att:adj:{i}:up"}])
-    if not cards:
-        rows = [[r[1] for r in rows], [r[0] for r in rows]]            # ➕ row, then ➖ row
-        rows = [[{k: v for k, v in b.items() if k != "card"} for b in row] for row in rows]
-    return "\n".join(lines), [*rows, [{"text": "🔙 Attendance", "callback_data": "att:home"}]]
+    if not _in_slack():
+        rows = [[{"text": f"➕ {i}", "callback_data": f"att:adj:{i - 1}:up"} for i in range(1, len(names) + 1)],
+                [{"text": f"➖ {i}", "callback_data": f"att:adj:{i - 1}:down"} for i in range(1, len(names) + 1)]]
+    return "\n".join(lines), [*rows, [ATTENDANCE, MAIN]]
 
 
 # ------------------------------------------------------------------ buttons
@@ -132,35 +149,34 @@ def handle_callback(cb: dict, action: str, message_id: int | None) -> None:
     what = parts[1] if len(parts) > 1 else "home"
     if chat.is_file_message(cb.get("message")):
         message_id = None
+    names = attendance.ordered()
+    index = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else -1
     if what == "home":
         _show(message_id, view_home())
-        return
-    if what == "set":
+    elif what == "set":
         _show(message_id, view_set())
-        return
-    if what == "adj":
-        names = attendance.ordered()
-        if len(parts) > 3 and parts[2].isdigit() and int(parts[2]) < len(names) and parts[3] in ("up", "down"):
-            attendance.adjust(names[int(parts[2])], 1 if parts[3] == "up" else -1)
+    elif what == "to" and 0 <= index < len(names) and len(parts) > 3 and parts[3].isdigit():
+        attendance.set_count(names[index], int(parts[3]))
         _show(message_id, view_set())
-        return
-    if what == "today":
+    elif what == "adj" and 0 <= index < len(names) and len(parts) > 3 and parts[3] in ("up", "down"):
+        attendance.adjust(names[index], 1 if parts[3] == "up" else -1)
+        _show(message_id, view_set())
+    elif what == "today":
         day = date.today()
         _show(message_id, view_ask(day) if attendance.courses_on(day)
-              else ("🎒 *Attendance*\nNo counted lectures today.", [HOME_ROW]))
-        return
-    if what == "undo":
-        names = attendance.ordered()
-        index = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else -1
-        if 0 <= index < len(names):
-            attendance.remove_one(names[index])
+              else ("🎒 *Attendance*\nNo counted lectures today.", [[ATTENDANCE, MAIN]]))
+    elif what in ("ask", "pick", "t", "all", "none", "save"):
+        try:
+            day = date.fromisoformat(parts[2])
+        except (IndexError, ValueError):
+            _show(message_id, view_home())
+            return
+        _handle_day(message_id, what, day, parts)
+    else:
         _show(message_id, view_home())
-        return
-    try:
-        day = date.fromisoformat(parts[2])
-    except (IndexError, ValueError):
-        _show(message_id, view_home())
-        return
+
+
+def _handle_day(message_id: int | None, what: str, day: date, parts: list[str]) -> None:
     stamp = day.isoformat()
     courses = attendance.courses_on(day)
     if what == "ask":
