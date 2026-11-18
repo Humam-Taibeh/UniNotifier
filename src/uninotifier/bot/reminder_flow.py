@@ -7,6 +7,7 @@ from datetime import datetime
 import logging
 
 from uninotifier import daily
+from uninotifier import failsafe
 from uninotifier import notifier
 from uninotifier import reminders
 from uninotifier import slack
@@ -222,8 +223,26 @@ def drop_pending() -> None:
 def original_picture(url: str) -> list[bytes]:
     """The reminder's page as a picture, from the portal now (the saved session)."""
     from uninotifier import checkin
-    png = checkin.screenshot(url)
-    return [png] if png else []
+    from uninotifier.monitor import config, items
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            try:
+                context = browser.new_context(
+                    storage_state=str(checkin.SESSION_FILE) if checkin.SESSION_FILE.exists() else None,
+                    viewport=config.VIEWPORT, device_scale_factor=config.SCALE)
+                page = context.new_page()
+                shots, _ = items.capture_screens(page, url, "#region-main")      # the same picture the notification had: the whole post
+                if "/login/" in page.url:
+                    return []
+                return shots
+            finally:
+                browser.close()
+    except Exception as e:
+        log.exception("Could not picture %s", url)
+        failsafe.bug("reminders", "A reminder's page could not be pictured", e, "Show Original offers the Moodle link instead.")
+        return []
 
 
 def show_original(reminder_id: int, answer) -> None:

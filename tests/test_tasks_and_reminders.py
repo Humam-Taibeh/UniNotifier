@@ -1084,3 +1084,48 @@ def test_show_original_pictures_an_old_reminder_again_and_keeps_it():
     finally:
         notifier.send_png_file, chat.send_view, reminder_flow.original_picture = keep
         reminders.remove(item["id"])
+
+
+def test_a_reminders_picture_is_the_whole_post_not_a_corner_of_the_page():
+    """The picture Show Original takes is the post's whole main region — the same as its notification had — not
+    the check-in page's clipped box (which cut the announcement away and kept only the forum's search bar)."""
+    import sys
+    import types
+    from uninotifier.bot import reminder_flow
+    from uninotifier.monitor import items
+
+    asked = []
+
+    class Page:
+        url = "https://x/forum"
+
+    class Browser:
+        def new_context(self, **kw):
+            return types.SimpleNamespace(new_page=lambda: Page())
+
+        def close(self):
+            pass
+
+    class Playwright:
+        chromium = types.SimpleNamespace(launch=lambda headless=True: Browser())
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    fake = types.ModuleType("playwright.sync_api")
+    fake.sync_playwright = lambda: Playwright()
+    keep_mod, keep_capture = sys.modules.get("playwright.sync_api"), items.capture_screens
+    sys.modules["playwright.sync_api"] = fake
+    items.capture_screens = lambda page, url, selector: asked.append(selector) or ([b"png"], False)
+    try:
+        assert reminder_flow.original_picture("https://x/forum") == [b"png"]
+    finally:
+        items.capture_screens = keep_capture
+        if keep_mod is None:
+            sys.modules.pop("playwright.sync_api", None)
+        else:
+            sys.modules["playwright.sync_api"] = keep_mod
+    assert asked == ["#region-main"]
