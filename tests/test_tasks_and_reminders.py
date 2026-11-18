@@ -1064,8 +1064,12 @@ def test_show_original_pictures_an_old_reminder_again_and_keeps_it():
     item = reminders.add("Announcement", time.time() + 3600, "English", "https://x/forum", 0)
     assert "🖼️ Show Original" in [b["text"] for row in reminder_flow.view_reminder(item["id"])[1] for b in row]
     sent, views, taken = [], [], []
-    keep = (notifier.send_png_files, chat.send_view, reminder_flow.original_picture)
-    notifier.send_png_files = lambda token, chat_id, pngs, name: sent.append(pngs) or True
+    keep = (notifier.send_png_file, chat.send_view, reminder_flow.original_picture)
+    def fake_file(token, chat_id, png, name, caption="", url=None, rows=None):
+        assert caption.strip(), "Slack refuses a file sent without words"
+        sent.append([png])
+        return True
+    notifier.send_png_file = fake_file
     chat.send_view = lambda text, rows: views.append((text, rows))
     reminder_flow.original_picture = lambda url: taken.append(url) or []
     try:
@@ -1078,5 +1082,5 @@ def test_show_original_pictures_an_old_reminder_again_and_keeps_it():
         reminder_flow.show_original(item["id"], lambda *a: None)
         assert sent[-1] == [b"\x89PNG-now"] and "again" not in taken, "kept: not taken twice"
     finally:
-        notifier.send_png_files, chat.send_view, reminder_flow.original_picture = keep
+        notifier.send_png_file, chat.send_view, reminder_flow.original_picture = keep
         reminders.remove(item["id"])

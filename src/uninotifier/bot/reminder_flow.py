@@ -250,9 +250,17 @@ def show_original(reminder_id: int, answer) -> None:
     if pictures:                             # the picture itself, from the copy kept with the reminder: it never depends on the old message
         if not answered:
             answer()
-        notifier.send_png_files(chat.BOT_TOKEN, chat.CHAT_ID, pictures, "original.png")
         rows = [[{"text": "🌐 Open on Moodle", "url": item["url"]}]] if item.get("url") else []
-        chat.send_view(f"📌 *Original post*\n📝 {escape_md(item['note'])}", rows + way_back)
+        caption = f"📌 *Original post*\n📝 {escape_md(item['note'])}"
+        long_note = len(caption) > notifier.CAPTION_LIMIT          # the wording does not fit a caption: it follows in a card of its own
+        for n, png in enumerate(pictures, 1):                    # every picture with words (Slack refuses a file without any); the last carries the buttons
+            last = n == len(pictures)
+            words = "📌 *Original post*" if long_note else caption
+            words += f" ({n} of {len(pictures)})" if len(pictures) > 1 else ""
+            notifier.send_png_file(chat.BOT_TOKEN, chat.CHAT_ID, png, f"original-{n}.png", words,
+                                   rows=(rows + way_back) if last and not long_note else None)
+        if long_note:
+            chat.send_view(caption, rows + way_back)
         return
     if slack.mode() == "slack":              # no quote to tap in Slack, and the post is not in this chat: the post itself
         rows = [[{"text": "🌐 Open on Moodle", "url": item["url"]}]] if item.get("url") else []
