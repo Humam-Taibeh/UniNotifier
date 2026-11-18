@@ -23,7 +23,7 @@ TICK = 60                                   # seconds between looks at whether t
 MAIN = {"text": "🏠 Main Menu", "callback_data": "menu"}
 ATTENDANCE = {"text": "🔙 Attendance", "callback_data": "att:home"}
 RULES = ("*Twice a week:* 5 absences allowed, the 6th is deprivation." + chr(10)
-         + "*Once a week* (blended, online or free): 2 allowed, the 3rd is deprivation.")
+         + "*Once a week* (blended or online): 2 allowed, the 3rd is deprivation.")
 KIND_TAG = {"blended": " · blended", "once": " · once a week", "normal": ""}
 
 

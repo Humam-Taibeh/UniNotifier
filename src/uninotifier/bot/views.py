@@ -182,7 +182,7 @@ def view_course_list() -> tuple[str, list]:
         entries.append((name, course["url"], schedule.lectures_for(name)))
     entries.sort(key=lambda e: (timetable.order_key(e[2]), e[0]))
 
-    lines = [f"📚 *My Courses & Schedule* ({len(courses)})"]
+    lines = ["📚 *My Courses & Schedule*", f"Total: {len(courses)} course{'' if len(courses) == 1 else 's'}"]
     group, number = None, 0
     for name, url, slots in entries:
         days = timetable.pattern(slots)
