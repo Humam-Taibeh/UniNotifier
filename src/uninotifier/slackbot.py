@@ -443,7 +443,7 @@ SLACK_LINK = re.compile(rf"<{SCHEME}(?:[^|>]*\|([^>]*)|([^>|]*))>")
 
 def unlink(text: str) -> str:
     """What was typed, without Slack's auto-links: a bare number or address a person types arrives as
-    "<http://202311988|202311988>" — the words they typed are the label (or the link, without its scheme)."""
+    "<http://202400001|202400001>" — the words they typed are the label (or the link, without its scheme)."""
     return html.unescape(SLACK_LINK.sub(lambda m: m.group(1) if m.group(1) is not None else m.group(2), text))
 
 
