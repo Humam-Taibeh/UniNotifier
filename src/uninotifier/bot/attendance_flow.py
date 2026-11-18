@@ -10,12 +10,13 @@ import logging
 import time
 from datetime import date, datetime
 
-from uninotifier import attendance, failsafe, media, notifier
+from uninotifier import attendance, failsafe, media, notifier, slack
 from uninotifier.bot import chat
 
 log = logging.getLogger("uninotifier")
 
 TICK = 60                                   # seconds between looks at whether the question is due
+_MARK = {"ok": "🟢", "last": "🟠", "limit": "🔴", "deprived": "🚫"}
 HOME_ROW = [{"text": "🎒 Attendance", "callback_data": "att:home"}, {"text": "🏠 Main Menu", "callback_data": "menu"}]
 
 
@@ -76,14 +77,15 @@ def view_home() -> tuple[str, list]:
     if not kind:
         return ("🎒 *Attendance & Absences*\n" + media.DIVIDER + "\nNo timetable yet, so there is nothing to count. "
                 "It appears once your timetable is read.", [chat.BACK_ROW])
-    names = sorted(kind)
+    names = attendance.ordered()
     lines = ["🎒 *Attendance & Absences*", media.DIVIDER]
     rows = []
     for i, course in enumerate(names):
         info = attendance.status(course, kind[course], data)
-        mark = {"ok": "🟢", "last": "🟠", "limit": "🔴", "deprived": "🚫"}[info["state"]]
+        mark = _MARK[info["state"]]
         tag = " · blended: in-person days only" if kind[course] == "blended" else ""
-        lines.append(f"{mark} *{course}* — {info['count']} of {info['allowed']}{tag}")
+        lines.append(f"{mark} *{course}*{tag}")
+        lines.append(f"      {attendance.bar(info['count'], info['allowed'])}  {info['count']} of {info['allowed']}")
         if info["count"]:
             rows.append([{"text": f"↩️ Undo the last absence: {course[:28]}", "callback_data": f"att:undo:{i}"}])
     lines += ["", "Normal course: 5 allowed, the 6th deprives. Blended: 2 allowed, the 3rd deprives."]
@@ -92,18 +94,30 @@ def view_home() -> tuple[str, list]:
 
 
 def view_set() -> tuple[str, list]:
-    """Absences from before the bot counted. The courses are numbered in the text and a ➕ row and a ➖ row
-    carry the numbers: Slack runs a row's buttons together, so a button per course line could not be told apart."""
+    """Absences from before the bot counted, the courses in the order of the week. In Slack each course is a
+    card of its own (its bar and count, ➖ and ➕ on it); anywhere else a numbered list with a ➕ row and
+    a ➖ row (the cards' buttons are ordinary rows there, labelled with the course's number)."""
     data = attendance.load()
     kind = attendance.kinds()
-    names = sorted(kind)
-    lines = ["📝 *Your earlier absences*", media.DIVIDER, "Tap ➕ or ➖ with a course's number to change its count.", ""]
-    for i, course in enumerate(names, 1):
+    names = attendance.ordered()
+    cards = slack.mode() == "slack"
+    lines = ["📝 *Your earlier absences*", media.DIVIDER, "Set each course to the absences you have now — "
+             + ("swipe the cards, ➖ removes one, ➕ adds one." if cards else "➕ adds one, ➖ removes one, by the number.")]
+    rows = []
+    for i, course in enumerate(names):
         info = attendance.status(course, kind[course], data)
-        lines.append(f"*{i}.* {course} — {info['count']} of {info['allowed']}")
-    plus = [{"text": f"➕ {i}", "callback_data": f"att:adj:{i - 1}:up"} for i in range(1, len(names) + 1)]
-    minus = [{"text": f"➖ {i}", "callback_data": f"att:adj:{i - 1}:down"} for i in range(1, len(names) + 1)]
-    return "\n".join(lines), [plus, minus, [{"text": "🔙 Attendance", "callback_data": "att:home"}]]
+        mark = _MARK[info["state"]]
+        if not cards:
+            lines.append(f"*{i + 1}.* {course} — {info['count']} of {info['allowed']}")
+        card = {"title": f"{i + 1}. {course}", "subtitle": f"{mark} {attendance.bar(info['count'], info['allowed'])}",
+                "body": f"*{info['count']} of {info['allowed']}* absences" + (" · blended" if kind[course] == "blended" else ""),
+                "labels": ["➖ Remove", "➕ Add"]}
+        rows.append([{"text": f"➖ {i + 1}", "callback_data": f"att:adj:{i}:down", "card": card},
+                     {"text": f"➕ {i + 1}", "callback_data": f"att:adj:{i}:up"}])
+    if not cards:
+        rows = [[r[1] for r in rows], [r[0] for r in rows]]            # ➕ row, then ➖ row
+        rows = [[{k: v for k, v in b.items() if k != "card"} for b in row] for row in rows]
+    return "\n".join(lines), [*rows, [{"text": "🔙 Attendance", "callback_data": "att:home"}]]
 
 
 # ------------------------------------------------------------------ buttons
@@ -125,7 +139,7 @@ def handle_callback(cb: dict, action: str, message_id: int | None) -> None:
         _show(message_id, view_set())
         return
     if what == "adj":
-        names = sorted(attendance.kinds())
+        names = attendance.ordered()
         if len(parts) > 3 and parts[2].isdigit() and int(parts[2]) < len(names) and parts[3] in ("up", "down"):
             attendance.adjust(names[int(parts[2])], 1 if parts[3] == "up" else -1)
         _show(message_id, view_set())
@@ -136,7 +150,7 @@ def handle_callback(cb: dict, action: str, message_id: int | None) -> None:
               else ("🎒 *Attendance*\nNo counted lectures today.", [HOME_ROW]))
         return
     if what == "undo":
-        names = sorted(attendance.kinds())
+        names = attendance.ordered()
         index = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else -1
         if 0 <= index < len(names):
             attendance.remove_one(names[index])

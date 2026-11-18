@@ -1291,3 +1291,26 @@ def test_attendance_blended_mark_and_free_electives():
         assert attendance.kinds(sched) == {"Painting": "normal", "Maths": "blended"}
     finally:
         attendance.free_codes = keep
+
+
+def test_attendance_courses_follow_the_week_and_slack_draws_cards():
+    """Courses are listed first-lecture-first (Sunday morning on top), never alphabetically; in Slack each is a card."""
+    import importlib
+    from uninotifier import attendance, slack
+    sched = {"days": {
+        "tue": [{"start": "08:00", "end": "09:00", "course": "Alpha", "mode": "In-Person"}],
+        "sun": [{"start": "11:00", "end": "12:00", "course": "Zulu", "mode": "In-Person"},
+                {"start": "09:00", "end": "10:00", "course": "Mike", "mode": "In-Person"}]}}
+    assert attendance.ordered(sched) == ["Mike", "Zulu", "Alpha"]
+    assert attendance.bar(2, 5) == "▰▰▱▱▱" and attendance.bar(6, 5) == "▰▰▰▰▰▰"
+    flow = importlib.import_module("uninotifier.bot.attendance_flow")
+    keep = slack.mode
+    try:
+        slack.mode = lambda: "slack"
+        _, rows = flow.view_set()
+    finally:
+        slack.mode = keep
+    blocks = slack.buttons({"inline_keyboard": rows})
+    assert blocks[0]["type"] == "carousel" and all(c["type"] == "card" for c in blocks[0]["elements"])
+    assert [b["text"]["text"] for b in blocks[0]["elements"][0]["actions"]] == ["➖ Remove", "➕ Add"] if blocks[0]["elements"] else True
+    assert blocks[-1]["block_id"] == "nav"

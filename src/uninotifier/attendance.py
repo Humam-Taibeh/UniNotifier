@@ -235,3 +235,23 @@ def adjust(course: str, delta: int) -> int:
         data["absences"].pop(course, None)
     save(data)
     return len(days)
+
+
+WEEK = ("sun", "mon", "tue", "wed", "thu", "fri", "sat")
+
+
+def ordered(sched: dict | None = None) -> list[str]:
+    """The counted courses in the order of the week: the one whose first lecture comes first (Sunday
+    morning first) at the top — never alphabetical."""
+    sched = sched if sched is not None else schedule.load_schedule()
+    first: dict[str, tuple] = {}
+    for day, lec in _slots(sched):
+        key = (WEEK.index(day) if day in WEEK else 7, lec.get("start", ""))
+        if lec["course"] not in first or key < first[lec["course"]]:
+            first[lec["course"]] = key
+    return sorted(kinds(sched), key=lambda course: (first.get(course, (7, "")), course))
+
+
+def bar(used: int, allowed: int) -> str:
+    """▰▰▱▱▱ — the absences used of the ones allowed (a course over its limit shows the extra ones filled)."""
+    return "▰" * used + "▱" * max(allowed - used, 0)
