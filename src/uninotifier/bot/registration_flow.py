@@ -83,7 +83,7 @@ def view_home() -> tuple[str, list]:
         rows.append([{"text": "✋ Choose Courses Myself", "callback_data": "reg:pick"}])
         rows.append([{"text": "✅ What I Can Take", "callback_data": "reg:open"},
                      {"text": "⛔ Not Yet — Why", "callback_data": "reg:held"}])
-    return "\n".join(lines), rows + [chat.RECORD_ROW]
+    return "\n".join(lines), slack.grouped(rows, "plan", stack=True) + [chat.RECORD_ROW]     # each row on its own: What I Can Take sits with Not Yet
 
 
 def _short(name: str) -> str:

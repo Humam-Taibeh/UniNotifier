@@ -1593,3 +1593,22 @@ def test_the_term_hours_rule_is_small_print_in_one_piece_with_the_overview():
         assert "Left to take" in blocks[2]["text"]["text"] and "Not yet" in blocks[2]["text"]["text"]      # the three lines stacked in one block
     finally:
         slack.mode = keep
+
+
+def test_the_registration_plan_rows_stay_as_they_are_laid_out():
+    """The hours, Choose Courses Myself, and What I Can Take beside Not Yet — each its own row; a short label is never pulled up
+    beside the row above it."""
+    from uninotifier import slack
+    rows = [[{"text": f"{h} hrs", "callback_data": f"reg:h:{h}"} for h in (12, 15, 18, 21)],
+            [{"text": "✋ Choose Courses Myself", "callback_data": "reg:pick"}],
+            [{"text": "✅ What I Can Take", "callback_data": "reg:open"}, {"text": "⛔ Not Yet — Why", "callback_data": "reg:held"}]]
+    keep = slack.mode
+    try:
+        slack.mode = lambda: "slack"
+        blocks = slack.buttons({"inline_keyboard": slack.grouped(rows, "plan", stack=True)}, width=slack.ROW_WIDTH)
+        shown = [[e["text"]["text"] for e in b["elements"]] for b in blocks if b["type"] == "actions"]
+        assert shown == [["12 hrs", "15 hrs", "18 hrs", "21 hrs"], ["✋ Choose Courses Myself"],
+                         ["✅ What I Can Take", "⛔ Not Yet — Why"]], shown
+        assert [b["type"] for b in blocks] == ["actions"] * 3                  # no line between them: one group
+    finally:
+        slack.mode = keep
