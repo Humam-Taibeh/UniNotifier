@@ -1674,3 +1674,21 @@ def test_absences_allowed_can_be_set_by_hand_per_course():
         assert any(b["callback_data"] == "att:lim" for r in flow.view_home()[1] for b in r)
     finally:
         attendance.kinds, attendance.ordered, slack.mode = keep
+
+
+def test_a_message_too_long_for_one_box_goes_on_in_the_next_box_never_without_a_box():
+    """A notification with more blocks than a box holds is not sent boxless: the box goes on in another one ('… (continued)'), the words
+    in order, the controls and the way back under their lines in the last — every box within what Slack accepts."""
+    from uninotifier import slack
+    card = [{"type": "header", "text": {"type": "plain_text", "text": "📢 New post"}}]
+    card += [{"type": "section", "fields": [{"type": "mrkdwn", "text": f"*L{n}*\nv"}, {"type": "mrkdwn", "text": f"*M{n}*\nw"}]} for n in range(14)]
+    card += [{"type": "divider"}, {"type": "actions", "block_id": "row0", "elements": [{"type": "button", "text": {"type": "plain_text", "text": "Open"}, "action_id": "a"}]},
+             {"type": "divider"}, {"type": "actions", "block_id": "nav", "elements": [{"type": "button", "text": {"type": "plain_text", "text": "Back"}, "action_id": "b"}]}]
+    boxes = slack.boxed(card)
+    assert [b["type"] for b in boxes] == ["container", "container"], [b["type"] for b in boxes]
+    assert [b["title"]["text"] for b in boxes] == ["📢 New post", "📢 New post (continued)"]
+    assert all(len(b["child_blocks"]) <= slack.BOX_CHILDREN for b in boxes)
+    rows = [c for b in boxes for c in b["child_blocks"] if c["type"] == "section"]
+    assert [r["fields"][0]["text"] for r in rows] == [f"*L{n}*\nv" for n in range(14)]          # every word, in order
+    last = boxes[-1]["child_blocks"]
+    assert [c["type"] for c in last][-4:] == ["divider", "actions", "divider", "actions"] and last[-1]["block_id"] == "nav"

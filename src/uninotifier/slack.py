@@ -514,12 +514,12 @@ def boxed(card: list[dict], title: str = HOME_TITLE, flat: bool = False) -> list
     parts = [children]
     if len(children) > BOX_CHILDREN:                      # more than a box holds: split at the headings — each heading its own box
         parts = _split_at_headings(children)
+    chunks: list[list[dict]] = []
+    for part in parts:
+        chunks += _pack(part)                              # always boxes: what a box cannot hold goes on in the next one
     boxes = []
-    for n, part in enumerate(parts):
-        part = _fit(part)
-        if part is None:                                   # nothing more can go: no box rather than blocks outside it
-            return card
-        name, small = (title, subtitle) if n == 0 else ("", "")
+    for n, part in enumerate(chunks):
+        name, small = (title, subtitle) if n == 0 else (f"{title} (continued)", "")
         if n and part and part[0]["type"] == "header":    # a later box is named by the heading it starts with
             name, part = part[0]["text"]["text"], part[1:]
         box = {"type": "container", "title": {"type": "plain_text", "text": (name or " ")[:HEADER_LIMIT], "emoji": False},
@@ -553,6 +553,24 @@ def _split_at_headings(children: list[dict]) -> list[list[dict]]:
         while part and part[0]["type"] == "divider":
             part.pop(0)
     return [part for part in parts if part]
+
+
+def _pack(children: list[dict]) -> list[list[dict]]:
+    """The blocks as one box when they fit (losing the least), else as boxes one after another: the words in order, the controls and the
+    way back — under their lines — in the last one. Never blocks outside a box, never a message without one."""
+    fitted = _fit(children)
+    if fitted is not None:
+        return [fitted]
+    at = len(children)
+    while at and children[at - 1]["type"] in ("actions", "divider"):
+        at -= 1
+    body, tail = children[:at], children[at:]
+    chunks = [body[n:n + BOX_CHILDREN] for n in range(0, len(body), BOX_CHILDREN)] or [[]]
+    if len(chunks[-1]) + len(tail) <= BOX_CHILDREN:
+        chunks[-1] = chunks[-1] + tail
+    else:
+        chunks.append(tail)
+    return [fit if (fit := _fit(chunk)) is not None else chunk[:BOX_CHILDREN] for chunk in chunks if chunk]
 
 
 def _fit(children: list[dict]) -> list[dict] | None:
