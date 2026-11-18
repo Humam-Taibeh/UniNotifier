@@ -138,6 +138,8 @@ _TITLE = re.compile(r"^(\S+\s+)?\*([^*\n]+)\*$")                        # "⏰ *
 _TITLE_LEAD = re.compile(r"^(\S+\s+)\*([^*\n:]+)\*(\s+[•·—-]\s+.+)$")    # "🎓 *UniNotifier System* • First Semester"
 _TITLE_RUN = re.compile(r"^(\S+\s+)\*([^*\n:]+)\*\s+([^\n]+)$")          # "🔧 *The bot stopped* and is back."
 _FIELD = re.compile(r"^(\S+\s+)?\*([^*\n]{1,40}?):\*\s*(.+)$")            # "📘 *Course:* Big Data"
+HEAD = "⁣"                      # an invisible mark at the start of a line: in Slack a big heading (a header block)
+SMALL = "⁢"                     # ... and this one a line of small grey details (a context block); Telegram shows neither
 _NOTE = re.compile(r"^_[^_\n].*_$")                                     # "_A note in italics._"
 HEADER_LIMIT = 150
 TITLE_SHOWN = 38                   # what a box's title shows on one line; a longer line stays inside the box, whole
@@ -207,6 +209,16 @@ def _row_lines(rows: list[list[dict]]) -> list[dict]:
     return out
 
 
+def small(line: str) -> str:
+    """In Slack a line of details under an item: smaller and grey, inside the item. Elsewhere the line as it is."""
+    return SMALL + line if mode() == "slack" else line
+
+
+def heading(text: str, plain: str) -> str:
+    """In Slack a big heading (`plain`: its words without marks); elsewhere `text`, the line as Telegram shows it."""
+    return HEAD + plain if mode() == "slack" else text
+
+
 def grouped(rows: list[list[dict]], name: str) -> list[list[dict]]:
     """In Slack: these rows are one group of buttons (a list of courses, a list of tasks), apart from
     the rows around them by a light line. Elsewhere the rows as they are."""
@@ -255,11 +267,20 @@ def buttons(reply_markup, prefix: str = "") -> list[dict]:
                 for n in range(0, len(content), size)]
     if cards:
         out[:0] = _row_lines(cards)
-    if nav:
-        if out:
-            out.append({"type": "divider"})
+    if nav and out and out[-1]["type"] == "actions" and len(out[-1]["elements"]) + len(nav) <= 25:
+        out[-1] = {**out[-1], "elements": out[-1]["elements"] + nav}      # the way back stands beside the buttons, in the same row
+    elif nav:
         out.append({"type": "actions", "block_id": f"{prefix}nav" if prefix else "nav", "elements": nav[:25]})
     return out
+
+
+def _one_liner(blocks_: list[dict]) -> bool:
+    """A menu's single short line ("What would you like to see?"): the buttons follow it without a line between."""
+    texts = [b for b in blocks_ if b["type"] != "header" and b.get("block_id") != "subtitle"]
+    if len(texts) != 1 or texts[0]["type"] != "section" or "text" not in texts[0]:
+        return False
+    words = texts[0]["text"]["text"]
+    return "\n" not in words and len(words) <= 60
 
 
 def _only_title(blocks_: list[dict]) -> bool:
@@ -303,8 +324,31 @@ def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | Non
         field_lines.clear()
         fields.clear()
 
+    smalls: list[str] = []
+
+    def flush_small():
+        if smalls:
+            out.append({"type": "context", "block_id": "small",
+                        "elements": [{"type": "mrkdwn", "text": mrkdwn("\n".join(smalls))[:2900]}]})
+            smalls.clear()
+
     for raw in lines:
         line = raw.rstrip()
+        if not line.startswith(SMALL):
+            flush_small()                                      # the small details end with the first line that is not one
+        if line.startswith(HEAD):                              # a heading: bigger than the items under it
+            flush_prose()
+            if fields:
+                flush_fields()
+            heading = _plain(line[len(HEAD):])
+            out.append({"type": "header", "text": {"type": "plain_text", "text": heading[:HEADER_LIMIT], "emoji": True}})
+            continue
+        if line.startswith(SMALL):                             # details of the item above: smaller, inside it
+            flush_prose()
+            if fields:
+                flush_fields()
+            smalls.append(line[len(SMALL):].strip())
+            continue
         field = _FIELD.match(line.strip())
         if field:
             flush_prose()
@@ -330,7 +374,7 @@ def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | Non
         flush_fields()
     if live:
         keyboard = buttons(reply_markup)
-        if keyboard and out and out[-1]["type"] != "divider" and not _only_title(out):
+        if keyboard and out and out[-1]["type"] != "divider" and not _only_title(out) and not _one_liner(out):
             out.append({"type": "divider"})                    # the same everywhere: a light line above the buttons
         out.extend(keyboard)
     else:
@@ -346,6 +390,19 @@ def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | Non
 HOME_TITLE = "🎓 UniNotifier"
 HOME_BLOCKS = 100
 BOX_CHILDREN = 10                  # Slack's limit of blocks inside one container
+
+
+def _fold_small(children: list[dict]) -> list[dict]:
+    """Small details (block "small") as part of the line above them: one block for the item instead of two."""
+    out: list[dict] = []
+    for block in children:
+        last = out[-1] if out else None
+        if block.get("block_id") == "small" and last and last["type"] == "section" and "text" in last:
+            out[-1] = {"type": "section", "text": {"type": "mrkdwn", "text":
+                       last["text"]["text"] + "\n" + block["elements"][0]["text"]}}
+        else:
+            out.append(block)
+    return out
 
 
 def _fewer(children: list[dict], kind: str) -> list[dict]:
@@ -368,7 +425,7 @@ def _fewer(children: list[dict], kind: str) -> list[dict]:
     return out
 
 
-def boxed(card: list[dict], title: str = HOME_TITLE) -> list[dict]:
+def boxed(card: list[dict], title: str = HOME_TITLE, flat: bool = False) -> list[dict]:
     """The card inside a box (Slack's container block; emoji:False in its title — Slack turns an emoji
     into its :name: and the title cannot draw that back, a lone emoji showed as ":hourglass_flowing_sand:"): its title as the box's title, a line under
     it, everything else inside — the words on the box, not on Slack's background, and nothing ever
@@ -389,12 +446,23 @@ def boxed(card: list[dict], title: str = HOME_TITLE) -> list[dict]:
             title = _plain(children.pop(0)["text"]["text"])    # a one-line message: the line is the title
     if not children:
         return card
+    if flat:                                                # a Slack whose boxes refuse headers: a bold line instead
+        children = [{"type": "section", "text": {"type": "mrkdwn", "text": f"*{_escape(b['text']['text'])}*"}}
+                    if b["type"] == "header" else b for b in children]
+    def over() -> bool:
+        return len(children) > BOX_CHILDREN
+
+    def above_buttons(i: int) -> bool:                     # the line over the buttons: the one that always stays
+        return i + 1 < len(children) and children[i + 1]["type"] == "actions" and (
+            children[i + 1].get("block_id") == "nav" or i == 0 or children[i - 1]["type"] != "actions")
+
+    if over():                                             # too many for a box: the lines between parts go first,
+        children = [b for i, b in enumerate(children) if b["type"] != "divider" or above_buttons(i)]
+    if over():                                             # then an item's small details join its line
+        children = _fold_small(children)
     for kind in ("actions", "section"):
-        if len(children) > BOX_CHILDREN:
+        if over():
             children = _fewer(children, kind)
-    if len(children) > BOX_CHILDREN:                       # still too many for a box: the lines between parts go,
-        children = [b for i, b in enumerate(children)       # the one above the way back stays
-                    if b["type"] != "divider" or (i + 1 < len(children) and children[i + 1].get("block_id") == "nav")]
     box = {"type": "container", "title": {"type": "plain_text", "text": title[:HEADER_LIMIT], "emoji": False},
            "has_header_divider": True, "child_blocks": children[:BOX_CHILDREN]}
     if subtitle:
@@ -608,6 +676,9 @@ def refused_layout(error: Exception) -> bool:
     return "block" in str(error) or "invalid_arguments" in str(error)
 
 
+_BOX_HEADERS = True                 # does this Slack take a header block inside a box? (found out the first time)
+
+
 def _layouts(card: list[dict], colour: str) -> list[tuple[str, dict]]:
     """The card's looks, best first: a notification that fits as Slack's card; in a box; in a
     coloured frame (a Slack without either)."""
@@ -615,20 +686,33 @@ def _layouts(card: list[dict], colour: str) -> list[tuple[str, dict]]:
     short = notice(card)
     if short:
         looks.append(("card", {"blocks": json.dumps([short], ensure_ascii=False), "attachments": "[]"}))
-    looks += [("box", {"blocks": json.dumps(boxed(card), ensure_ascii=False), "attachments": "[]"}),
-              ("frame", framed(card, colour))]
+    headings = any(b["type"] == "header" for b in card[1:])
+    flat = ("box-flat", {"blocks": json.dumps(boxed(card, flat=True), ensure_ascii=False), "attachments": "[]"})
+    if headings and not _BOX_HEADERS:
+        looks.append(flat)                                   # this Slack refused headers inside a box before: no second try
+    else:
+        looks.append(("box", {"blocks": json.dumps(boxed(card), ensure_ascii=False), "attachments": "[]"}))
+        if headings:
+            looks.append(flat)
+    looks.append(("frame", framed(card, colour)))
     return looks
 
 
 def _send_card(token: str, method: str, data: dict, card: list[dict] | None, colour: str) -> dict:
     """chat.postMessage / chat.update with the card in its best look Slack takes — and as text when
     it takes none, so a layout Slack does not take never costs the message."""
+    global _BOX_HEADERS
+    refused_box = False
     for name, layout in _layouts(card, colour) if card else []:
         try:
-            return call(token, method, {**data, "text": preview(data["text"]), **layout})
+            sent = call(token, method, {**data, "text": preview(data["text"]), **layout})
+            if name == "box-flat" and refused_box:
+                _BOX_HEADERS = False                         # the box took it only without its headers: remembered
+            return sent
         except SlackError as e:
             if not refused_layout(e):
                 raise
+            refused_box = refused_box or name == "box"
             log.warning("Slack refused the card's %s (%s)", name, e)
     if method == "chat.update":
         data = {**data, "blocks": "[]", "attachments": "[]"}

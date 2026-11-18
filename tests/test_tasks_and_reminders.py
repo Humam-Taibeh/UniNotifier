@@ -987,7 +987,14 @@ def test_slack_tasks_screen_has_no_indent_a_long_line_could_wrap_out_of():
         lines = text.splitlines()
         assert not [l for l in lines if l[:1] in (" ", "\u00a0") or l.lstrip("\u200e")[:1] in (" ", "\u00a0")], lines
         assert any(long_line in l for l in lines)
-        assert lines.index(media.DIVIDER, 2) < lines.index("🔔 *Your reminders*")       # a line between course tasks and yours
+        heading = lines.index(slack.HEAD + "🔔 Your reminders")
+        assert lines.index(media.DIVIDER, 2) < heading                                  # a line between course tasks and yours
+        assert slack.HEAD + "📚 Course tasks" in lines                                  # headings are big in Slack
+        assert lines[heading + 2].lstrip("\u200e").startswith("1. 📝 *"), lines[heading + 2]
+        assert all(l.startswith(slack.SMALL) for l in lines[heading + 3:heading + 6]), lines[heading + 3:heading + 6]   # its details: small
+        blocks = slack.blocks(text, {"inline_keyboard": rows}, live=True)
+        kinds = [(b["type"], b.get("block_id")) for b in blocks]
+        assert ("header", None) in kinds and kinds.count(("context", "small")) >= 2, kinds    # a heading, then item / its small details
         buttons = [b for row in rows for b in row]
         assert not [b for b in buttons if "View Original Post" in b["text"]]
         assert not [b for b in buttons if "Open Post" in b["text"] or "Original" in b["text"]]      # the reminder shows the whole post

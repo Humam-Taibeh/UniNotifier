@@ -22,8 +22,6 @@ log = logging.getLogger("uninotifier")
 TICK = 60                                   # seconds between looks at whether the question is due
 MAIN = {"text": "🏠 Main Menu", "callback_data": "menu"}
 ATTENDANCE = {"text": "🔙 Attendance", "callback_data": "att:home"}
-RULES = ("*Twice a week:* 5 absences allowed, the 6th is deprivation." + chr(10)
-         + "*Once a week* (blended or online): 2 allowed, the 3rd is deprivation.")
 KIND_TAG = {"blended": " · blended", "once": " · once a week", "normal": ""}
 
 
@@ -106,8 +104,7 @@ def view_home() -> tuple[str, list]:
     lines = ["🎒 *Attendance & Absences*", media.DIVIDER]
     for i, course in enumerate(attendance.ordered()):
         lines += [_course_text(i, course, kind[course], attendance.status(course, kind[course], data)), ""]
-    lines.append(RULES)
-    return "\n".join(lines), [[{"text": "➕ Record today", "callback_data": "att:today"},
+    return "\n".join(lines).rstrip(), [[{"text": "➕ Record today", "callback_data": "att:today"},
                                {"text": "📝 Earlier absences", "callback_data": "att:set"}], chat.COURSES_ROW]
 
 

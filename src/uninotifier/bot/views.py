@@ -68,9 +68,8 @@ def base_line() -> str:
 def view_academic() -> tuple[str, list]:
     """📊 GPA & Grade Hub: what each course needs, and the grades as they are released."""
     lines = ["📊 *GPA & Grade Hub*", media.DIVIDER, base_line(), "",
-             "🎯 *Grade Needed* — what each course needs for a semester or cumulative target; "
-             "hours, retakes and marks are adjusted there",
-             "🏁 *Finals Watch* — check this term's grades now, or have each one announced the moment it is released"]
+             "🎯 *Grade Needed* — the mark each course needs for your target", "",
+             "🏁 *Finals Watch* — your grades, as they are released"]
     return "\n".join(lines), [
         [{"text": "🎯 Grade Needed", "callback_data": "gpa:need"},
          {"text": "🏁 Finals Watch", "callback_data": "finals:status"}],
@@ -106,11 +105,12 @@ def reminder_lines(number: int, reminder: dict) -> list[str]:
     written = [line.strip() for line in (reminder.get("note") or "").splitlines() if line.strip()] or ["Reminder"]
     title = written[0]
     ind = "" if slack.mode() == "slack" else "      "      # Slack wraps a long line back to the margin: nothing is indented there
-    lines = [f"{LRM}{number}. 📝 {FSI}{escape_md(title)}{PDI}"]
-    lines += [f"{LRM}{ind}{FSI}{escape_md(line)}{PDI}" for line in written[1:]]
+    bold = "*" if slack.mode() == "slack" else ""         # in Slack the title is bold and what is under it small, inside it
+    lines = [f"{LRM}{number}. 📝 {bold}{FSI}{escape_md(title)}{PDI}{bold}"]
+    lines += [slack.small(f"{LRM}{ind}{FSI}{escape_md(line)}{PDI}") for line in written[1:]]
     if reminder.get("course") and reminder["course"] not in title:
-        lines.append(f"{LRM}{ind}📘 {escape_md(reminder['course'])}")
-    lines.append(f"{LRM}{ind}🕐 {reminders.when_text(reminder['due'])} · ⏱️ {chat.remaining_text(reminder['due'])}")
+        lines.append(slack.small(f"{LRM}{ind}📘 {escape_md(reminder['course'])}"))
+    lines.append(slack.small(f"{LRM}{ind}🕐 {reminders.when_text(reminder['due'])} · ⏱️ {chat.remaining_text(reminder['due'])}"))
     return lines
 
 
@@ -123,7 +123,7 @@ def view_tasks() -> tuple[str, list]:
     now = time.time()
     upcoming = tasks.open_tasks(chat.load_state(), now)
 
-    lines = ["⏳ *Upcoming Tasks & Reminders*", media.DIVIDER, "📚 *Course tasks*"]
+    lines = ["⏳ *Upcoming Tasks & Reminders*", media.DIVIDER, slack.heading("📚 *Course tasks*", "📚 Course tasks")]
     if not upcoming:
         lines.append("🎉 No assignments or quizzes ahead.")
     for n, task in enumerate(upcoming, 1):
@@ -131,7 +131,7 @@ def view_tasks() -> tuple[str, list]:
     rows = slack.grouped(tasks.open_buttons(upcoming), "items")
 
     mine = reminders.pending()
-    lines += ["", media.DIVIDER, "🔔 *Your reminders*"]       # the course's own tasks, then yours: a line between them
+    lines += ["", media.DIVIDER, slack.heading("🔔 *Your reminders*", "🔔 Your reminders")]       # the course's own tasks, then yours: a line between them
     if not mine:
         lines.append("None yet — tap ➕ below, or 📌 Add to Reminders under any announcement.")
     shown = []
@@ -165,12 +165,7 @@ def view_tasks() -> tuple[str, list]:
 
 def view_courses() -> tuple[str, list]:
     """My Courses & Schedule: a menu, not a wall of text."""
-    state = chat.load_state()
-    count = len(state.get("courses", {}))
-    hours = sum(c["hours"] for c in gpa.load()["courses"].values()) or 3 * count
-    text = "\n".join(["📚 *My Courses & Schedule*", media.DIVIDER,
-                      f"What would you like to see?  ·  {count} course{'' if count == 1 else 's'} · "
-                      f"{gpa.fmt(hours)} credit hours"])
+    text = "\n".join(["📚 *My Courses & Schedule*", media.DIVIDER, "What would you like to see?"])
     return text, [[{"text": "📋 Course List & Details", "callback_data": "courselist"}],
                   [{"text": "📅 Weekly Timetable", "callback_data": "schedule"},
                    {"text": "🎒 Attendance", "callback_data": "att:home"}],

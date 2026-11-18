@@ -82,7 +82,7 @@ def test_bot_views():
     assert [[b["text"] for b in row] for row in rows] == [
         ["📋 Course List & Details"], ["📅 Weekly Timetable", "🎒 Attendance"], ["🔙 Main Menu"]]
     assert [rows[0][0]["callback_data"], rows[1][0]["callback_data"]] == ["courselist", "schedule"]
-    assert "6 courses · 18 credit hours" in text and len(text.splitlines()) <= 5
+    assert "What would you like to see?" in text and "credit hours" not in text and len(text.splitlines()) <= 5
     everywhere = {b.get("callback_data") for view in bot.VIEWS.values() for row in view()[1] for b in row}
     assert not {"items", "campus"} & everywhere and not {"items", "campus"} & {c for c, _ in bot.COMMANDS}
     assert not hasattr(bot, "view_items") and not hasattr(bot, "view_campus")
@@ -942,13 +942,13 @@ def test_the_bot_lives_in_slack():
                 menu = next(d for m, d in calls if m == "chat.update")
                 assert sent_rows(menu), "the menu has its buttons"
 
-                # the buttons side by side, the way back apart at the bottom
+                # the buttons side by side, the way back in the same row
                 assert len(sent_rows(menu)[0]["elements"]) > 1, "Telegram's one-per-row buttons go side by side"
                 laid = slack.buttons({"inline_keyboard": [[{"text": "⏳ Tasks", "callback_data": "tasks"}],
                                                           [{"text": "📅 Timetable", "callback_data": "schedule"}],
                                                           [{"text": "🔙 Main Menu", "callback_data": "menu"}]]})
-                assert [b["type"] for b in laid] == ["actions", "divider", "actions"] and laid[-1]["block_id"] == "nav"
-                assert [e["value"] for e in laid[0]["elements"]] == ["tasks", "schedule"]
+                assert [b["type"] for b in laid] == ["actions"]               # one row: the way back stands beside them
+                assert [e["value"] for e in laid[0]["elements"]] == ["tasks", "schedule", "menu"]
 
                 # the Home page: a press there redraws the page itself (views.publish), never the chat
                 calls.clear()
@@ -1122,8 +1122,8 @@ def test_slack_cards_have_one_line_under_the_title_and_one_above_the_buttons():
         return [b["type"] for b in found]
 
     title = "📚 *My Courses & Schedule*"
-    assert kinds(f"{title}\n{media.DIVIDER}\nWhat would you like to see?", both) == ["header", "section", "divider", "actions", "divider", "actions"]
-    assert kinds(f"{title}\n{media.DIVIDER}\nSome words", nav) == ["header", "section", "divider", "actions"]
+    assert kinds(f"{title}\n{media.DIVIDER}\nWhat would you like to see?", both) == ["header", "section", "actions"]        # a one-line menu: no line between it and the buttons, the way back in the same row
+    assert kinds(f"{title}\n{media.DIVIDER}\nSome words that run on a while\nand a second line", nav) == ["header", "section", "divider", "actions"]
     assert kinds(f"{title}\nSome words\n{media.DIVIDER}\nMore words", None) == ["header", "section", "divider", "section"]
     assert kinds(f"{title}\n{media.DIVIDER}", nav) == ["header", "actions"]           # nothing but a title: the box's own line
     # too many blocks for one box: the lines between parts give way, the one above the way back stays
@@ -1149,7 +1149,41 @@ def test_the_menu_and_the_semester_follow_the_student():
             assert views.semester() == name, (code, views.semester())
             text, rows = views.view_menu()
             assert text.startswith(f"🎓 *UniNotifier System* • {name} • ") and "\n" not in text and "Tracked" not in text
-        assert "credit hours" in views.view_courses()[0] and "\n\n" not in views.view_courses()[0]
-        assert "First Semester" not in views.view_courses()[0] and "What would you like to see?" in views.view_courses()[0]
+        assert "credit hours" not in views.view_courses()[0] and "First Semester" not in views.view_courses()[0]
+        assert views.view_courses()[0].endswith("What would you like to see?")
     finally:
         chat.load_state = keep
+
+
+def test_a_slack_that_refuses_headers_in_a_box_gets_them_as_bold_lines():
+    """A big heading inside the box is tried first; if this Slack refuses it, the box is sent once more with the
+    headings as bold lines — and remembered, so the next message goes straight to that. The first look is never
+    a plain frame just because of a heading."""
+    import json
+    from uninotifier import slack
+    card = [{"type": "header", "text": {"type": "plain_text", "text": "Title"}},
+            {"type": "header", "text": {"type": "plain_text", "text": "Your reminders"}},
+            {"type": "section", "text": {"type": "mrkdwn", "text": "1. a reminder"}},
+            {"type": "context", "block_id": "small", "elements": [{"type": "mrkdwn", "text": "🕐 soon"}]}]
+    flat = slack.boxed(card, flat=True)[0]["child_blocks"]
+    assert [b["type"] for b in flat] == ["section", "section", "context"] and flat[0]["text"]["text"] == "*Your reminders*"
+    assert [b["type"] for b in slack.boxed(card)[0]["child_blocks"]] == ["header", "section", "context"]
+    sent = []
+
+    def call(token, method, data):
+        blocks = json.loads(data["blocks"])
+        sent.append(blocks)
+        if blocks and blocks[0].get("type") == "container" and any(b["type"] == "header" for b in blocks[0]["child_blocks"]):
+            raise slack.SlackError("invalid_blocks")
+        return {"ok": True}
+
+    keep = (slack.call, slack._BOX_HEADERS)
+    try:
+        slack.call, slack._BOX_HEADERS = call, True
+        slack._send_card("t", "chat.postMessage", {"text": "x", "channel": "c"}, card, slack.DEFAULT_TONE)
+        assert len(sent) == 2 and sent[1][0]["type"] == "container" and slack._BOX_HEADERS is False
+        sent.clear()
+        slack._send_card("t", "chat.postMessage", {"text": "x", "channel": "c"}, card, slack.DEFAULT_TONE)
+        assert len(sent) == 1 and sent[0][0]["type"] == "container"          # straight to the flat box
+    finally:
+        slack.call, slack._BOX_HEADERS = keep

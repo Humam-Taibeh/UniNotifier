@@ -1357,8 +1357,8 @@ def test_course_order_is_the_timetables_everywhere():
         finals_state = {"term": "T", "published": 1, "total": 3, "courses": [
             {"code": "2", "name": "m", "hours": 3, "mark": None}, {"code": "1", "name": "z", "hours": 3, "mark": None},
             {"code": "3", "name": "a", "hours": 3, "mark": 80}]}
-        shown = [l for l in finals.grades_lines(finals_state)[1:]]
-        assert ["Alpha" in l for l in shown] == [True, False, False] and "Mike" in shown[1] and "Zulu" in shown[2], shown
+        shown = finals.grades_lines(finals_state)
+        assert shown[2:] == ["✅ *Published*", "• ✅ *80* · Alpha", "", "⏳ *Not published yet*", "• Mike", "• Zulu"], shown
         released = finals.in_timetable_order(finals_state["courses"])
         assert [c["code"] for c in released] == ["2", "1", "3"]
     finally:
@@ -1377,10 +1377,9 @@ def test_slack_button_groups_never_run_into_each_other():
         text, rows = gpa_ui.view_home(["Alpha", "Mike", "Zulu"])
         blocks = slack.buttons({"inline_keyboard": rows})
         kinds = [b["type"] for b in blocks]
-        assert kinds == ["actions", "divider", "actions", "divider", "actions"], kinds
-        courses, tools, nav = (b["elements"] for b in blocks if b["type"] == "actions")
-        assert len(courses) == 3 and [e["text"]["text"] for e in tools] == ["⚙️ CGPA & Record Hours", "🎯 Grade Needed"]
-        assert nav[0]["text"]["text"].endswith("Main Menu")
+        assert kinds == ["actions", "divider", "actions"], kinds      # one line between the groups; the way back joins the controls
+        courses, tools = (b["elements"] for b in blocks if b["type"] == "actions")
+        assert len(courses) == 3 and [e["text"]["text"] for e in tools] == ["⚙️ CGPA & Record Hours", "🎯 Grade Needed", "🔙 Main Menu"]
         slack.mode = lambda: "telegram"
         assert [len(r) for r in gpa_ui.view_home(["Alpha", "Mike", "Zulu"])[1]] == [1, 1, 1, 2, 1]     # Telegram as it was
     finally:
@@ -1389,7 +1388,7 @@ def test_slack_button_groups_never_run_into_each_other():
 
 
 def test_attendance_asks_an_hour_after_the_day_and_again_at_ten():
-    """The question comes an hour after the day's last counted lecture (an online one too); if it is not
+    """The question comes an hour after the day's last counted lecture (the moment it ends when it is an online one); if it is not
     answered, once more at 10 PM — never sooner than an hour after the first time — and then no more."""
     from datetime import date, datetime
     from uninotifier import attendance
@@ -1404,10 +1403,20 @@ def test_attendance_asks_an_hour_after_the_day_and_again_at_ten():
     assert attendance.due(datetime(2026, 11, 15, 22, 0), sched) == sunday          # and again at 10 PM
     attendance.mark_asked(sunday, datetime(2026, 11, 15, 22, 0))
     assert attendance.due(datetime(2026, 11, 15, 23, 30), sched) is None          # twice is all
-    assert attendance.due(datetime(2026, 11, 18, 21, 29), sched) is None
-    assert attendance.due(datetime(2026, 11, 18, 21, 30), sched) == wednesday      # an online lecture counts: 8:30 PM + 1 hour
+    # an online lecture ends the day: asked the moment it ends (8:30 PM), not an hour later
+    assert attendance.due(datetime(2026, 11, 18, 20, 29), sched) is None
+    assert attendance.due(datetime(2026, 11, 18, 20, 30), sched) == wednesday
+    attendance.mark_asked(wednesday, datetime(2026, 11, 18, 20, 30))
+    assert attendance.due(datetime(2026, 11, 18, 21, 59), sched) is None
+    assert attendance.due(datetime(2026, 11, 18, 22, 0), sched) == wednesday       # not answered: again at 10 PM
+    attendance.mark_asked(wednesday, datetime(2026, 11, 18, 22, 0))
+    assert attendance.due(datetime(2026, 11, 18, 23, 30), sched) is None
+    # a late online lecture: 10 PM is only half an hour after the first question — the gap rule still lets it through at 10
+    late = {"days": {"wed": [{"start": "20:30", "end": "21:30", "course": "Free", "mode": "Online"}]}}
+    attendance.FILE = Path(tempfile.mkdtemp()) / "attendance.json"
     attendance.mark_asked(wednesday, datetime(2026, 11, 18, 21, 30))
-    assert attendance.due(datetime(2026, 11, 18, 22, 0), sched) is None            # 10 PM, but only half an hour after the first
-    assert attendance.due(datetime(2026, 11, 18, 22, 30), sched) == wednesday
-    attendance.record_day(wednesday, [], sched)
-    assert attendance.due(datetime(2026, 11, 18, 22, 30), sched) is None           # answered: never again
+    assert attendance.due(datetime(2026, 11, 18, 21, 59), late) is None and attendance.due(datetime(2026, 11, 18, 22, 0), late) == wednesday
+    attendance.record_day(wednesday, [], late)
+    assert attendance.due(datetime(2026, 11, 18, 22, 30), late) is None           # answered: never again
+
+

@@ -285,7 +285,7 @@ def test_finals_check_ends_on_the_grades_screen():
             assert len(announced) == 1 and "Finals Watch" in announced[0]
             kind, mid, text, rows = shown[-1]
             assert kind == "send" and len(shown) == 1, "announcements landed first: the screen returns under them"
-            assert "0 of 3 published" in text and text.count("⏳") == 3 and "Linear Algebra (1)" in text
+            assert "0 of 3 published" in text and "Published:* none yet" in text and "Not published yet*" in text and "Linear Algebra (1)" in text and "Term:" not in text and "While it's on" not in text
             assert rows[0][0]["callback_data"] == "finals:check"
 
             # a grade appears: announced, then the screen shows the mark
@@ -293,12 +293,12 @@ def test_finals_check_ends_on_the_grades_screen():
             check()
             assert announced and announced[0].startswith("🎓 *Grade Released*")
             text = shown[-1][2]
-            assert "1 of 3 published" in text and "✅ *70* · Linear Algebra (1)" in text and text.count("⏳") == 2
+            assert "1 of 3 published" in text and "✅ *70* · Linear Algebra (1)" in text and "⏳ *Not published yet*" in text and "• Numerical Analysis (1)" in text
 
             # nothing new: no announcement, the screen is updated WHERE IT IS (the pressed message), nothing else is sent
             check()
             assert announced == [] and len(shown) == 1 and shown[0][:2] == ("edit", 7), shown
-            assert "1 of 3 published" in shown[0][2] and "🕒 *Last check:*" in shown[0][2]
+            assert "1 of 3 published" in shown[0][2] and "Last check:" in shown[0][2]
             check(None)                                                 # typed (/grades): the screen goes to the bottom
             assert shown[0][0] == "send" and "Finals Watch" in shown[0][2]
             assert [c["code"] for c in finals.load()["courses"]] == ["0101221", "0101272", "0135220"]
@@ -323,7 +323,7 @@ def test_finals_check_ends_on_the_grades_screen():
                                                                                   bot._portal_lock.release())
             try:
                 bot.handle_finals("check", 9)
-                assert shown == [("edit", 9, "🏁 *Finals Watch*\n\n⏳ Reading your grades from the portal…", [])], shown
+                assert shown == [("edit", 9, "🏁 *Finals Watch*\n\n⏳ Reading your grades from the portal… usually about 10 seconds, up to a minute if the portal is slow", [])], shown
                 for _ in range(100):
                     if started:
                         break

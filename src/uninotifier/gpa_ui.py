@@ -190,9 +190,7 @@ def view_need_picker(names: list[str] | None = None) -> tuple[str, list]:
         _base_line(state), "",
         "What are you aiming for?",
         "• *Semester GPA* — the average of this term's courses",
-        "• *Cumulative CGPA* — your record after this term", "",
-        "Official grades from the portal are locked in 🔒; the target is shared out over the "
-        "courses that don't have one yet."])
+        "• *Cumulative CGPA* — your record after this term"])
     return text, [[{"text": f"{SCOPES['s'][0]} {SCOPES['s'][1]}", "callback_data": "gpa:t:s"}],
                   [{"text": f"{SCOPES['c'][0]} {SCOPES['c'][1]}", "callback_data": "gpa:t:c"}],
                   [ADJUST_BUTTON], [MENU_BUTTON]]

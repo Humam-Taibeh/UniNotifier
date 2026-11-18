@@ -132,7 +132,7 @@ def handle_finals(arg: str, message_id: int | None = None) -> None:
             chat.send_view(portal_flow.portal_setup_text(), [chat.BACK_ROW])
         elif portal_flow._portal_lock.acquire(blocking=False):
             if message_id:                                   # the button's own message shows the progress: no extra message
-                chat.edit_view(message_id, "🏁 *Finals Watch*\n\n⏳ Reading your grades from the portal…", [])
+                chat.edit_view(message_id, "🏁 *Finals Watch*\n\n⏳ Reading your grades from the portal… usually about 10 seconds, up to a minute if the portal is slow", [])
             threading.Thread(target=run_finals_check, args=(True, message_id), daemon=True).start()
         else:
             chat.send_view("⏳ *A portal request is already running.*", [chat.BACK_ROW])

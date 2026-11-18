@@ -27,9 +27,10 @@ FILE = paths.DATA / "attendance.json"
 ALLOWED = {"normal": 5, "blended": 2, "once": 2}   # absences allowed; one more deprives
 CAMPUS_MODES = ("In-Person", "Blended")           # "Blended" is the portal's own mark (م) for a blended course's campus day
 COUNTED_MODES = CAMPUS_MODES + ("Online",)
-ASK_AFTER_MINUTES = 60                           # asked this long after the day's last lecture ends
+ASK_AFTER_MINUTES = 60                           # a day ending on campus: asked this long after its last lecture ends
+ASK_AFTER_ONLINE_MINUTES = 0                     # a day ending with an online lecture: asked the moment it ends
 ASK_AGAIN_AT = (22, 0)                           # asked once more at 10 PM if there was no answer (never sooner than
-ASK_AGAIN_GAP_MINUTES = 60                       # an hour after the first time: a late lecture's question is not repeated at once)
+ASK_AGAIN_GAP_MINUTES = 30                       # half an hour after the first time: a late lecture's question is not repeated at once)
 ASK_TIMES = 2
 
 
@@ -117,13 +118,15 @@ def courses_on(day: date, sched: dict | None = None) -> list[str]:
 
 
 def day_over_at(day: date, sched: dict | None = None) -> datetime | None:
-    """When the bot asks about that day: an hour after its last counted lecture ends."""
+    """When the bot asks about that day: an hour after its last counted lecture ends — or the moment it
+    ends when that last lecture is an online one (you are home already)."""
     lectures = classes_on(day, sched)
     if not lectures:
         return None
-    hour, minute = map(int, max(lec["end"] for lec in lectures).split(":"))
-    return datetime.combine(day, datetime.min.time()).replace(hour=hour, minute=minute) \
-        + timedelta(minutes=ASK_AFTER_MINUTES)
+    last = max(lectures, key=lambda lec: lec["end"])
+    hour, minute = map(int, last["end"].split(":"))
+    wait = ASK_AFTER_ONLINE_MINUTES if last.get("mode") == "Online" else ASK_AFTER_MINUTES
+    return datetime.combine(day, datetime.min.time()).replace(hour=hour, minute=minute) + timedelta(minutes=wait)
 
 
 def count(course: str, data: dict | None = None) -> int:
