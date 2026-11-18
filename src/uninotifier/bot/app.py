@@ -31,7 +31,7 @@ from uninotifier import reminders
 from uninotifier import schedule
 from uninotifier import tasks
 from uninotifier import telegram
-from uninotifier.bot import (chat, checks, finals_flow, gpa_flow, guest_flow, portal_flow, registration_flow,
+from uninotifier.bot import (attendance_flow, chat, checks, finals_flow, gpa_flow, guest_flow, portal_flow, registration_flow,
                              reminder_flow, update_flow, views)
 
 log = logging.getLogger("uninotifier")
@@ -90,6 +90,7 @@ COMMANDS = [
     ("gpa", "📊 GPA & Grade Hub"),
     ("record", "📜 Academic Record & Balance"),
     ("guest", "👤 Guest Look-up"),
+    ("attendance", "🎒 Attendance & Absences"),
     ("grades", "🔄 Check Grades Now"),
     ("transcript", "📜 Transcript & Passed Hours"),
     ("balance", "💰 Tuition Balance"),
@@ -131,6 +132,8 @@ def handle_command(text: str, message_id: int | None = None) -> None:
         reminder_flow.start_reminder()
     elif command == "/guest":
         guest_flow.start_guest()
+    elif command == "/attendance":
+        attendance_flow.start()
     elif command == "/need":
         gpa_flow.handle_need(text.strip()[len(text.split()[0]):])
     elif command == "/finals":
@@ -249,6 +252,9 @@ def route_callback(cb: dict, action: str, message_id: int | None) -> None:
         return
     if action.startswith("rem:"):
         reminder_flow.handle_reminder_callback(cb, action, message_id)
+        return
+    if action.startswith("att:"):
+        attendance_flow.handle_callback(cb, action, message_id)
         return
     if action.startswith("guest:"):
         guest_flow.handle_guest_callback(cb, action)
@@ -412,6 +418,7 @@ def main() -> None:
     heartbeat.beat("poll")
     threading.Thread(target=lecture_loop, name="lectures", daemon=True).start()
     threading.Thread(target=finals_flow.finals_loop, name="finals", daemon=True).start()
+    threading.Thread(target=attendance_flow.loop, name="attendance", daemon=True).start()   # "did you go today?"
     threading.Thread(target=pulse_loop, name="pulse", daemon=True).start()
     threading.Thread(target=probe.loop, name="probe", daemon=True).start()     # the 2-minute look at Moodle
     threading.Thread(target=update_flow.loop, name="updates", daemon=True).start()   # a new version, once a day

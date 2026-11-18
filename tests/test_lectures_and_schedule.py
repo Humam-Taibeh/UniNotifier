@@ -1216,3 +1216,45 @@ def test_attendance_on_online_lecture_alert():
         finally:
             (lectures.STATE_FILE, lectures.CLAIM_DIR, lectures.notifier.send_message,
              lectures.notifier.send_png_file, lecturelinks.LINKS_FILE) = keep
+
+
+def test_attendance_counts_absences_by_the_rules():
+    """5 allowed (6th deprives) for a normal course; a blended one counts its In-Person day only: 2 allowed, 3rd deprives."""
+    from datetime import date, datetime
+    from uninotifier import attendance
+    attendance.FILE = Path(tempfile.mkdtemp()) / "attendance.json"
+    sched = {"days": {
+        "sun": [{"start": "08:00", "end": "09:00", "course": "Algebra", "mode": "In-Person"},
+                {"start": "10:00", "end": "11:00", "course": "Physics", "mode": "In-Person"},
+                {"start": "12:00", "end": "13:00", "course": "Club", "mode": "Activity"},
+                {"start": "13:00", "end": "14:00", "course": "Data", "mode": "In-Person"}],
+        "mon": [{"start": "09:00", "end": "10:00", "course": "Physics", "mode": "Online"}],
+        "tue": [{"start": "09:00", "end": "10:00", "course": "Data", "mode": "Activity"}]}}
+    assert attendance.kinds(sched) == {"Algebra": "normal", "Physics": "blended", "Data": "blended"}
+    sunday, monday = date(2026, 11, 15), date(2026, 11, 16)
+    assert attendance.courses_on(sunday, sched) == ["Algebra", "Physics", "Data"]
+    assert attendance.courses_on(monday, sched) == []                     # a blended course's Online day is not counted
+    assert attendance.day_over_at(sunday, sched) == datetime(2026, 11, 15, 15, 0)     # last lecture 14:00 + 1 hour
+    assert attendance.due(datetime(2026, 11, 15, 14, 59), sched) is None
+    assert attendance.due(datetime(2026, 11, 15, 15, 0), sched) == sunday
+    attendance.record_day(sunday, ["Physics"], sched)
+    assert attendance.count("Physics") == 1 and attendance.count("Algebra") == 0
+    attendance.record_day(sunday, ["Physics"], sched)                     # answering the same day again never counts twice
+    assert attendance.count("Physics") == 1
+    assert attendance.due(datetime(2026, 11, 15, 16, 0), sched) is None   # answered
+    assert attendance.status("Physics", "blended")["state"] == "last"     # 1 of 2: one absence left
+    data = attendance.load()
+    data["absences"]["Physics"] = ["2026-11-01", "2026-11-08"]
+    assert attendance.status("Physics", "blended", data)["state"] == "limit"
+    data["absences"]["Physics"].append("2026-11-09")
+    assert attendance.status("Physics", "blended", data)["state"] == "deprived"
+    data["absences"]["Algebra"] = ["d1", "d2", "d3", "d4", "d5"]
+    assert attendance.status("Algebra", "normal", data)["state"] == "limit"
+    data["absences"]["Algebra"].append("d6")
+    assert attendance.status("Algebra", "normal", data)["state"] == "deprived"
+    attendance.save(data)
+    assert attendance.remove_one("Algebra") and attendance.count("Algebra") == 5
+    attendance.record_day(sunday, ["Algebra", "Physics", "Data"], sched)          # "I didn't go": absent from every course
+    assert attendance.load()["answered"]["2026-11-15"] == "none"
+    attendance.mark_asked(monday, datetime(2026, 11, 16, 12, 0))
+    assert "ONE absence left" in attendance.warning("Physics", "normal", {"absences": {"Physics": ["a"] * 4}})

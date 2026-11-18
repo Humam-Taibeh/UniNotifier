@@ -164,7 +164,8 @@ def view_courses() -> tuple[str, list]:
                       f"{count} course{'' if count == 1 else 's'} · {gpa.fmt(hours)} credit hours · {semester()}",
                       "", "What would you like to see?"])
     return text, [[{"text": "📋 Course List & Details", "callback_data": "courselist"}],
-                  [{"text": "📅 Weekly Timetable", "callback_data": "schedule"}],
+                  [{"text": "📅 Weekly Timetable", "callback_data": "schedule"},
+                   {"text": "🎒 Attendance", "callback_data": "att:home"}],
                   chat.BACK_ROW]
 
 

@@ -80,7 +80,7 @@ def test_bot_views():
     # My Courses & Schedule is a menu, not a wall of text; Tracked Items and Campus Guide are gone
     text, rows = bot.view_courses()
     assert [[b["text"] for b in row] for row in rows] == [
-        ["📋 Course List & Details"], ["📅 Weekly Timetable"], ["🔙 Main Menu"]]
+        ["📋 Course List & Details"], ["📅 Weekly Timetable", "🎒 Attendance"], ["🔙 Main Menu"]]
     assert [rows[0][0]["callback_data"], rows[1][0]["callback_data"]] == ["courselist", "schedule"]
     assert "6 courses · 18 credit hours" in text and len(text.splitlines()) <= 5
     everywhere = {b.get("callback_data") for view in bot.VIEWS.values() for row in view()[1] for b in row}
