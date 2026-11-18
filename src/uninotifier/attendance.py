@@ -4,8 +4,10 @@ answer is kept here, per course, and you are warned before a course deprives you
 
 The rules (ZUJ, as given by the owner):
   - a normal course: 5 absences are allowed, the 6th is a deprivation;
-  - a blended course (it has an In-Person day AND an Online day in the timetable): only the In-Person
-    day counts — the Online day is never asked about — 2 absences are allowed, the 3rd deprives;
+  - a blended course — the portal marks its campus day Blended (م), or it meets on campus one day and not
+    on campus (Online / Activity) another, or it is a FREE elective (the study plan's "حرة" category,
+    found by its course number): only the campus day counts — the other day is never asked about —
+    2 absences are allowed, the 3rd deprives;
   - an Activity slot is never counted.
 
 The timetable comes from schedule.load_schedule() (your schedule.json or the portal's), so this works
@@ -21,7 +23,8 @@ from uninotifier import fileio, paths, schedule
 
 FILE = paths.DATA / "attendance.json"
 ALLOWED = {"normal": 5, "blended": 2}            # absences allowed; one more deprives
-COUNTED_MODES = ("In-Person", "Online")
+CAMPUS_MODES = ("In-Person", "Blended")           # "Blended" is the portal's own mark (م) for a blended course's campus day
+COUNTED_MODES = CAMPUS_MODES + ("Online",)
 ASK_AFTER_MINUTES = 60                           # asked this long after the day's last lecture ends
 ASK_AGAIN_HOURS = 3                              # asked once more if there was no answer
 ASK_TIMES = 2
@@ -50,13 +53,37 @@ def _slots(sched: dict | None = None) -> list[tuple[str, dict]]:
 
 
 def kinds(sched: dict | None = None) -> dict[str, str]:
-    """Every course with a counted slot -> "normal" or "blended": a course that meets In-Person one day
-    and not in person (Online or an Activity day) another is blended — only its In-Person day counts."""
+    """Every course with a counted slot -> "normal" or "blended". Blended is: a slot the portal marks
+    Blended (م); or a course that meets on campus one day and not on campus (Online, an Activity day)
+    another; or a free elective (a course of the study plan's "حرة" category) — only its campus days count."""
+    sched = sched if sched is not None else schedule.load_schedule()
     modes: dict[str, set] = {}
     for _, lec in _slots(sched):
         modes.setdefault(lec["course"], set()).add(lec.get("mode"))
-    return {course: "blended" if "In-Person" in found and len(found) > 1 else "normal"
+    free = free_courses(sched)
+    return {course: "blended" if ("Blended" in found or "In-Person" in found and len(found) > 1 or course in free)
+            else "normal"
             for course, found in modes.items() if found & set(COUNTED_MODES)}
+
+
+def free_codes() -> set[str]:
+    """The course numbers of the study plan's free-elective category ("حرة" / "Free"), from the last
+    transcript the bot read. Empty when no plan has been read or it has no such category."""
+    try:
+        from uninotifier.bot import portal_flow
+        cached = portal_flow.load_cached("transcript")
+        categories = ((cached[0].data or {}).get("plan") or {}).get("categories", []) if cached else []
+    except Exception:
+        return set()
+    return {str(c["code"]) for cat in categories
+            if "حرة" in str(cat.get("name", "")) or "free" in str(cat.get("name", "")).lower()
+            for c in cat.get("courses", [])}
+
+
+def free_courses(sched: dict) -> set[str]:
+    """The timetable's course names that are free electives (the schedule's course_codes: number -> name)."""
+    codes = free_codes()
+    return {name for code, name in (sched.get("course_codes") or {}).items() if str(code) in codes}
 
 
 def classes_on(day: date, sched: dict | None = None) -> list[dict]:
@@ -65,9 +92,11 @@ def classes_on(day: date, sched: dict | None = None) -> list[dict]:
     sched = sched if sched is not None else schedule.load_schedule()
     kind = kinds(sched)
     key = schedule.DAY_KEYS[day.weekday()]
+    campus = {lec["course"] for _, lec in _slots(sched) if lec.get("mode") in CAMPUS_MODES}
     return sorted((lec for lec in sched.get("days", {}).get(key, [])
                    if lec.get("mode") in COUNTED_MODES and lec["course"] in kind
-                   and not (kind[lec["course"]] == "blended" and lec["mode"] != "In-Person")),
+                   and not (kind[lec["course"]] == "blended" and lec["mode"] not in CAMPUS_MODES
+                            and lec["course"] in campus)),
                   key=lambda lec: lec["start"])
 
 

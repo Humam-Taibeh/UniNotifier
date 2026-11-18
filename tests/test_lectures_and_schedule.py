@@ -1271,3 +1271,23 @@ def test_attendance_earlier_absences_can_be_entered():
     flow = importlib.import_module("uninotifier.bot.attendance_flow")
     text, rows = flow.view_set()
     assert "earlier absences" in text and rows[-1][0]["callback_data"] == "att:home" and len(rows[0]) == len(rows[1])
+
+
+def test_attendance_blended_mark_and_free_electives():
+    """The portal's own Blended mark counts, and a free elective (the plan's "حرة" category) is blended: 2 allowed."""
+    from datetime import date
+    from uninotifier import attendance
+    sched = {"course_codes": {"0101": "Painting", "0202": "Maths"}, "days": {
+        "sun": [{"start": "09:00", "end": "10:00", "course": "Painting", "mode": "In-Person"},
+                {"start": "10:00", "end": "11:00", "course": "Maths", "mode": "Blended"}],
+        "tue": [{"start": "10:00", "end": "11:00", "course": "Maths", "mode": "Activity"}]}}
+    keep = attendance.free_codes
+    try:
+        attendance.free_codes = lambda: {"0101"}
+        assert attendance.kinds(sched) == {"Painting": "blended", "Maths": "blended"}
+        assert attendance.courses_on(date(2026, 11, 15), sched) == ["Painting", "Maths"]
+        assert attendance.courses_on(date(2026, 11, 17), sched) == []
+        attendance.free_codes = lambda: set()
+        assert attendance.kinds(sched) == {"Painting": "normal", "Maths": "blended"}
+    finally:
+        attendance.free_codes = keep
