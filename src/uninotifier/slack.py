@@ -511,6 +511,55 @@ def boxed(card: list[dict], title: str = HOME_TITLE, flat: bool = False) -> list
     if flat:                                                # a Slack whose boxes refuse headers: a bold line instead
         children = [{"type": "section", "text": {"type": "mrkdwn", "text": f"*{_escape(b['text']['text'])}*"}}
                     if b["type"] == "header" else b for b in children]
+    parts = [children]
+    if len(children) > BOX_CHILDREN:                      # more than a box holds: split at the headings — each heading its own box
+        parts = _split_at_headings(children)
+    boxes = []
+    for n, part in enumerate(parts):
+        part = _fit(part)
+        if part is None:                                   # nothing more can go: no box rather than blocks outside it
+            return card
+        name, small = (title, subtitle) if n == 0 else ("", "")
+        if n and part and part[0]["type"] == "header":    # a later box is named by the heading it starts with
+            name, part = part[0]["text"]["text"], part[1:]
+        box = {"type": "container", "title": {"type": "plain_text", "text": (name or " ")[:HEADER_LIMIT], "emoji": False},
+               "has_header_divider": True, "child_blocks": part}
+        if small:
+            box["subtitle"] = {"type": "mrkdwn", "text": small}
+        boxes.append(box)
+    return boxes
+
+
+def _split_at_headings(children: list[dict]) -> list[list[dict]]:
+    """The blocks as whole parts, each starting at a heading, packed into as few boxes as hold them. A part never ends or starts
+    with a line (the box edge is the line)."""
+    segments: list[list[dict]] = []
+    for block in children:
+        if block["type"] == "header" and segments and segments[-1]:
+            segments.append([block])
+        elif segments:
+            segments[-1].append(block)
+        else:
+            segments.append([block])
+    parts: list[list[dict]] = []
+    for segment in segments:
+        if parts and len(parts[-1]) + len(segment) <= BOX_CHILDREN:
+            parts[-1] = parts[-1] + segment
+        else:
+            parts.append(list(segment))
+    for part in parts:
+        while part and part[-1]["type"] == "divider":
+            part.pop()
+        while part and part[0]["type"] == "divider":
+            part.pop(0)
+    return [part for part in parts if part]
+
+
+def _fit(children: list[dict]) -> list[dict] | None:
+    """One box's blocks brought down to what a box holds, losing the least: the lines between parts first, then the line over
+    the controls, then the last items' small details, then neighbours merged. None when it still does not fit."""
+    children = list(children)
+
     def over() -> bool:
         return len(children) > BOX_CHILDREN
 
@@ -518,7 +567,7 @@ def boxed(card: list[dict], title: str = HOME_TITLE, flat: bool = False) -> list
         return i + 1 < len(children) and children[i + 1]["type"] == "actions" and (
             children[i + 1].get("block_id") == "nav" or i == 0 or children[i - 1]["type"] != "actions")
 
-    if over():                                             # too many for a box: the lines between parts go first,
+    if over():                                             # the lines between parts go first,
         children = [b for i, b in enumerate(children) if b["type"] != "divider" or above_buttons(i)]
     if over() and _foldable(children):                     # then the line over the controls (the one over the way back stays):
         children = [b for i, b in enumerate(children)      # an item's small details matter more than that line
@@ -528,13 +577,7 @@ def boxed(card: list[dict], title: str = HOME_TITLE, flat: bool = False) -> list
     for kind in ("actions", "section"):
         if over():
             children = _fewer(children, kind)
-    if over():                                             # nothing more can go: no box rather than blocks outside it
-        return card
-    box = {"type": "container", "title": {"type": "plain_text", "text": title[:HEADER_LIMIT], "emoji": False},
-           "has_header_divider": True, "child_blocks": children[:BOX_CHILDREN]}
-    if subtitle:
-        box["subtitle"] = {"type": "mrkdwn", "text": subtitle}
-    return [box] + children[BOX_CHILDREN:]
+    return None if over() else children
 
 
 CARD_TEXT = 200                    # Slack's limit for a card's body, and for its small print

@@ -1610,3 +1610,67 @@ def test_the_registration_plan_rows_stay_as_they_are_laid_out():
         assert [b["type"] for b in blocks] == ["actions"] * 3                  # no line between them: one group
     finally:
         slack.mode = keep
+
+
+def test_a_screen_with_headings_that_does_not_fit_one_box_becomes_boxes_titled_by_their_headings_and_keeps_every_line():
+    """Course tasks + Your reminders + the controls are more than a box holds: each heading gets its own box (a clear space between
+    the parts, the second box named by its heading), the lines above the controls and above Back / Main Menu are kept, and the small
+    details of every item stay small."""
+    from uninotifier import reminders, slack, tasks
+    from uninotifier.bot import chat, views
+    items = [{"id": n, "note": f"Reminder {n}\nCourse: X\nWhen: soon", "course": None, "due": 1900000000 + n, "message_id": None} for n in (1, 2)]
+    task = {"kind": "assign", "name": "Essay", "course": "English", "due": 1900000000, "opens": None, "late": True,
+            "progress": None, "url": "https://m/x", "cmid": "5"}
+    keep = (slack.mode, reminders.pending, tasks.open_tasks, chat.load_state)
+    try:
+        slack.mode = lambda: "slack"
+        reminders.pending = lambda now=None: list(items)
+        tasks.open_tasks = lambda state, now: [task]
+        chat.load_state = lambda: {}
+        text, rows = views.view_tasks()
+        boxes = slack.boxed(slack.blocks(text, {"inline_keyboard": rows}, live=True))
+        assert [b["type"] for b in boxes] == ["container", "container"], [b["type"] for b in boxes]
+        assert boxes[0]["title"]["text"].startswith("⏳") and boxes[1]["title"]["text"] == "🔔 Your reminders"
+        assert all(len(b["child_blocks"]) <= slack.BOX_CHILDREN for b in boxes)
+        first, second = boxes[0]["child_blocks"], boxes[1]["child_blocks"]
+        assert first[0]["type"] == "header" and "Course tasks" in first[0]["text"]["text"] and first[-1]["type"] == "context"   # a task, its small details
+        kinds = [b["type"] for b in second]
+        assert kinds[-2:] == ["divider", "actions"] and second[-1]["block_id"] == "nav", kinds                  # the line above Back / Main Menu
+        assert "divider" in kinds[:-2] and kinds.index("divider") < kinds.index("actions"), kinds                # ... and above the controls
+        assert len([b for b in second if b.get("block_id", "").startswith("small")]) == 2                       # every reminder's details small
+        assert not [b for b in second if b["type"] == "header"]                                           # the second heading IS the box title
+    finally:
+        slack.mode, reminders.pending, tasks.open_tasks, chat.load_state = keep
+
+
+def test_absences_allowed_can_be_set_by_hand_per_course():
+    """The rule's own number (5, or 2 for a course attended once a week) is 'auto'; a limit you set for one course (4: the 5th deprives)
+    changes only that course; Auto takes it back. The screen has a drop-down per course in Slack."""
+    import importlib
+    from uninotifier import attendance, slack
+    flow = importlib.import_module("uninotifier.bot.attendance_flow")
+    attendance.FILE = Path(tempfile.mkdtemp()) / "attendance.json"
+    keep = (attendance.kinds, attendance.ordered, slack.mode)
+    try:
+        attendance.kinds = lambda sched=None: {"Arabic": "once", "Algebra": "normal"}
+        attendance.ordered = lambda sched=None: ["Algebra", "Arabic"]
+        slack.mode = lambda: "slack"
+        assert attendance.status("Arabic", "once")["allowed"] == 2 and attendance.status("Algebra", "normal")["allowed"] == 5
+        attendance.set_limit("Arabic", 4)
+        attendance.set_count("Arabic", 4)
+        info = attendance.status("Arabic", "once")
+        assert info["allowed"] == 4 and info["state"] == "limit" and attendance.status("Algebra", "normal")["allowed"] == 5
+        attendance.set_count("Arabic", 5)
+        assert attendance.status("Arabic", "once")["state"] == "deprived"                 # the 5th deprives
+        text, rows = flow.view_limits()
+        blocks = slack.blocks(text, {"inline_keyboard": rows}, live=True)
+        lines = [b for b in blocks if b["type"] == "section" and "accessory" in b]
+        assert len(lines) == 2 and "4 allowed · set by you" in lines[1]["text"]["text"] and "5 allowed · auto" in lines[0]["text"]["text"]
+        assert [o["text"]["text"] for o in lines[1]["accessory"]["options"]][:2] == ["Auto (2)", "2 allowed"]
+        assert lines[1]["accessory"]["initial_option"]["value"] == "att:lim:1:4"
+        flow.handle_callback({"id": "1", "message": {"message_id": 9}}, "att:lim:1:auto", None) if False else None
+        attendance.set_limit("Arabic", None)
+        assert attendance.status("Arabic", "once")["allowed"] == 2
+        assert any(b["callback_data"] == "att:lim" for r in flow.view_home()[1] for b in r)
+    finally:
+        attendance.kinds, attendance.ordered, slack.mode = keep

@@ -114,7 +114,31 @@ def view_home() -> tuple[str, list]:
     for i, course in enumerate(attendance.ordered()):
         lines += [_course_text(i, course, kind[course], attendance.status(course, kind[course], data)), ""]
     return "\n".join(lines).rstrip(), [[{"text": "➕ Record today", "callback_data": "att:today"},
-                               {"text": "📝 Earlier absences", "callback_data": "att:set"}], chat.COURSES_ROW]
+                               {"text": "📝 Earlier absences", "callback_data": "att:set"},
+                               {"text": "⚙️ Limits", "callback_data": "att:lim"}], chat.COURSES_ROW]
+
+
+def view_limits() -> tuple[str, list]:
+    """The absences allowed in each course: the rule's own number (auto), or the one you set — the next absence deprives."""
+    data = attendance.load()
+    kind = attendance.kinds()
+    lines = ["⚙️ *Absences allowed*", media.DIVIDER,
+             "Auto follows the rule; or set a course's own limit — the next absence deprives you."]
+    rows = []
+    for i, course in enumerate(attendance.ordered()):
+        auto = attendance.ALLOWED[kind[course]]
+        mine = data["limits"].get(course)
+        now = int(mine or auto)
+        if _in_slack():
+            options = [[f"Auto ({auto})", f"att:lim:{i}:auto"]] + [[f"{n} allowed", f"att:lim:{i}:{n}"] for n in attendance.LIMIT_CHOICES]
+            rows.append([{"text": "Limit", "callback_data": f"att:lim:{i}:{mine or 'auto'}", "line": {
+                "text": f"*{i + 1}. {course}*\n{now} allowed" + (" · set by you" if mine else " · auto"),
+                "options": options, "initial": f"att:lim:{i}:{mine or 'auto'}"}}])
+        else:
+            lines.append(f"*{i + 1}.* {course} — {now} allowed" + (" (set by you)" if mine else " (auto)"))
+            rows.append([{"text": f"{i + 1}: " + ("✅ " if (mine or 0) == n else "") + str(n), "callback_data": f"att:lim:{i}:{n}"}
+                         for n in attendance.LIMIT_CHOICES] + [{"text": f"{i + 1}: Auto", "callback_data": f"att:lim:{i}:auto"}])
+    return "\n".join(lines), [*rows, [ATTENDANCE, MAIN]]
 
 
 def view_set() -> tuple[str, list]:
@@ -161,6 +185,10 @@ def handle_callback(cb: dict, action: str, message_id: int | None) -> None:
         _show(message_id, view_home())
     elif what == "set":
         _show(message_id, view_set())
+    elif what == "lim":
+        if 0 <= index < len(names) and len(parts) > 3 and (parts[3] == "auto" or parts[3].isdigit()):
+            attendance.set_limit(names[index], None if parts[3] == "auto" else int(parts[3]))
+        _show(message_id, view_limits())
     elif what == "to" and 0 <= index < len(names) and len(parts) > 3 and parts[3].isdigit():
         attendance.set_count(names[index], int(parts[3]))
         _show(message_id, view_set())

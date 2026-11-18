@@ -41,7 +41,7 @@ def load() -> dict:
         data = {}
     if not isinstance(data, dict):
         data = {}
-    for key in ("absences", "answered", "asked", "pick"):
+    for key in ("absences", "answered", "asked", "pick", "limits"):
         if not isinstance(data.get(key), dict):
             data[key] = {}
     return data
@@ -136,10 +136,24 @@ def count(course: str, data: dict | None = None) -> int:
 def status(course: str, kind: str, data: dict | None = None) -> dict:
     """{"count", "allowed", "left", "state"}: state is "ok", "last" (one absence left), "limit" (none
     left — the next one deprives) or "deprived"."""
-    used, allowed = count(course, data), ALLOWED[kind]
+    used = count(course, data)
+    allowed = int(((data or load()).get("limits") or {}).get(course) or ALLOWED[kind])     # the limit you set, else the rule's
     left = allowed - used
     state = "deprived" if left < 0 else "limit" if left == 0 else "last" if left == 1 else "ok"
     return {"count": used, "allowed": allowed, "left": max(left, 0), "state": state}
+
+
+LIMIT_CHOICES = (2, 3, 4, 5, 6)             # the limits offered by hand; the rule's own number is "auto"
+
+
+def set_limit(course: str, allowed: int | None) -> None:
+    """The absences allowed in one course, set by you (the next one deprives); None goes back to the rule's own number."""
+    data = load()
+    if allowed:
+        data["limits"][course] = int(allowed)
+    else:
+        data["limits"].pop(course, None)
+    save(data)
 
 
 def record_day(day: date, absent: list[str], sched: dict | None = None) -> list[str]:

@@ -129,7 +129,7 @@ def view_tasks() -> tuple[str, list]:
         lines.append(slack.small("none ahead 🎉") if in_slack else "🎉 No assignments or quizzes ahead.")
     for n, task in enumerate(upcoming, 1):
         lines += tasks.task_lines(n, task, now)
-    rows = slack.grouped(tasks.open_buttons(upcoming), "items")
+    rows = tasks.open_buttons(upcoming)              # (the controls: one group, under one line)
 
     mine = reminders.pending()
     lines += ["", media.DIVIDER, slack.heading("🔔 *Your reminders*", "🔔 Your reminders")]       # the course's own tasks, then yours: a line between them
@@ -148,12 +148,10 @@ def view_tasks() -> tuple[str, list]:
     # number the list gives the reminder (so it is renumbered with the list), and the reminder's own id
     # (so a screen that is a little old still opens the right one).
     pinned = [(n, r) for n, r in enumerate(shown, 1) if r.get("message_id")]
-    first_post = len(rows)
     for n, r in pinned[:VIEW_POST_BUTTONS]:
         if slack.mode() == "slack":          # Slack cannot quote a message, and the reminder shows the whole post: no button
             continue
         rows.append([{"text": f"🔗 View Original Post ({n})", "callback_data": f"rem:view:{r['id']}"}])
-    rows[first_post:] = slack.grouped(rows[first_post:], "items")        # the course's tasks and the posts: one group
 
     rows.append([{"text": "➕ New Custom Reminder", "callback_data": "rem:new"}]
                 + ([{"text": "🗑️ Manage Reminders", "callback_data": "rem:list"}] if mine else []))
