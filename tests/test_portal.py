@@ -542,7 +542,7 @@ def test_study_plan_from_the_portal():
         "📊 *Degree Plan:* 22 hrs", "✅ *Passed:* 6 hrs", "⏳ *This Term:* 6 hrs · 2 courses (1 retake)",
         "❌ *Failed, Not Retaken Yet:* 3 hrs · 1 course", "🔁 *Repeated Courses:* 3 (2 done · 1 this term)",
         "🏁 *Remaining:* 16 hrs · 10 after this term",
-        "📝 *Placement Exams:* all 2 exempt (80%+) — nothing added to the plan"]
+        "📝 *Placement Exams:* all 2 exempt — nothing added to the plan"]
     done = degreeplan.parse(_plan_html([("متطلبات الكلية (اجبارية)", 3, 3, 0, [("مجتازة", "0900401", "مقدمة", 3)])]))
     assert degreeplan.progress_lines(done) == ["📊 *Degree Plan:* 3 hrs", "✅ *Passed:* 3 hrs", "🏁 *Remaining:* 0 hrs"]
 
@@ -1755,3 +1755,27 @@ def test_the_registration_page_is_read_said_and_watched():
         assert rows is None or any(b["callback_data"] == "reg:register" for r in rows for b in r)
     finally:
         registration_watch.STATE_FILE, portal.fetch_many, notifier.send_png_file, notifier.send_message = keep
+
+
+def test_exempt_courses_lower_the_hours_required_and_a_remedial_exemption_adds_nothing():
+    """A placement exam above 80% exempts you from the COURSE itself (Communication Skills, the remedial computer course): its hours
+    are not required of you — the Degree Plan line says the real total, a line names the courses. A remedial course that is exempt
+    adds nothing (the normal case) and says no percentage."""
+    from support import PLAN_CATEGORIES, _plan_html
+    from uninotifier import degreeplan, transcript
+    normal = degreeplan.parse(_plan_html())
+    assert degreeplan.exempted(normal) is None
+    assert degreeplan.progress_lines(normal)[0] == "📊 *Degree Plan:* 22 hrs"
+    assert "all 2 exempt — nothing added to the plan" in degreeplan.placement_line(normal) and "80" not in degreeplan.placement_line(normal)
+    cats = [list(c) for c in PLAN_CATEGORIES]
+    cats[0][4] = [("معفاة", "0900101", "مهارات الدراسة", 3), ("قيد الدراسة", "0900102", "الكتابة الأكاديمية", 3), ("", "0900103", "العمل التطوعي", 3)]
+    one = degreeplan.parse(_plan_html(cats))
+    assert degreeplan.exempted(one)["hours"] == 3
+    lines = degreeplan.progress_lines(one)
+    assert lines[0] == "📊 *Degree Plan:* 22 hrs (−3 exempt = 19 hrs)", lines[0]
+    assert any(l.startswith("🎓 *Exempt Courses:*") and "−3 hrs required" in l for l in lines)
+    cats[2][4] = [("معفاة", "0900301", "هياكل البيانات", 3), ("", "0900302", "نظم التشغيل", 3), ("", "0900303", "حلقة بحث", 1)]
+    two = degreeplan.parse(_plan_html(cats))
+    assert degreeplan.exempted(two)["hours"] == 6 and degreeplan.progress_lines(two)[0].endswith("(−6 exempt = 16 hrs)")
+    ordered = transcript._in_grid_order(degreeplan.progress_lines(two))
+    assert ordered[-1].startswith("🎓 *Exempt Courses:*")                    # in the summary's grid, after the placement exams

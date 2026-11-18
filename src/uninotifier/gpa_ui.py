@@ -257,8 +257,6 @@ def view_plan(names: list[str], scope: str, target: float) -> tuple[str, list]:
         lines.append(f"📊 *Semester average{'' if status == 'done' else ' at that pace'}:* {fmt(result['semester'])}%")
     if result["cgpa"] is not None:
         lines.append(f"🎓 *CGPA{'' if status == 'done' else ' at that pace'}:* {fmt(result['cgpa'])}%")
-    if any(gpa.need_for(c, 0) is None for _, c in result["open"]) and status == "reachable":
-        lines += ["", "ℹ️ Add a course's coursework total in ⚙️ Course Adjustments to see the final-exam mark it needs."]
 
     other = "c" if scope == "s" else "s"
     return "\n".join(lines), [

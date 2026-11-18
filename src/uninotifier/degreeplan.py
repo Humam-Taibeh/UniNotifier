@@ -184,6 +184,32 @@ def unknown_line(plan: dict) -> str | None:
             "shown as the portal writes it; the hours above are the portal's own.")
 
 
+def exempted(plan: dict) -> dict | None:
+    """The plan's own courses the student is EXEMPT from (a placement exam above 80% exempts from the course itself: Arabic or English
+    Communication Skills, the remedial computer course...): {"courses": [...], "hours"}. Their hours are not required of the student.
+    None when there are none. (A remedial course marked exempt adds nothing: see placement.)"""
+    courses = [c for cat in _counted(plan) for c in cat["courses"] if c["status"] == "exempt"]
+    return {"courses": courses, "hours": sum(c["hours"] for c in courses)} if courses else None
+
+
+def _course_name(course: dict) -> str:
+    """The course in English when the timetable knows its number, else as the portal writes it."""
+    try:
+        from uninotifier import schedule
+        known = schedule.load_schedule().get("course_codes", {}).get(course["code"])
+    except Exception:
+        known = None
+    return escape_md(known) if known else f"{FSI}{escape_md(course['name'] or course['code'])}{PDI}"
+
+
+def exempted_line(plan: dict) -> str | None:
+    found = exempted(plan)
+    if not found:
+        return None
+    names = " · ".join(_course_name(c) for c in found["courses"])
+    return f"🎓 *Exempt Courses:* {names} — −{_n(found['hours'])} hrs required"
+
+
 def placement(plan: dict) -> dict | None:
     """The placement exams, from the plan's remedial courses: {"courses": [...], "extra" (hours they
     add on top of the plan: every one not exempted), "left" (of those, still to pass), "term"
@@ -228,7 +254,7 @@ def placement_line(plan: dict) -> str | None:
     if not p:
         return None
     if not p["extra"]:                                   # 80% or more in every exam: exempt — the normal case
-        return f"📝 *Placement Exams:* all {len(p['courses'])} exempt (80%+) — nothing added to the plan"
+        return f"📝 *Placement Exams:* all {len(p['courses'])} exempt — nothing added to the plan"
     marks = " · ".join(_mark(c) for c in p["courses"])
     return f"📝 *Placement Exams:* {marks} — *+{_n(p['extra'])} hrs on top of the plan*"
 
@@ -260,8 +286,10 @@ def progress_lines(plan: dict, retakes: int = 0, repeated: int = 0) -> list[str]
     """The degree progress for the summary. `retakes`: how many of this term's courses are retakes;
     `repeated`: how many courses of the record were ever taken again (both from the transcript)."""
     p = progress(plan)
-    exams = placement(plan)
-    on_top = f" (+{_n(exams['extra'])} placement = {_n(p['degree'] + exams['extra'])} hrs)" if exams and exams["extra"] else ""
+    exams, free = placement(plan), exempted(plan)
+    extra, exempt = (exams["extra"] if exams else 0), (free["hours"] if free else 0)
+    parts = ([f"+{_n(extra)} placement"] if extra else []) + ([f"−{_n(exempt)} exempt"] if exempt else [])
+    on_top = f" ({' '.join(parts)} = {_n(p['degree'] + extra - exempt)} hrs)" if parts else ""     # the real total: the plan's, plus, minus
     lines = [f"📊 *Degree Plan:* {_n(p['degree'])} hrs{on_top}", f"✅ *Passed:* {_n(p['passed'])} hrs"]
     if p["term_courses"]:
         again = f" ({_count(retakes, 'retake')})" if retakes else ""
@@ -279,7 +307,7 @@ def progress_lines(plan: dict, retakes: int = 0, repeated: int = 0) -> list[str]
     exams = placement(plan)
     if exams and exams["left"]:
         left += f" · +{_n(exams['left'])} remedial"
-    return lines + [left] + [line for line in (placement_line(plan), unknown_line(plan)) if line]
+    return lines + [left] + [line for line in (placement_line(plan), exempted_line(plan), unknown_line(plan)) if line]
 
 
 def _course(course: dict) -> str:

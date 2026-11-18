@@ -59,7 +59,7 @@ def standing(semesters: list[dict]) -> dict:
 # The summary is a grid of two columns, read left to right: the plan and what is left, the hours attempted and
 # passed, what failed and what was repeated, this term and the placement exams.
 GRID_ORDER = ("Degree Plan", "Remaining", "Total Attempted Hours", "Passed", "Failed, Not Retaken Yet",
-              "Repeated Courses", "This Term", "Placement Exams")
+              "Repeated Courses", "This Term", "Placement Exams", "Exempt Courses")
 
 
 def _in_grid_order(lines: list[str]) -> list[str]:
