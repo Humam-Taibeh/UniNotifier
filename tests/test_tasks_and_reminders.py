@@ -994,7 +994,7 @@ def test_slack_tasks_screen_has_no_indent_a_long_line_could_wrap_out_of():
         assert all(l.startswith(slack.SMALL) for l in lines[heading + 3:heading + 6]), lines[heading + 3:heading + 6]   # its details: small
         blocks = slack.blocks(text, {"inline_keyboard": rows}, live=True)
         kinds = [(b["type"], b.get("block_id")) for b in blocks]
-        assert ("header", None) in kinds and kinds.count(("context", "small")) >= 2, kinds    # a heading, then item / its small details
+        assert ("header", None) in kinds and len([k for k in kinds if str(k[1]).startswith("small")]) >= 2, kinds    # a heading, then item / its small details
         buttons = [b for row in rows for b in row]
         assert not [b for b in buttons if "View Original Post" in b["text"]]
         assert not [b for b in buttons if "Open Post" in b["text"] or "Original" in b["text"]]      # the reminder shows the whole post

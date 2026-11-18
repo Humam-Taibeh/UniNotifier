@@ -34,7 +34,8 @@ from uninotifier.gpa import fmt
 from uninotifier.notifier import escape_md
 
 DIVIDER = "━━━━━━━━━━━━━━━━━━"
-MENU_BUTTON = {"text": "🔙 Main Menu", "callback_data": "menu"}
+MENU_BUTTON = {"text": "🏠 Main Menu", "callback_data": "menu"}
+NAV_ROW = [{"text": "🔙 GPA & Grade Hub", "callback_data": "academic"}, MENU_BUTTON]     # the way back, on every screen under the hub
 CANCEL_ROW = [{"text": "✖️ Cancel", "callback_data": "gpa:cancel"}]
 
 
@@ -101,7 +102,7 @@ def view_home(names: list[str]) -> tuple[str, list]:
     buttons = slack.grouped([[{"text": f"{n}. {_label(name, courses[name])}", "callback_data": f"gpa:c:{n - 1}"}]
                              for n, name in enumerate(order, 1)], "courses")
     buttons += slack.grouped([[{"text": "⚙️ CGPA & Record Hours", "callback_data": "gpa:cg"}, NEED_BUTTON]], "tools")
-    buttons += [[MENU_BUTTON]]
+    buttons += [NAV_ROW]
     return "\n".join(lines), buttons
 
 
@@ -193,7 +194,7 @@ def view_need_picker(names: list[str] | None = None) -> tuple[str, list]:
         "• *Cumulative CGPA* — your record after this term"])
     return text, [[{"text": f"{SCOPES['s'][0]} {SCOPES['s'][1]}", "callback_data": "gpa:t:s"}],
                   [{"text": f"{SCOPES['c'][0]} {SCOPES['c'][1]}", "callback_data": "gpa:t:c"}],
-                  [ADJUST_BUTTON], [MENU_BUTTON]]
+                  [ADJUST_BUTTON], NAV_ROW]
 
 
 def view_targets(scope: str) -> tuple[str, list]:
@@ -270,7 +271,7 @@ def view_plan(names: list[str], scope: str, target: float) -> tuple[str, list]:
         [{"text": "🔁 Another Target", "callback_data": f"gpa:t:{scope}"},
          {"text": f"{SCOPES[other][0]} As {'CGPA' if other == 'c' else 'Semester'} Target",
           "callback_data": f"gpa:n:{other}:{fmt(target)}"}],
-        [ADJUST_BUTTON], [MENU_BUTTON]]
+        [ADJUST_BUTTON], NAV_ROW]
 
 
 def _requirement(need: dict) -> str:

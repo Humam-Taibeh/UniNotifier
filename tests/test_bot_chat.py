@@ -942,13 +942,13 @@ def test_the_bot_lives_in_slack():
                 menu = next(d for m, d in calls if m == "chat.update")
                 assert sent_rows(menu), "the menu has its buttons"
 
-                # the buttons side by side, the way back in the same row
+                # the buttons side by side, the way back under a line of its own
                 assert len(sent_rows(menu)[0]["elements"]) > 1, "Telegram's one-per-row buttons go side by side"
                 laid = slack.buttons({"inline_keyboard": [[{"text": "⏳ Tasks", "callback_data": "tasks"}],
                                                           [{"text": "📅 Timetable", "callback_data": "schedule"}],
                                                           [{"text": "🔙 Main Menu", "callback_data": "menu"}]]})
-                assert [b["type"] for b in laid] == ["actions"]               # one row: the way back stands beside them
-                assert [e["value"] for e in laid[0]["elements"]] == ["tasks", "schedule", "menu"]
+                assert [b["type"] for b in laid] == ["actions", "divider", "actions"] and laid[-1]["block_id"] == "nav"
+                assert [e["value"] for e in laid[0]["elements"]] == ["tasks", "schedule"]   # the controls, a line, the way back
 
                 # the Home page: a press there redraws the page itself (views.publish), never the chat
                 calls.clear()
@@ -1122,7 +1122,7 @@ def test_slack_cards_have_one_line_under_the_title_and_one_above_the_buttons():
         return [b["type"] for b in found]
 
     title = "📚 *My Courses & Schedule*"
-    assert kinds(f"{title}\n{media.DIVIDER}\nWhat would you like to see?", both) == ["header", "section", "actions"]        # a one-line menu: no line between it and the buttons, the way back in the same row
+    assert kinds(f"{title}\n{media.DIVIDER}\nWhat would you like to see?", both) == ["header", "section", "actions", "divider", "actions"]        # a one-line menu: no line under it; the way back under a line
     assert kinds(f"{title}\n{media.DIVIDER}\nSome words that run on a while\nand a second line", nav) == ["header", "section", "divider", "actions"]
     assert kinds(f"{title}\nSome words\n{media.DIVIDER}\nMore words", None) == ["header", "section", "divider", "section"]
     assert kinds(f"{title}\n{media.DIVIDER}", nav) == ["header", "actions"]           # nothing but a title: the box's own line
@@ -1219,3 +1219,83 @@ def test_in_slack_the_controls_come_last_under_the_picture():
         assert log == [("card", True)], log                                                         # no file: buttons on the card
     finally:
         slack.post, slack.upload, slack.post_controls, slack.delete, slackbot._settings, slackbot.STORE, slack.call = keep
+
+
+def test_every_slack_screen_is_laid_out_the_same_and_is_accepted():
+    """The one layout, on every screen: the title alone, a line, the whole content, a line, the controls, a line, Back and
+    Main Menu (Main Menu alone when the screen before is the main menu). No id repeats inside a message — Slack refuses
+    the whole message for that, and the screen then silently does nothing (the target buttons did nothing for that)."""
+    from datetime import date
+    from uninotifier import finals, gpa_ui, slack
+    from uninotifier.bot import attendance_flow as af, views
+    keep = slack.mode
+    try:
+        slack.mode = lambda: "slack"
+        names = ["Alpha", "Mike", "Zulu"]
+        gpa_ui.gpa.STATE_FILE = Path(tempfile.mkdtemp()) / "gpa.json"
+        screens = {
+            "tasks": (views.view_tasks(), "main"), "courses": (views.view_courses(), "main"),
+            "course list": (views.view_course_list(), "courses"), "hub": (views.view_academic(), "main"),
+            "record": (views.view_record(), "main"),
+            "finals": ((finals.status_text(), [[{"text": "🔄 Check", "callback_data": "finals:check"}],
+                                                [{"text": "🔙 GPA & Grade Hub", "callback_data": "academic"}, gpa_ui.MENU_BUTTON]]), "hub"),
+            "need": (gpa_ui.view_need(names) if hasattr(gpa_ui, "view_need") else gpa_ui.on_callback(names, "gpa:need"), "hub"),
+            "targets": (gpa_ui.on_callback(names, "gpa:t:s"), "hub"),
+            "adjustments": (gpa_ui.view_home(names), "hub"),
+            "attendance": (af.view_home(), "courses"), "earlier": (af.view_set(), "attendance"),
+            "ask": (af.view_ask(date(2026, 11, 15)), "attendance"), "pick": (af.view_pick(date(2026, 11, 15)), "attendance"),
+        }
+        for name, ((text, rows), parent) in screens.items():
+            blocks = slack.blocks(text, {"inline_keyboard": rows}, live=True)
+            ids = [b["block_id"] for b in blocks if b.get("block_id")]
+            assert len(ids) == len(set(ids)), (name, ids)                       # no block id twice
+            actions = [e["action_id"] for b in blocks if b["type"] == "actions" for e in b["elements"]]
+            assert len(actions) == len(set(actions)), (name, actions)
+            nav = [b for b in blocks if b.get("block_id") == "nav"]
+            assert len(nav) == 1 and blocks[-1] is nav[0], (name, [b["type"] for b in blocks])
+            labels = [e["text"]["text"] for e in nav[0]["elements"]]
+            assert labels[-1].endswith("Main Menu"), (name, labels)             # Main Menu on every screen
+            assert (len(labels) == 1) == (parent == "main"), (name, labels)      # Back too, unless the screen before is the menu
+            if len(blocks) > 2:
+                assert blocks[-2]["type"] == "divider", (name, [b["type"] for b in blocks])   # a line above the way back
+            box = slack.boxed(blocks)
+            assert len(box) == 1 and len(box[0]["child_blocks"]) <= slack.BOX_CHILDREN, name   # one box, nothing outside it
+    finally:
+        slack.mode = keep
+
+
+def test_the_attendance_question_fits_the_day():
+    """A day of online lectures is not asked 'did you go to university'; one course is attended or missed — never 'some'."""
+    from datetime import date
+    from uninotifier import attendance
+    from uninotifier.bot import attendance_flow as af
+    sched = {"days": {
+        "sun": [{"start": "09:00", "end": "10:00", "course": "A", "mode": "In-Person"},
+                {"start": "10:00", "end": "11:00", "course": "B", "mode": "In-Person"}],
+        "mon": [{"start": "09:00", "end": "10:00", "course": "C", "mode": "Online"},
+                {"start": "10:00", "end": "11:00", "course": "D", "mode": "Online"}],
+        "tue": [{"start": "09:00", "end": "10:00", "course": "E", "mode": "Online"},
+                {"start": "10:00", "end": "11:00", "course": "E", "mode": "Activity"}],
+        "wed": [{"start": "09:00", "end": "10:00", "course": "F", "mode": "In-Person"}]}}
+    keep = attendance.load_schedule if hasattr(attendance, "load_schedule") else None
+    from uninotifier import schedule
+    keep = schedule.load_schedule
+    try:
+        schedule.load_schedule = lambda: sched
+
+        def ask(day):
+            text, rows = af.view_ask(day)
+            return text, [b["text"] for row in rows for b in row]
+
+        text, labels = ask(date(2026, 11, 15))                                    # Sunday: two lectures on campus
+        assert "go to university" in text and labels[:3] == ["✅ Attended all", "🎯 Missed some", "❌ Didn't go"], labels
+        text, labels = ask(date(2026, 11, 16))                                    # Monday: two online lectures
+        assert "university" not in text and "online lectures" in text and "❌ Missed all" in labels and "online" in text.split("Did you")[0]
+        text, labels = ask(date(2026, 11, 17))                                    # Tuesday: one online lecture
+        assert "attend your online lecture" in text and "university" not in text
+        assert labels[:2] == ["✅ Attended", "❌ Absent"] and not [l for l in labels if "some" in l], labels
+        text, labels = ask(date(2026, 11, 18))                                    # Wednesday: one lecture on campus
+        assert "go to your lecture" in text and labels[:2] == ["✅ Attended", "❌ Absent"] and "🔙 Attendance" in labels
+        assert labels[-1] == "🏠 Main Menu"
+    finally:
+        schedule.load_schedule = keep

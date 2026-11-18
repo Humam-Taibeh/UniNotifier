@@ -39,7 +39,8 @@ def _clock(hhmm: str) -> str:
 
 
 def _course_lines(day: date) -> list[str]:
-    return [f"• {lec['course']} · {_clock(lec['start'])}–{_clock(lec['end'])}" for lec in attendance.classes_on(day)]
+    return [f"• {lec['course']} · {_clock(lec['start'])}–{_clock(lec['end'])}" + (" · online" if lec.get("mode") == "Online" else "")
+            for lec in attendance.classes_on(day)]
 
 
 def _course_text(i: int, course: str, kind: str, info: dict) -> str:
@@ -51,14 +52,22 @@ def _course_text(i: int, course: str, kind: str, info: dict) -> str:
 # ------------------------------------------------------------------ the question
 
 def view_ask(day: date) -> tuple[str, list]:
+    """The question fits the day: a day on campus asks whether you went to university, a day of online
+    lectures whether you attended; one course is attended or missed (no "some"); several can be missed in part."""
     stamp = day.isoformat()
-    lines = [f"🎒 *Attendance* — {_day_name(day)}", media.DIVIDER, *_course_lines(day), "",
-             "Did you go to university today?"]
-    return "\n".join(lines), [
-        [{"text": "✅ Attended", "callback_data": f"att:all:{stamp}"}],
-        [{"text": "🎯 Missed some", "callback_data": f"att:pick:{stamp}"}],
-        [{"text": "❌ Didn't go", "callback_data": f"att:none:{stamp}"}],
-        [MAIN]]
+    courses = attendance.courses_on(day)
+    campus = any(lec.get("mode") in attendance.CAMPUS_MODES for lec in attendance.classes_on(day))
+    if len(courses) == 1:
+        question = "Did you go to your lecture?" if campus else "Did you attend your online lecture?"
+        rows = [[{"text": "✅ Attended", "callback_data": f"att:all:{stamp}"},
+                 {"text": "❌ Absent", "callback_data": f"att:none:{stamp}"}]]
+    else:
+        question = "Did you go to university today?" if campus else "Did you attend your online lectures today?"
+        rows = [[{"text": "✅ Attended all", "callback_data": f"att:all:{stamp}"},
+                 {"text": "🎯 Missed some", "callback_data": f"att:pick:{stamp}"},
+                 {"text": "❌ Didn't go" if campus else "❌ Missed all", "callback_data": f"att:none:{stamp}"}]]
+    lines = [f"🎒 *Attendance* — {_day_name(day)}", media.DIVIDER, *_course_lines(day), "", question]
+    return "\n".join(lines), [*rows, [ATTENDANCE, MAIN]]
 
 
 def view_pick(day: date) -> tuple[str, list]:

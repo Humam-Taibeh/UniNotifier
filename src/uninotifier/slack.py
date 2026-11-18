@@ -20,6 +20,7 @@ with it, slackbot.py gives the whole bot real buttons and the Home page.
 """
 
 import html
+import itertools
 import json
 import logging
 import re
@@ -259,17 +260,18 @@ def buttons(reply_markup, prefix: str = "") -> list[dict]:
                 groups.append((group, []))
             groups[-1][1].append(element)
     out: list[dict] = []
+    numbers = itertools.count()                          # every row has an id of its own (Slack refuses a message that repeats one)
     for group, content in groups:
         if out:
             out.append({"type": "divider"})              # a group of buttons never runs into the one before it
         size = 25 if group else ROW_SIZE                 # a named group is one block: Slack wraps it by the width
-        out += [{"type": "actions", "block_id": f"{prefix}row{len(out)}", "elements": content[n:n + size]}
-                for n in range(0, len(content), size)]
+        for n in range(0, len(content), size):
+            out.append({"type": "actions", "block_id": f"{prefix}row{next(numbers)}", "elements": content[n:n + size]})
     if cards:
         out[:0] = _row_lines(cards)
-    if nav and out and out[-1]["type"] == "actions" and len(out[-1]["elements"]) + len(nav) <= 25:
-        out[-1] = {**out[-1], "elements": out[-1]["elements"] + nav}      # the way back stands beside the buttons, in the same row
-    elif nav:
+    if nav:                                              # the way back — Back and Main Menu — under a line of its own
+        if out:
+            out.append({"type": "divider"})
         out.append({"type": "actions", "block_id": f"{prefix}nav" if prefix else "nav", "elements": nav[:25]})
     return out
 
@@ -328,7 +330,7 @@ def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | Non
 
     def flush_small():
         if smalls:
-            out.append({"type": "context", "block_id": "small",
+            out.append({"type": "context", "block_id": f"small{len(out)}",
                         "elements": [{"type": "mrkdwn", "text": mrkdwn("\n".join(smalls))[:2900]}]})
             smalls.clear()
 
@@ -397,7 +399,7 @@ def _fold_small(children: list[dict]) -> list[dict]:
     out: list[dict] = []
     for block in children:
         last = out[-1] if out else None
-        if block.get("block_id") == "small" and last and last["type"] == "section" and "text" in last:
+        if str(block.get("block_id", "")).startswith("small") and last and last["type"] == "section" and "text" in last:
             out[-1] = {"type": "section", "text": {"type": "mrkdwn", "text":
                        last["text"]["text"] + "\n" + block["elements"][0]["text"]}}
         else:
@@ -673,7 +675,7 @@ def framed(card: list[dict], colour: str) -> dict:
 
 def refused_layout(error: Exception) -> bool:
     """Slack refused the look of a message (its blocks), not the message."""
-    return "block" in str(error) or "invalid_arguments" in str(error)
+    return any(word in str(error) for word in ("block", "attachment", "invalid_arguments"))
 
 
 _BOX_HEADERS = True                 # does this Slack take a header block inside a box? (found out the first time)
