@@ -457,7 +457,7 @@ def test_gpa_screens_and_flow():
         hub_text = bot.view_academic()[0]
         assert "This Term" not in hub_text and "Course Adjustments" not in hub_text.split("Grade Needed")[0]
         record = [b["callback_data"] for row in bot.view_record()[1] for b in row if "callback_data" in b]
-        assert record == ["portal:transcript", "portal:balance", "reg:home", "guest:start", "menu", "menu"], "no combined button"
+        assert record == ["portal:transcript", "portal:balance", "reg:fresh", "guest:start", "menu", "menu"], "no combined button"
         record_text = bot.view_record()[0]
         assert "verification code" not in record_text and "re-syncs" not in record_text
         assert {"gpa", "need", "grades", "transcript", "balance"} <= {c for c, _ in bot.COMMANDS}

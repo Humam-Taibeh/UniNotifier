@@ -1374,10 +1374,11 @@ def test_slack_lists_and_headings_have_room_and_never_hide_a_button():
         slack.mode = lambda: "slack"
         text, rows = views.view_tasks()
         blocks = slack.blocks(text, {"inline_keyboard": rows}, live=True)
-        assert blocks[0]["type"] == "header" and blocks[1].get("block_id") == "subtitle", [b["type"] for b in blocks]
-        assert "none ahead" in blocks[1]["elements"][0]["text"]                      # said once, in the title area
-        assert [b["type"] for b in blocks[2:4]] == ["header", "section"] and "Your reminders" in blocks[2]["text"]["text"]
-        assert not [b for b in blocks if b["type"] == "header" and "Course tasks" in b["text"]["text"]]   # no heading beside "Your reminders"
+        kinds = [b["type"] for b in blocks]
+        assert kinds[:3] == ["header", "header", "context"], kinds                   # title, "Course tasks", its small line
+        assert "Course tasks" in blocks[1]["text"]["text"] and "none ahead" in blocks[2]["elements"][0]["text"]
+        assert blocks[2].get("block_id", "").startswith("small")                      # small, inside the heading — not under the title
+        assert "Your reminders" in next(b for b in blocks[3:] if b["type"] == "header")["text"]["text"]
         # Course Adjustments: eight courses, each on its own line; nothing hidden, nothing outside the box
         gpa.STATE_FILE = Path(tempfile.mkdtemp()) / "gpa.json"
         names = [f"Course {n}" for n in range(1, 9)]
@@ -1405,7 +1406,7 @@ def test_a_portal_button_shows_reading_on_the_screen_it_was_pressed_on():
     seen = []
     keep = (portal_flow.start_portal, chat.answer, chat.is_double_tap)
     try:
-        portal_flow.start_portal = lambda section, message_id=None: seen.append((section, message_id)) or True
+        portal_flow.start_portal = lambda section, message_id=None, saved=False: seen.append((section, message_id)) or True
         chat.answer = lambda *a, **k: True
         chat.is_double_tap = lambda *a: False
         app.handle_callback({"id": "1", "data": "portal:transcript", "message": {"message_id": 12}})
@@ -1429,3 +1430,86 @@ def test_the_transcript_summary_is_a_grid_in_the_order_you_read_it():
     blocks = slack.blocks("📜 *Transcript*\n" + "\n".join(head + rest), None, live=False)
     fields = [b for b in blocks if b["type"] == "section" and "fields" in b]
     assert len(fields) == 2 and len(fields[0]["fields"]) == 2 and len(fields[1]["fields"]) == 8     # a gap under GPA and status
+
+
+def test_in_slack_the_screen_you_leave_is_removed_but_a_notification_stays():
+    """A button that opens a new screen below takes the screen it was pressed on away (no old controls left above);
+    the buttons of a notification (Done, Snooze, Add to Reminders) never remove it; Telegram keeps everything."""
+    from uninotifier import slack, slackbot
+    from uninotifier.bot import app, chat
+    retired = []
+    keep = (slack.mode, app.route_callback, chat.retire, chat.answer, chat.is_double_tap)
+    try:
+        chat.retire = lambda mid: retired.append(mid)
+        chat.answer = lambda *a, **k: True
+        chat.is_double_tap = lambda *a: False
+
+        def opens_a_screen(cb, action, message_id):
+            slackbot.PRESS["moved"] = True                   # (slackbot.send does this when a screen with buttons is sent)
+
+        app.route_callback = opens_a_screen
+        for mode, action, expected in (("slack", "rec:taken", [31]), ("slack", "done:5:1", []), ("slack", "rem:s:key", []),
+                                       ("slack", "rem:z:3", []), ("telegram", "rec:taken", [])):
+            slack.mode = lambda mode=mode: mode
+            retired.clear()
+            app.handle_callback({"id": "1", "data": action, "message": {"message_id": 31}})
+            assert retired == expected, (mode, action, retired)
+            assert slackbot.PRESS == {"id": None, "moved": False}
+        app.route_callback = lambda *a: None                 # edited in place: nothing was opened below, nothing is removed
+        slack.mode = lambda: "slack"
+        retired.clear()
+        app.handle_callback({"id": "1", "data": "gpa:c:1", "message": {"message_id": 31}})
+        assert retired == []
+    finally:
+        slack.mode, app.route_callback, chat.retire, chat.answer, chat.is_double_tap = keep
+
+
+def test_the_registration_plan_picks_courses_from_one_drop_down_and_shows_every_button():
+    """Choose Courses Myself in Slack: one drop-down listing every course whole (a button per course was cut and wrapped), the
+    ticked ones come back as one answer; the plan screen has no 'Update My Plan', no summer switch, no hidden buttons."""
+    import json
+    from uninotifier import slack, slackbot
+
+    rows = [[{"text": "Choose courses", "callback_data": "reg:pick", "stack": True,
+              "multi": {"prefix": "reg:set", "placeholder": "Choose your courses",
+                        "options": [("تراكيب البيانات · 3h", "0142210"), ("Operating Systems · 3h", "0142211")], "initial": ["0142210"]}}],
+            [{"text": "🔙 Registration Plan", "callback_data": "reg:home"}, {"text": "🏠 Main Menu", "callback_data": "menu"}]]
+    blocks = slack.buttons({"inline_keyboard": rows}, width=slack.ROW_WIDTH)
+    select = blocks[0]["elements"][0]
+    assert blocks[0]["type"] == "actions" and select["type"] == "multi_static_select" and select["action_id"] == "msel:reg:set"
+    assert [o["text"]["text"] for o in select["options"]] == ["تراكيب البيانات · 3h", "Operating Systems · 3h"]
+    assert [o["value"] for o in select["initial_options"]] == ["0142210"]
+    press = slackbot.from_press({"type": "block_actions", "user": {"id": "U1"}, "container": {"message_ts": "1.1"},
+                                 "actions": [{"type": "multi_static_select", "action_id": "msel:reg:set", "action_ts": "5.5",
+                                              "selected_options": [{"value": "0142210"}, {"value": "0142211"}]}]})
+    assert press and press[0]["callback_query"]["data"] == "reg:set:0142210,0142211", press
+    none = slackbot.from_press({"type": "block_actions", "user": {"id": "U1"}, "container": {"message_ts": "1.1"},
+                                "actions": [{"type": "multi_static_select", "action_id": "msel:reg:set", "action_ts": "5.6",
+                                             "selected_options": []}]})
+    assert none[0]["callback_query"]["data"] == "reg:set:"                       # everything un-ticked is an answer too
+    assert json.dumps(blocks)                                                     # and it serialises
+
+
+def test_back_from_the_lists_returns_to_the_transcript_without_reading_the_portal():
+    """Courses Taken / Remaining Courses (Slack): Back is the transcript they came from — the saved copy at once, nothing read,
+    no time told — and the list it was pressed on goes."""
+    from uninotifier import portal, slack
+    from uninotifier.bot import chat, portal_flow
+    log = []
+    keep = (slack.mode, portal_flow.load_cached, portal_flow.send_cached, portal_flow.settle, chat.retire,
+            portal.fetch_many, portal_flow._portal_lock)
+    try:
+        slack.mode = lambda: "slack"
+        saved = portal.Result("transcript", True, b"png", [], {}, [], [])
+        portal_flow.load_cached = lambda section: (saved, 1.7e9)
+        portal_flow.send_cached = lambda result, when: log.append(("sent", result.section, when))
+        portal_flow.settle = lambda section: log.append(("settle", section))
+        chat.retire = lambda mid: log.append(("retire", mid))
+        portal.fetch_many = lambda *a, **k: log.append("READ THE PORTAL") or {}
+        portal_flow._portal_lock = type("L", (), {"release": lambda self: log.append("released")})()
+        portal_flow.run_portal("transcript", 77, saved=True)
+        assert log == [("sent", "transcript", ""), ("settle", "transcript"), ("retire", 77), "released"], log
+        assert portal_flow.TRANSCRIPT_ROW[0]["callback_data"] == "portal:transcript:saved" and portal_flow.TRANSCRIPT_ROW[1]["text"] == "🏠 Main Menu"
+    finally:
+        (slack.mode, portal_flow.load_cached, portal_flow.send_cached, portal_flow.settle, chat.retire,
+         portal.fetch_many, portal_flow._portal_lock) = keep

@@ -30,9 +30,10 @@ from uninotifier import cambridge          # temporary (this semester): remove w
 from uninotifier import reminders
 from uninotifier import schedule
 from uninotifier import slack
+from uninotifier import slackbot
 from uninotifier import tasks
 from uninotifier import telegram
-from uninotifier.bot import (attendance_flow, chat, checks, finals_flow, gpa_flow, guest_flow, portal_flow, registration_flow,
+from uninotifier.bot import (attendance_flow, balance_flow, chat, checks, finals_flow, gpa_flow, guest_flow, portal_flow, registration_flow,
                              reminder_flow, update_flow, views)
 
 log = logging.getLogger("uninotifier")
@@ -231,6 +232,10 @@ def handle_done_toggle(cb: dict, action: str) -> None:
         chat.answer(cb["id"], "⏳ Updating the portal…")
 
 
+# Buttons of a notification (Done, Snooze, Add to Reminders, a sign-in code): the notification stays where it is.
+NOTIFICATION_BUTTONS = ("done:", "rem:s:", "rem:z:", "rem:done:", "mfa")
+
+
 def handle_callback(cb: dict) -> None:
     """One button press. It is answered at once (toast), a double tap is ignored, and
     whatever route ran, the press is answered before this returns."""
@@ -239,7 +244,16 @@ def handle_callback(cb: dict) -> None:
     if chat.is_double_tap(message_id, action):
         chat.answer(cb["id"])
         return
-    route_callback(cb, action, message_id)
+    leaving = slack.mode() == "slack" and bool(message_id) and not action.startswith(NOTIFICATION_BUTTONS)
+    if leaving:
+        slackbot.PRESS.update(id=message_id, moved=False)
+    try:
+        route_callback(cb, action, message_id)
+    finally:
+        pressed, moved = slackbot.PRESS["id"], slackbot.PRESS["moved"]
+        slackbot.PRESS.update(id=None, moved=False)
+        if leaving and moved and pressed:             # the screen it opened is below: the one it was pressed on is gone
+            chat.retire(pressed)
     chat.answer(cb["id"])                  # a no-op when the route already answered; a raise skips it (update_failed answers)
 
 
@@ -294,7 +308,7 @@ def route_callback(cb: dict, action: str, message_id: int | None) -> None:
         return
     if action.startswith("portal:"):
         shown = None if chat.is_file_message(cb.get("message")) else message_id    # the pressed screen says "reading…" while it works
-        started = portal_flow.start_portal(action.split(":")[1], shown)
+        started = portal_flow.start_portal(action.split(":")[1], shown, saved=action.endswith(":saved"))
         chat.answer(cb["id"], "🏛️ Contacting the portal…" if started else "⏳ A portal request is already running")
         return
     if action == mfa.SMS_CALLBACK:
@@ -437,6 +451,7 @@ def main() -> None:
     heartbeat.beat("poll")
     threading.Thread(target=lecture_loop, name="lectures", daemon=True).start()
     threading.Thread(target=finals_flow.finals_loop, name="finals", daemon=True).start()
+    balance_flow.start()                                   # tells you when your tuition balance changes
     threading.Thread(target=attendance_flow.loop, name="attendance", daemon=True).start()   # "did you go today?"
     threading.Thread(target=pulse_loop, name="pulse", daemon=True).start()
     threading.Thread(target=probe.loop, name="probe", daemon=True).start()     # the 2-minute look at Moodle

@@ -13,6 +13,7 @@ import time
 from dataclasses import fields
 from pathlib import Path
 
+from uninotifier import balance_watch
 from uninotifier import degreeplan
 from uninotifier import failsafe
 from uninotifier import fileids
@@ -172,6 +173,10 @@ def record_text(kind: str, semesters: list[dict], plan: dict | None, overlay: di
     return "\n".join(["✅ *Courses Taken*", "", *body]).strip() if body else ""
 
 
+TRANSCRIPT_ROW = [{"text": "🔙 Transcript", "callback_data": "portal:transcript:saved"},
+                  {"text": "🏠 Main Menu", "callback_data": "menu"}]
+
+
 def handle_record_callback(cb: dict, action: str) -> None:
     """✅ Courses Taken / 📚 Remaining Courses under your transcript: answered from the transcript as it
     was last read (the message the button is on). The list ends with the other list and the way back."""
@@ -184,7 +189,8 @@ def handle_record_callback(cb: dict, action: str) -> None:
         return
     chat.answer(cb["id"])
     other = [b for b in record_buttons("rec", bool(data.get("plan"))) if b["callback_data"] != action]
-    notifier.send_long_message(chat.BOT_TOKEN, chat.CHAT_ID, text, rows=[r for r in (other, chat.RECORD_ROW) if r])
+    back = TRANSCRIPT_ROW if slack.mode() == "slack" else chat.RECORD_ROW      # Back is the transcript it came from
+    notifier.send_long_message(chat.BOT_TOKEN, chat.CHAT_ID, text, rows=[r for r in (other, back) if r])
     chat.leave_menu()
 
 
@@ -196,6 +202,8 @@ def apply_syncs(result: portal.Result) -> None:
             sync_base(f["base_cgpa"], f["base_hours"])
         if "retakes" in result.data:              # only a record that was read: never clear on a failed parse
             sync_retakes(result.data["retakes"])
+    if result.section == "balance" and result.found and result.figures.get("balance") is not None:
+        balance_watch.observe(result.figures["balance"])      # what you read yourself is not news later
     if result.section == "grades":
         lock_grades({r["code"]: r["mark"] for r in result.data.get("results", []) if r.get("mark") is not None})
 
@@ -454,6 +462,8 @@ def read_and_answer(section: str, message_id: int | None) -> None:
         chat.edit_view(message_id, failure, rows) if message_id else chat.send_view(failure, rows)
     elif answered:
         settle(section)
+        if message_id and slack.mode() == "slack":
+            chat.retire(message_id)                        # the "reading…" screen goes: the answer is below
     else:
         chat.send_view(*return_view(section))
 
@@ -480,12 +490,19 @@ def fresh_in_slack(section: str) -> bool:
     return section in SWR_SECTIONS and slack.mode() == "slack"
 
 
-def run_portal(section: str, message_id: int | None) -> None:
+def run_portal(section: str, message_id: int | None, saved: bool = False) -> None:
     """Worker thread: one on-demand portal request — from the saved answer when there is one
-    (Transcript, Balance), else read now."""
+    (Transcript, Balance), else read now. `saved`: the way back to a screen already read — the saved copy, at once,
+    nothing read and no time told."""
     _cancelled.clear()
     try:
-        cached = None if fresh_in_slack(section) else load_cached(section)
+        cached = load_cached(section) if saved else (None if fresh_in_slack(section) else load_cached(section))
+        if saved and cached:
+            send_cached(cached[0], "")
+            settle(section)
+            if message_id and slack.mode() == "slack":
+                chat.retire(message_id)                    # the list it was pressed on goes: the transcript is back
+            return
         if cached:
             answer_from_cache(section, *cached)
         else:
@@ -497,7 +514,42 @@ def run_portal(section: str, message_id: int | None) -> None:
         _portal_lock.release()
 
 
-def start_portal(section: str, message_id: int | None = None) -> bool:
+def refresh_plan(message_id: int | None) -> None:
+    """Worker thread: Registration Plan was opened — your study plan is read from the portal now (a "reading…"
+    screen with Back and Main Menu), the answer is kept, and the plan screen is shown, never a transcript. If the
+    portal cannot be read the plan as last read is shown."""
+    from uninotifier.bot import registration_flow            # it imports this module
+    _cancelled.clear()
+    try:
+        if message_id:
+            chat.edit_view(message_id, "🗓️ *Registration Plan*\n\n⏳ Reading your study plan from the portal… "
+                                       "usually about 10 seconds, up to a minute if the portal is slow",
+                           [chat.cancel_row("record")])
+        try:
+            for result in portal.fetch_many(["transcript"], ask_portal_code).values():
+                apply_syncs(result)
+                save_cached(result)
+        except Exception as e:                                # unavailable, a refused sign-in, a changed page
+            log.info("Registration plan: the portal was not read (%s) — the saved plan is shown", notifier.redact(str(e)))
+        if cancelled():
+            return
+        registration_flow.show(registration_flow.view_home(), message_id)
+    except Exception as e:
+        log.exception("Registration plan refresh failed")
+        failsafe.bug("bot:registration-plan", "The registration plan could not be opened", e)
+    finally:
+        _portal_lock.release()
+
+
+def start_plan(message_id: int | None) -> bool:
+    """False when a portal request is already running (the saved plan is shown instead)."""
+    if portal.credentials() is None or not _portal_lock.acquire(blocking=False):
+        return False
+    threading.Thread(target=refresh_plan, args=(message_id,), daemon=True).start()
+    return True
+
+
+def start_portal(section: str, message_id: int | None = None, saved: bool = False) -> bool:
     """False when nothing was started (already busy); a missing login is
     answered in chat."""
     if portal.credentials() is None:
@@ -505,5 +557,5 @@ def start_portal(section: str, message_id: int | None = None) -> bool:
         return True
     if not _portal_lock.acquire(blocking=False):
         return False
-    threading.Thread(target=run_portal, args=(section, message_id), daemon=True).start()
+    threading.Thread(target=run_portal, args=(section, message_id, saved), daemon=True).start()
     return True

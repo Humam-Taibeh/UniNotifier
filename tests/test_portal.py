@@ -52,7 +52,7 @@ def test_portal_parsers():
     assert "In Progress" in lines and "✅ *88*" in lines and "🔁 *35*" in lines and "average 76 · cumulative 71.3" in lines
     assert lines.index("In Progress") < lines.index("Second semester 2025/2026"), "the semester in progress comes first"
     assert "⏳ \u2068Algebra\u2069 · 3h" in lines, "an in-progress course shows ⏳, its name isolated from its neighbours"
-    assert lines.rstrip().endswith("⏳ in progress_"), "a one-line legend closes the blocks"
+    assert "in progress_" not in lines and not lines.rstrip().endswith("_"), "no legend closes the blocks"
     assert "Second semester 2024/2025" not in lines, "an empty semester is skipped"
     assert portal_pages.english_term("الفصل الصيفي 2023/2024 20233") == "Summer semester 2023/2024"
 
@@ -430,7 +430,7 @@ def test_registration_plan():
     listed = registration.open_lines(advice)
     assert "🔁 *Retake first*" in listed and "🎯 *Major · Elective* — choose 3 hrs" in listed
     assert not any("elective ·" in line for line in listed), "the heading says what they are: not repeated on every line"
-    assert "⛔ *Not yet:* 7 hrs · 4 courses" in registration.overview_lines(advice, "x")
+    assert "⛔ *Not yet* — 7 hrs · 4 courses" in registration.overview_lines(advice, "x")
 
     # your own choice: the hours, and what the rules say
     mine = registration.check(advice, ["0900212", "0900331", "0900332", "0900313"])
@@ -484,12 +484,13 @@ def test_registration_plan():
         portal_flow.load_cached = lambda section: (result, 0.0)
         registration_flow._kind = None
         text, rows = registration_flow.view_home()
-        assert "Registration Plan* — Second semester 2030/2031" in text and "Left to take:* 22 hrs" in text
+        assert "Registration Plan* — Second semester 2030/2031" in text and "Left to take* — 22 hrs" in text
         assert [b["callback_data"] for b in rows[0]] == ["reg:h:12", "reg:h:15", "reg:h:18", "reg:h:21"]
-        assert rows[1][0]["callback_data"] == "reg:pick" and rows[-2][1]["callback_data"] == "portal:transcript"
-        assert rows[-1] == chat.RECORD_ROW and "open with the portal's registration period" in text
-        assert "Your plan as read from the portal" in text and "Update My Plan" in text, "read long ago: said"
-        assert "Update My Plan" not in registration_flow.read_line(1000.0, now=1500.0)
+        assert rows[1][0]["callback_data"] == "reg:pick" and [b["callback_data"] for b in rows[-2]] == ["reg:open", "reg:held"]
+        assert rows[-1] == chat.RECORD_ROW and not any("reg:k:" in b["callback_data"] or b["callback_data"] == "portal:transcript" for r in rows for b in r)
+        assert "open with the portal's registration period" not in text and "Your plan as read" not in text and "Update My Plan" not in text
+        assert "Regular term* — 12–18 hrs" in text and text.splitlines()[-1].startswith("✨ *Suggest my courses*"), text    # the hours are last
+        assert text.index("Not yet*") < text.index("Regular term*") < text.index("Suggest my courses")
         suggested, rows = registration_flow.view_screen("h:12")
         assert "✨ *Suggested: 12 hrs*" in suggested and "*Total:* 12 hrs" in suggested and rows[0][0]["callback_data"] == "reg:pick"
         # ✋ starts from the suggestion; a tap takes a course out or adds one; every open course is a button
@@ -627,7 +628,7 @@ def test_transcript_layout():
     text = "\n".join(transcript.blocks(sems))
     order = [text.index(m) for m in ("In Progress", "Second semester 2025/2026", "First semester 2024/2025")]
     assert order == sorted(order), "the semester in progress first"
-    assert text.startswith("⏳ *First semester 2026/2027* · In Progress")
+    assert text.startswith("📅 *First semester 2026/2027* · In Progress")
     assert "📅 *Second semester 2025/2026* · average 76 · cumulative 71.3" in text
     for fragment in ("✅ *88* ·", "✅ *74* ·", "🔁 *35* · \u2068جبر خطي (1)\u2069 · 3h", "🔁 *35* · \u2068قواعد البيانات\u2069 · 3h",
                      "❌ *30* · \u2068تراكيب البيانات\u2069 · 3h", "✅ *95* ·"):
@@ -639,7 +640,7 @@ def test_transcript_layout():
         if "· 3h" in line or "· 2h" in line:
             assert line.startswith("\u200e") and "\u2068" in line and "\u2069" in line, repr(line)
     assert "Big\\_Data \\*2\\*" in text and _legacy_markdown_ok(text), "Markdown characters in a name are escaped"
-    assert text.rstrip().endswith("⏳ in progress_") and transcript.blocks([]) == []
+    assert "in progress_" not in text and transcript.blocks([]) == []        # no legend under the lists
     # marks the results page already shows for the term in progress
     published = "\n".join(transcript.blocks(sems, {"0135220": 74.0, "0101221": 40.0}))
     assert "✅ *74* · \u2068قواعد البيانات\u2069" in published and "❌ *40* · \u2068جبر خطي (1)\u2069" in published
@@ -688,7 +689,7 @@ def test_portal_answer_is_one_message():
             and len(caption) < 1024
         assert rows[0] == [{"text": "✅ Courses Taken", "callback_data": "rec:taken"}], "no plan was read: no Remaining Courses"
         taken = bot.record_text("taken", sems, None)
-        assert taken.startswith("✅ *Courses Taken*\n\n⏳ *First semester 2026/2027* · In Progress")
+        assert taken.startswith("✅ *Courses Taken*\n\n📅 *First semester 2026/2027* · In Progress")
         assert "details" not in taken and "Retrieved" not in taken and bot.record_text("left", sems, None) == ""
 
         # a balance: everything in the one message
@@ -1658,3 +1659,56 @@ def test_portal_answers_from_the_saved_copy():
         (bot.notifier.send_png_file, bot.notifier.send_message, bot.notifier.send_long_message,
          bot.notifier.send_document, bot.notifier.upload, bot.send_view, bot.edit_view, bot.api,
          bot.portal.fetch_many, bot.sync_base, bot.sync_retakes, bot.lock_grades) = keep
+
+
+def test_the_balance_watch_tells_you_only_when_the_balance_changed():
+    """First look: remembered, nothing said. Same balance: nothing. A balance you read yourself is remembered too (never news
+    later). Changed: the old and the new amount, what it means, with the screenshot. An unreadable look says nothing and waits."""
+    import importlib
+    import tempfile
+    from pathlib import Path
+    from uninotifier import balance_watch, maintenance, notifier, portal
+    balance_flow = importlib.import_module("uninotifier.bot.balance_flow")
+    sent = []
+    keep = (balance_watch.STATE_FILE, portal.fetch_many, notifier.send_png_file, notifier.send_message)
+    try:
+        balance_watch.STATE_FILE = Path(tempfile.mkdtemp()) / "balance_watch.json"
+        notifier.send_png_file = lambda token, chat_id, png, name, caption="", rows=None, **k: sent.append(("png", caption, rows)) or True
+        notifier.send_message = lambda token, chat_id, text, rows=None, **k: sent.append(("text", text, rows)) or True
+
+        def reads(total, png=b"PNG"):
+            portal.fetch_many = lambda sections, ask: {"balance": portal.Result("balance", True, png, [], {"balance": total}, [], [])}
+
+        assert balance_watch.due(now=1e9) and balance_watch.load() == {}
+        reads(1700.0)
+        assert balance_flow.check_once() is False and sent == [] and balance_watch.load()["total"] == 1700.0     # remembered
+        assert not balance_watch.due(now=balance_watch.load()["checked"] + 60) and balance_watch.due(now=balance_watch.load()["checked"] + 3601)
+        assert balance_flow.check_once() is False and sent == []                                             # unchanged: silence
+        reads(1500.0)
+        assert balance_flow.check_once() is True and len(sent) == 1
+        kind, text, rows = sent[0]
+        assert kind == "png" and "*Before:* 1,700 JD" in text and "*Now:* 1,500 JD" in text and "Down by 200 JD" in text
+        assert [b["callback_data"] for r in rows for b in r][0] == "portal:balance" and balance_watch.load()["total"] == 1500.0
+        sent.clear()
+        reads(1900.0)
+        assert balance_flow.check_once() is True and "Up by 400 JD" in sent[0][1] and "new fee" in sent[0][1]
+        sent.clear()
+        reads(1900.0, png=None)                                                                              # no screenshot: the text alone
+        balance_watch.observe(1900.0, checked=False)
+        reads(1850.0, png=None)
+        assert balance_flow.check_once() is True and sent[0][0] == "text"
+        reads(1850.0)                                                                                        # what you read yourself is not news
+        portal_flow = importlib.import_module("uninotifier.bot.portal_flow")
+        portal_flow.apply_syncs(portal.Result("balance", True, b"P", [], {"balance": 1800.0}, [], []))
+        sent.clear()
+        reads(1800.0)
+        assert balance_flow.check_once() is False and sent == [] and balance_watch.load()["total"] == 1800.0
+        # the portal could not be read: nothing is said, the next look waits
+        def down(sections, ask):
+            raise maintenance.PortalUnavailable("portal", "down")
+        portal.fetch_many = down
+        before = balance_watch.load()["checked"]
+        assert balance_flow.check_once() is False and sent == [] and balance_watch.load()["total"] == 1800.0
+        assert balance_watch.load()["checked"] >= before
+    finally:
+        balance_watch.STATE_FILE, portal.fetch_many, notifier.send_png_file, notifier.send_message = keep

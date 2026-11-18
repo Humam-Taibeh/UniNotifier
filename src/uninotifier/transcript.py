@@ -19,7 +19,7 @@ from uninotifier import degreeplan, gpa, gradebook
 from uninotifier.notifier import escape_md
 
 LRM, FSI, PDI = "\u200e", "\u2068", "\u2069"
-LEGEND = "_✅ passed · ❌ failed · 🔁 replaced by a later retake · ⏳ in progress_"
+
 
 
 def isolated(text: str) -> str:
@@ -152,7 +152,7 @@ def blocks(semesters: list[dict], overlay: dict[str, float] | None = None) -> li
         if not sem["courses"]:
             continue
         if index == 0 and any(c["passed"] is None for c in sem["courses"]):
-            lines.append(f"⏳ *{escape_md(sem['term'])}* · In Progress")
+            lines.append(f"📅 *{escape_md(sem['term'])}* · In Progress")      # every semester title has the calendar
             marks = overlay
         else:
             stats = " · ".join(x for x in (
@@ -162,6 +162,6 @@ def blocks(semesters: list[dict], overlay: dict[str, float] | None = None) -> li
             marks = None
         lines += [course_line(_replaced(semesters, index, c), marks) for c in sem["courses"]]
         lines.append("")
-    if lines:
-        lines.append(LEGEND)
+    if lines and lines[-1] == "":
+        lines.pop()                                  # no legend under the lists: the marks speak for themselves
     return lines

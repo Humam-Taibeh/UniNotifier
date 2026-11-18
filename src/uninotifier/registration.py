@@ -314,12 +314,12 @@ def _line(entry: dict, number: int | None = None, kind: bool = True) -> str:
 
 def allowed_line(advice: dict) -> str:
     if advice["kind"] == SUMMER:
-        return (f"📏 *Summer term:* up to {SUMMER_HOURS[-1]} hrs"
+        return (f"📏 *Summer term* — up to {SUMMER_HOURS[-1]} hrs"
                 + (f" · {SUMMER_TOP} now, as it is your last term" if advice["graduating"]
                    else f" · {SUMMER_TOP} only in your last term at the university"))
     if advice["graduating"]:
-        return f"📏 *Graduation term:* up to {REGULAR_TOP} hrs, and fewer than {REGULAR_HOURS[0]} is allowed"
-    return (f"📏 *Regular term:* {REGULAR_HOURS[0]}–{REGULAR_HOURS[-1]} hrs · {REGULAR_TOP} only with an "
+        return f"📏 *Graduation term* — up to {REGULAR_TOP} hrs, and fewer than {REGULAR_HOURS[0]} is allowed"
+    return (f"📏 *Regular term* — {REGULAR_HOURS[0]}–{REGULAR_HOURS[-1]} hrs · {REGULAR_TOP} only with an "
             "excellent CGPA or in your graduation term")
 
 
@@ -330,14 +330,13 @@ def overview_lines(advice: dict, term: str) -> list[str]:
     lines = [f"🗓️ *Registration Plan* — {escape_md(term)}"]
     if not advice["left"]:
         return lines + ["", "🎓 *Nothing is left on your plan* once this term is passed."]
-    left = f"🏁 *Left to take:* {_n(advice['left'])} hrs"
+    left = f"🏁 *Left to take* — {_n(advice['left'])} hrs"
     if advice["term_courses"]:
         left += f" — this term's {_count(advice['term_courses'], 'course')} counted as passed"
-    lines += [left, f"✅ *Open to you:* {_n(advice['open_hours'])} hrs · {_count(len(can), 'course')}",
-              f"⛔ *Not yet:* {_n(advice['held_hours'])} hrs · {_count(len(entries) - len(can), 'course')}",
-              allowed_line(advice)]
+    lines += [left, f"✅ *Open to you* — {_n(advice['open_hours'])} hrs · {_count(len(can), 'course')}",
+              f"⛔ *Not yet* — {_n(advice['held_hours'])} hrs · {_count(len(entries) - len(can), 'course')}"]      # one under the other
     if advice["graduating"]:
-        lines.append("🎓 *This can be your graduation term:* everything left fits in it.")
+        lines.append("🎓 *This can be your graduation term* — everything left fits in it.")
     return lines
 
 

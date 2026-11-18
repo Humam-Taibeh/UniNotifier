@@ -16,6 +16,7 @@ import time
 from uninotifier import media
 from uninotifier import notifier
 from uninotifier import registration
+from uninotifier import slack
 from uninotifier.bot import chat, portal_flow
 
 log = logging.getLogger("uninotifier")
@@ -76,17 +77,11 @@ def view_home() -> tuple[str, list]:
     lines.insert(1, media.DIVIDER)
     rows = []
     if advice["left"]:
-        lines += ["", "✨ *Suggest my courses* — choose the hours:"]
+        lines += ["", registration.allowed_line(advice), "", "✨ *Suggest my courses* — choose the hours:"]     # the hours are the last thing, the buttons under them
         rows.append([{"text": text, "callback_data": f"reg:h:{hours:g}"} for hours, text in registration.options(advice)])
         rows.append([{"text": "✋ Choose Courses Myself", "callback_data": "reg:pick"}])
         rows.append([{"text": "✅ What I Can Take", "callback_data": "reg:open"},
                      {"text": "⛔ Not Yet — Why", "callback_data": "reg:held"}])
-    other = registration.SUMMER if kind == registration.REGULAR else registration.REGULAR
-    rows.append([{"text": "🔁 Plan the Summer Term Instead" if other == registration.SUMMER
-                  else "🔁 Plan the Regular Term Instead", "callback_data": f"reg:k:{other}"},
-                 {"text": "🔄 Update My Plan", "callback_data": "portal:transcript"}])
-    lines += ["", "🔒 Sections, days and registering from here open with the portal's registration period.",
-              read_line(at)]
     return "\n".join(lines), rows + [chat.RECORD_ROW]
 
 
@@ -99,9 +94,14 @@ def view_pick(advice: dict, term: str) -> tuple[str, list]:
     open_entries = [e for e in advice["entries"] if e["state"] != "blocked"]
     codes = {e["course"]["code"] for e in open_entries}
     _chosen[:] = [code for code in _chosen if code in codes]          # a plan that changed: only what is still open
-    rows = [[{"text": f"{'✅' if e['course']['code'] in _chosen else '▫️'} {_short(e['course']['name'])} · "
-                      f"{e['course']['hours']:g}h", "callback_data": f"reg:t:{e['course']['code']}"}]
-            for e in open_entries]
+    if slack.mode() == "slack":                     # one drop-down with every course whole, ticked as you choose
+        options = [(f"{e['course']['name']} · {e['course']['hours']:g}h", e["course"]["code"]) for e in open_entries]
+        rows = [[{"text": "Choose courses", "callback_data": "reg:pick", "stack": True,
+                  "multi": {"prefix": "reg:set", "placeholder": "Choose your courses", "options": options, "initial": list(_chosen)}}]]
+    else:
+        rows = [[{"text": f"{'✅' if e['course']['code'] in _chosen else '▫️'} {_short(e['course']['name'])} · "
+                          f"{e['course']['hours']:g}h", "callback_data": f"reg:t:{e['course']['code']}"}]
+                for e in open_entries]
     if _chosen:
         rows.append([{"text": "🧹 Clear My Choice", "callback_data": "reg:clear"}])
     return "\n".join(registration.choice_lines(advice, _chosen, term)), rows + [HOME_ROW]
@@ -124,6 +124,10 @@ def view_screen(what: str) -> tuple[str, list]:
         _chosen[:] = [e["course"]["code"] for e in registration.propose(advice, hours)["entries"]]
         return ("\n".join(registration.proposal_lines(advice, hours, term)),
                 [[{"text": "✋ Change These Courses", "callback_data": "reg:pick"}], HOME_ROW])
+    if what.startswith("set:"):                     # the drop-down: the whole choice at once
+        picked = [c for c in what[4:].split(",") if c]
+        _chosen[:] = [e["course"]["code"] for e in advice["entries"] if e["state"] != "blocked" and e["course"]["code"] in picked]
+        return view_pick(advice, term)
     if what.startswith("t:"):
         code = what[2:]
         _chosen.remove(code) if code in _chosen else _chosen.append(code)
@@ -154,6 +158,10 @@ def handle_callback(cb: dict, action: str, message_id: int | None) -> None:
     global _kind
     chat.answer(cb["id"])
     what = action.partition(":")[2]
+    if what == "fresh":                              # opened from the record: the plan is read from the portal now, then shown
+        if not portal_flow.start_plan(None if chat.is_file_message(cb.get("message")) else message_id):
+            show(view_home(), message_id)            # a portal request is already running: what was last read
+        return
     if chat.is_file_message(cb.get("message")):     # pressed under a file: the screen opens below it
         message_id = None
     if what.startswith("k:"):

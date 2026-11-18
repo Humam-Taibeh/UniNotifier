@@ -263,6 +263,17 @@ def buttons(reply_markup, prefix: str = "", width: int | None = None) -> list[di
         for c, button in enumerate(row[:25]):
             label = str(button.get("text") or "·")
             element = {"type": "button", "text": {"type": "plain_text", "text": label[:75], "emoji": True}}
+            if button.get("multi"):                        # a drop-down to tick several things: every name whole, in the list
+                info = button["multi"]
+                options = [{"text": {"type": "plain_text", "text": str(t)[:75], "emoji": True}, "value": str(v)[:150]}
+                           for t, v in info["options"][:100]]
+                element = {"type": "multi_static_select", "action_id": f"msel:{info['prefix']}", "options": options,
+                           "placeholder": {"type": "plain_text", "text": info.get("placeholder", "Choose"), "emoji": True}}
+                chosen = [o for o in options if o["value"] in {str(x) for x in info.get("initial", [])}]
+                if chosen:
+                    element["initial_options"] = chosen
+                mine.append(element)
+                continue
             if button.get("url"):
                 element.update(url=str(button["url"])[:3000], action_id=f"{prefix}u{r}_{c}")
             elif button.get("callback_data"):
@@ -494,6 +505,9 @@ def boxed(card: list[dict], title: str = HOME_TITLE, flat: bool = False) -> list
 
     if over():                                             # too many for a box: the lines between parts go first,
         children = [b for i, b in enumerate(children) if b["type"] != "divider" or above_buttons(i)]
+    if over() and _foldable(children):                     # then the line over the controls (the one over the way back stays):
+        children = [b for i, b in enumerate(children)      # an item's small details matter more than that line
+                    if not (b["type"] == "divider" and above_buttons(i) and children[i + 1].get("block_id") != "nav")]
     while over() and _foldable(children):                  # then the LAST items' small details join their lines, one at a time
         children = _fold_small(children)
     for kind in ("actions", "section"):

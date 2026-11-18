@@ -190,11 +190,16 @@ def _rows_json(markup) -> str:
 
 # ------------------------------------------------------------------ out: what the bot sends
 
+PRESS = {"id": None, "moved": False}     # the message a button was pressed on, and whether a new screen was sent below it
+
+
 def send(text: str, markup=None, files: list[tuple[str, bytes]] | None = None) -> int:
     """A card with its buttons. With files (a screenshot): the files first, the card with its buttons under them —
     the controls are on the message itself, never left above a picture. If the card cannot follow, the files are
     taken back, so a retry never leaves a picture twice. The card's number."""
     token, channel = _settings()
+    if PRESS["id"] is not None and slack.buttons(markup):
+        PRESS["moved"] = True                 # a screen with buttons opened below the one pressed: that one is taken away
     file_ids: list[str] = []
     if files:
         file_ids = slack.upload(token, channel, files).get("file_ids", [])
@@ -403,6 +408,9 @@ def from_press(payload: dict) -> list[dict]:
     sender, chat = _person(user)
     out = []
     for action in payload.get("actions") or []:
+        if action.get("type") == "multi_static_select":                  # several ticked: "<prefix>:<value>,<value>"
+            picked = ",".join(o.get("value", "") for o in action.get("selected_options") or [])
+            action = {**action, "value": f"{str(action.get('action_id', ''))[5:]}:{picked}"}
         value = action.get("value") or (action.get("selected_option") or {}).get("value")    # a button, or a drop-down's pick
         if action.get("url") or not value:
             continue                                      # a button that opens a page: Slack opens it
