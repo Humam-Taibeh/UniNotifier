@@ -1336,3 +1336,53 @@ def test_attendance_once_a_week_course_and_wording():
     for view in (flow.view_home(), flow.view_set(), flow.view_ask(__import__('datetime').date(2026, 11, 18)), flow.view_pick(__import__('datetime').date(2026, 11, 18))):
         labels = [b["text"] for row in view[1] for b in row]
         assert any(l.startswith("🏠") for l in labels) or view is None, labels
+
+
+def test_course_order_is_the_timetables_everywhere():
+    """One order for every list of courses — the timetable's (first lecture of the week first, Sunday on top) —
+    never alphabetical here and different there. Only Finals Watch lifts a published grade to the top."""
+    from uninotifier import attendance, finals, gpa, schedule
+    sched = {"course_codes": {"1": "Zulu", "2": "Mike", "3": "Alpha"}, "days": {
+        "tue": [{"start": "08:00", "end": "09:00", "course": "Alpha", "course_ar": "ar-Alpha", "mode": "In-Person"}],
+        "sun": [{"start": "11:00", "end": "12:00", "course": "Zulu", "course_ar": "ar-Zulu", "mode": "In-Person"},
+                {"start": "09:00", "end": "10:00", "course": "Mike", "course_ar": "ar-Mike", "mode": "In-Person"}]}}
+    keep = schedule.load_schedule
+    try:
+        schedule.load_schedule = lambda: sched
+        assert schedule.course_order(sched) == ["Mike", "Zulu", "Alpha"]
+        assert schedule.sort_courses(["Alpha", "Other", "Zulu", "Mike"]) == ["Mike", "Zulu", "Alpha", "Other"]
+        assert attendance.ordered(sched) == ["Mike", "Zulu", "Alpha"]
+        state = {"courses": {}}
+        assert gpa.sync_courses(state, ["Alpha", "Zulu", "Mike"]) == ["Mike", "Zulu", "Alpha"]      # Grade Needed, GPA
+        finals_state = {"term": "T", "published": 1, "total": 3, "courses": [
+            {"code": "2", "name": "m", "hours": 3, "mark": None}, {"code": "1", "name": "z", "hours": 3, "mark": None},
+            {"code": "3", "name": "a", "hours": 3, "mark": 80}]}
+        shown = [l for l in finals.grades_lines(finals_state)[1:]]
+        assert ["Alpha" in l for l in shown] == [True, False, False] and "Mike" in shown[1] and "Zulu" in shown[2], shown
+        released = finals.in_timetable_order(finals_state["courses"])
+        assert [c["code"] for c in released] == ["2", "1", "3"]
+    finally:
+        schedule.load_schedule = keep
+
+
+def test_slack_button_groups_never_run_into_each_other():
+    """A list of courses, then the controls, then the way back: three groups with a light line between them
+    (the controls were glued to the course buttons). The course count carries its credit hours."""
+    from uninotifier import gpa, gpa_ui, slack
+    from uninotifier.bot import views
+    gpa.STATE_FILE = Path(tempfile.mkdtemp()) / "gpa.json"          # an earlier test leaves its own gone
+    keep = slack.mode
+    try:
+        slack.mode = lambda: "slack"
+        text, rows = gpa_ui.view_home(["Alpha", "Mike", "Zulu"])
+        blocks = slack.buttons({"inline_keyboard": rows})
+        kinds = [b["type"] for b in blocks]
+        assert kinds == ["actions", "divider", "actions", "divider", "actions"], kinds
+        courses, tools, nav = (b["elements"] for b in blocks if b["type"] == "actions")
+        assert len(courses) == 3 and [e["text"]["text"] for e in tools] == ["⚙️ CGPA & Record Hours", "🎯 Grade Needed"]
+        assert nav[0]["text"]["text"].endswith("Main Menu")
+        slack.mode = lambda: "telegram"
+        assert [len(r) for r in gpa_ui.view_home(["Alpha", "Mike", "Zulu"])[1]] == [1, 1, 1, 2, 1]     # Telegram as it was
+    finally:
+        slack.mode = keep
+    assert "credit hours" in views.view_course_list()[0] or "credit hours" in views.view_courses()[0]

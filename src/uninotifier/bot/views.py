@@ -126,7 +126,7 @@ def view_tasks() -> tuple[str, list]:
         lines.append("🎉 No assignments or quizzes ahead.")
     for n, task in enumerate(upcoming, 1):
         lines += tasks.task_lines(n, task, now)
-    rows = tasks.open_buttons(upcoming)
+    rows = slack.grouped(tasks.open_buttons(upcoming), "items")
 
     mine = reminders.pending()
     lines += ["", media.DIVIDER, "🔔 *Your reminders*"]       # the course's own tasks, then yours: a line between them
@@ -145,15 +145,17 @@ def view_tasks() -> tuple[str, list]:
     # number the list gives the reminder (so it is renumbered with the list), and the reminder's own id
     # (so a screen that is a little old still opens the right one).
     pinned = [(n, r) for n, r in enumerate(shown, 1) if r.get("message_id")]
+    first_post = len(rows)
     for n, r in pinned[:VIEW_POST_BUTTONS]:
         if slack.mode() == "slack":          # Slack cannot quote a message, and the post is not in this chat: its page opens
             if r.get("url"):
                 rows.append([{"text": f"🌐 Open Post on Moodle ({n})", "url": r["url"]}])
             continue
         rows.append([{"text": f"🔗 View Original Post ({n})", "callback_data": f"rem:view:{r['id']}"}])
+    rows[first_post:] = slack.grouped(rows[first_post:], "items")        # the course's tasks and the posts: one group
     last = chat.load_last_run().get("finished")
     if last:
-        lines += ["", f"🕒 *Last Checked:* {notifier.audit_timestamp(last)}"]
+        lines += ["", media.DIVIDER, f"🕒 *Last Checked:* {notifier.audit_timestamp(last)}"]       # apart from the reminders above it
 
     rows.append([{"text": "➕ New Custom Reminder", "callback_data": "rem:new"}]
                 + ([{"text": "🗑️ Manage Reminders", "callback_data": "rem:list"}] if mine else []))
@@ -187,7 +189,8 @@ def view_course_list() -> tuple[str, list]:
         entries.append((name, course["url"], schedule.lectures_for(name)))
     entries.sort(key=lambda e: (timetable.order_key(e[2]), e[0]))
 
-    lines = ["📚 *My Courses & Schedule*", f"Total: {len(courses)} course{'' if len(courses) == 1 else 's'}"]
+    hours = sum(c["hours"] for c in gpa.load()["courses"].values()) or 3 * len(courses)
+    lines = ["📚 *My Courses & Schedule*", f"Total: {len(courses)} course{'' if len(courses) == 1 else 's'} · {gpa.fmt(hours)} credit hours"]
     group, number = None, 0
     for name, url, slots in entries:
         days = timetable.pattern(slots)

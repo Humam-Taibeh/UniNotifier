@@ -85,11 +85,12 @@ def save(state: dict) -> None:
 
 
 def sync_courses(state: dict, names: list[str]) -> list[str]:
-    """Make the semester's courses match the portal's (sorted by name), keeping
+    """Make the semester's courses match the portal's (in the timetable's order), keeping
     what was entered for the ones that remain. With no names known yet, the
     stored list is kept. Returns the course names in display order."""
+    from uninotifier import schedule
     if names:
-        state["courses"] = {n: state["courses"].get(n) or new_course() for n in sorted(set(names))}
+        state["courses"] = {n: state["courses"].get(n) or new_course() for n in schedule.sort_courses(set(names))}
     return list(state["courses"])
 
 

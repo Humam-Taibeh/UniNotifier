@@ -29,6 +29,7 @@ Callbacks (all start with "gpa:"):
 from dataclasses import dataclass
 
 from uninotifier import gpa
+from uninotifier import slack
 from uninotifier.gpa import fmt
 from uninotifier.notifier import escape_md
 
@@ -97,10 +98,10 @@ def view_home(names: list[str]) -> tuple[str, list]:
     lines += ["", "Tap a course for its hours, retake, coursework total and final grade. "
               "Grades marked 🔒 come from the portal."]
 
-    buttons = [[{"text": f"{n}. {_label(name, courses[name])}", "callback_data": f"gpa:c:{n - 1}"}]
-               for n, name in enumerate(order, 1)]
-    buttons += [[{"text": "⚙️ CGPA & Record Hours", "callback_data": "gpa:cg"}, NEED_BUTTON],
-                [MENU_BUTTON]]
+    buttons = slack.grouped([[{"text": f"{n}. {_label(name, courses[name])}", "callback_data": f"gpa:c:{n - 1}"}]
+                             for n, name in enumerate(order, 1)], "courses")
+    buttons += slack.grouped([[{"text": "⚙️ CGPA & Record Hours", "callback_data": "gpa:cg"}, NEED_BUTTON]], "tools")
+    buttons += [[MENU_BUTTON]]
     return "\n".join(lines), buttons
 
 

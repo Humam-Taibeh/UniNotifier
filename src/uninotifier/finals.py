@@ -107,6 +107,11 @@ def due(now: datetime | None = None, state: dict | None = None, sch: dict | None
 
 # --------------------------------------------------------------- messages
 
+def in_timetable_order(courses: list[dict]) -> list[dict]:
+    """The term's courses in the timetable's order (schedule.course_order), as every screen lists them."""
+    return schedule.sort_courses(courses, lambda c: display_name(c["code"], c["name"]))
+
+
 def display_name(code: str, portal_name: str) -> str:
     """The course's English name (schedule.json "course_codes"), else as the portal has it."""
     return schedule.load_schedule().get("course_codes", {}).get(code) or portal_name
@@ -134,7 +139,7 @@ def _released(course: dict, report: dict, previous: float | None) -> str:
 def results_message(report: dict, portal_cgpa: float | None) -> str:
     """The semester average and the new cumulative GPA, from the full record."""
     lines = [f"🏁 *Semester Results — {escape_md(report['term'])}*", DIVIDER]
-    for n, c in enumerate(sorted(report["courses"], key=lambda c: c["code"]), 1):
+    for n, c in enumerate(in_timetable_order(report["courses"]), 1):
         name = escape_md(display_name(c["code"], c["name"]))
         lines.append(f"{n}. 📘 *{name}* · {fmt(c['hours'])}h · {fmt(c['mark'])} "
                      + ("✅" if c["passed"] else "❌") + (f" · 🔁 was {fmt(c['replaces'])}" if c["replaces"] is not None else ""))
@@ -208,7 +213,7 @@ def evaluate(state: dict, grades: portal.Result | None, transcript: portal.Resul
     if state["term"] != report["term"]:                    # a new term: start over
         state.update(term=report["term"], seen={}, baselined=False, reported=False)
     state["courses"] = [{"code": c["code"], "name": c["name"], "hours": c["hours"], "mark": c["mark"]}
-                        for c in sorted(report["courses"], key=lambda c: c["code"])]
+                        for c in in_timetable_order(report["courses"])]
     state.update(published=report["published"], total=report["total"], complete=report["complete"],
                  base=list(report["before"]),           # the CGPA base without this term (bot syncs it)
                  retakes={c["code"]: c["replaces"] for c in report["courses"] if c["replaces"] is not None})
@@ -221,7 +226,7 @@ def evaluate(state: dict, grades: portal.Result | None, transcript: portal.Resul
         if not report["complete"]:
             return messages                                # nothing more to say until a grade appears
 
-    for course in sorted(report["courses"], key=lambda c: c["code"]):
+    for course in in_timetable_order(report["courses"]):
         mark = course["mark"]
         if mark is None or state["seen"].get(course["code"]) == mark:
             continue
@@ -262,7 +267,8 @@ def grades_lines(state: dict) -> list[str]:
     if not state["term"] or not courses:
         return ["📊 *This term's grades* — not read yet. Tap 🔄 Check Grades Now."]
     lines = [f"📊 *This term's grades* — {state['published']} of {state['total']} published"]
-    for c in courses:
+    # a released grade comes first; the others keep the timetable's order (the courses are saved in it)
+    for c in [c for c in courses if c["mark"] is not None] + [c for c in courses if c["mark"] is None]:
         name = escape_md(display_name(c["code"], c["name"]))
         if c["mark"] is None:
             lines.append(f"• ⏳ {name} — not published yet")

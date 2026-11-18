@@ -263,19 +263,12 @@ def adjust(course: str, delta: int) -> int:
     return len(days)
 
 
-WEEK = ("sun", "mon", "tue", "wed", "thu", "fri", "sat")
-
-
 def ordered(sched: dict | None = None) -> list[str]:
     """The counted courses in the order of the week: the one whose first lecture comes first (Sunday
     morning first) at the top — never alphabetical."""
     sched = sched if sched is not None else schedule.load_schedule()
-    first: dict[str, tuple] = {}
-    for day, lec in _slots(sched):
-        key = (WEEK.index(day) if day in WEEK else 7, lec.get("start", ""))
-        if lec["course"] not in first or key < first[lec["course"]]:
-            first[lec["course"]] = key
-    return sorted(kinds(sched), key=lambda course: (first.get(course, (7, "")), course))
+    counted = kinds(sched)
+    return [course for course in schedule.course_order(sched) if course in counted]
 
 
 def bar(used: int, allowed: int) -> str:

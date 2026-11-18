@@ -293,6 +293,9 @@ def test_gpa_screens_and_flow():
     bot = _package("uninotifier.bot")
     from uninotifier import gpa
     from uninotifier import gpa_ui
+    from uninotifier import schedule as _schedule
+    _keep_order = _schedule.course_order
+    _schedule.course_order = lambda sched=None: []          # no timetable order here: by name (test_course_order_is_the_timetables covers the order)
 
     names = ["Arabic Communication Skills", "Big Data", "Database Systems"]
     with tempfile.TemporaryDirectory() as tmp:
@@ -459,6 +462,7 @@ def test_gpa_screens_and_flow():
         record_text = bot.view_record()[0]
         assert "verification code" not in record_text and "re-syncs" not in record_text
         assert {"gpa", "need", "grades", "transcript", "balance"} <= {c for c, _ in bot.COMMANDS}
+    _schedule.course_order = _keep_order
 
 
 def test_retake_replacement_in_plan():

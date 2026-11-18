@@ -991,6 +991,9 @@ def test_slack_tasks_screen_has_no_indent_a_long_line_could_wrap_out_of():
         buttons = [b for row in rows for b in row]
         assert not [b for b in buttons if "View Original Post" in b["text"]]
         assert [b["url"] for b in buttons if b["text"].startswith("🌐 Open Post on Moodle")] == ["https://moodle.example/post/1"]
+        for block in (b for b in slack.buttons({"inline_keyboard": rows}) if b["type"] == "actions"):
+            labels = [e["text"]["text"] for e in block["elements"]]
+            assert not (any("Open Post" in l for l in labels) and any("New Custom Reminder" in l for l in labels)), labels     # the controls stand apart
         slack.mode = lambda: "telegram"
         text, rows = views.view_tasks()
         assert any(l.startswith("\u200e      ") or l.startswith("    ") for l in text.splitlines())

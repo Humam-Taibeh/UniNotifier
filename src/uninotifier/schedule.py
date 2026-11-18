@@ -391,3 +391,33 @@ def lectures_for(course_en: str) -> list[tuple[str, dict]]:
     days = load_schedule().get("days", {})
     return [(day, lec) for day in DAY_KEYS[6:] + DAY_KEYS[:6]
             for lec in days.get(day, []) if lec["course"] == course_en]
+
+
+WEEK = ("sun", "mon", "tue", "wed", "thu", "fri", "sat")      # a student's week: Sunday first
+
+
+def course_order(sched: dict | None = None) -> list[str]:
+    """The courses in THE order of the timetable — the one whose first lecture of the week comes first
+    (Sunday morning on top). Every screen that lists the courses uses it, so they are never in one order
+    here and another there; only the Finals Watch brings a published grade to the top."""
+    sched = sched if sched is not None else load_schedule()
+    first: dict[str, tuple] = {}
+    for day, lectures in sched.get("days", {}).items():
+        for lec in lectures:
+            key = (WEEK.index(day) if day in WEEK else len(WEEK), lec.get("start", ""))
+            if lec["course"] not in first or key < first[lec["course"]]:
+                first[lec["course"]] = key
+    return sorted(first, key=lambda course: (first[course], course))
+
+
+def sort_courses(items, name=lambda item: item) -> list:
+    """`items` in the timetable's order. `name(item)` is the course's name as the item has it (the portal's
+    spelling is mapped to the timetable's); a course the timetable does not have goes last, by name."""
+    order = {course: n for n, course in enumerate(course_order())}
+
+    def rank(item):
+        text = name(item)
+        n = order.get(text, order.get(canonical_course(text), len(order)))
+        return (n, str(text).lower())
+
+    return sorted(items, key=rank)

@@ -207,16 +207,26 @@ def _row_lines(rows: list[list[dict]]) -> list[dict]:
     return out
 
 
+def grouped(rows: list[list[dict]], name: str) -> list[list[dict]]:
+    """In Slack: these rows are one group of buttons (a list of courses, a list of tasks), apart from
+    the rows around them by a light line. Elsewhere the rows as they are."""
+    if mode() != "slack":
+        return rows
+    return [[{**row[0], "group": name}, *row[1:]] if row else row for row in rows]
+
+
 def buttons(reply_markup, prefix: str = "") -> list[dict]:
     """Telegram's keyboard as Slack's: the buttons side by side (Telegram stacks one per row, which in
     Slack reads as a long list), the way back apart under a line, a button that opens a page opening
     it, any other carrying its Telegram callback data as its value (slackbot hands the press to the
     bot exactly as Telegram would). ✅ is Slack's green button, 🗑 its red one."""
-    content, nav, cards = [], [], []
+    groups: list[tuple[str | None, list]] = []       # the buttons, in groups (a row's first button may name its "group")
+    nav, cards = [], []
     for r, row in enumerate(_markup(reply_markup)):
         if row and row[0].get("line"):
             cards.append(row)
             continue
+        group = row[0].get("group") if row else None
         for c, button in enumerate(row[:25]):
             label = str(button.get("text") or "·")
             element = {"type": "button", "text": {"type": "plain_text", "text": label[:75], "emoji": True}}
@@ -230,9 +240,19 @@ def buttons(reply_markup, prefix: str = "") -> list[dict]:
                 element["style"] = "primary"
             elif label.startswith("🗑"):
                 element["style"] = "danger"
-            (nav if _is_nav(label) else content).append(element)
-    out = [{"type": "actions", "block_id": f"{prefix}row{n}", "elements": content[n:n + ROW_SIZE]}
-           for n in range(0, len(content), ROW_SIZE)]
+            if _is_nav(label):
+                nav.append(element)
+                continue
+            if not groups or groups[-1][0] != group:
+                groups.append((group, []))
+            groups[-1][1].append(element)
+    out: list[dict] = []
+    for group, content in groups:
+        if out:
+            out.append({"type": "divider"})              # a group of buttons never runs into the one before it
+        size = 25 if group else ROW_SIZE                 # a named group is one block: Slack wraps it by the width
+        out += [{"type": "actions", "block_id": f"{prefix}row{len(out)}", "elements": content[n:n + size]}
+                for n in range(0, len(content), size)]
     if cards:
         out[:0] = _row_lines(cards)
     if nav:
