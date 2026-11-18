@@ -126,8 +126,8 @@ def view_reminder(reminder_id: int, header: str = "📝 *Reminder*") -> tuple[st
     rows = [[{"text": "✏️ Edit Text", "callback_data": f"rem:et:{reminder_id}"}],
             [{"text": "🗓️ Change Date", "callback_data": f"rem:ed:{reminder_id}"},
              {"text": "🕐 Change Time", "callback_data": f"rem:eh:{reminder_id}"}]]
-    if item.get("message_id") or item.get("shots"):
-        rows.append([{"text": "🖼️ Show Original" if item.get("shots") else "🔗 View Original Post",
+    if item.get("message_id") or item.get("shots") or item.get("url"):
+        rows.append([{"text": "🖼️ Show Original" if item.get("shots") or (item.get("url") and (slack.mode() == "slack" or not item.get("message_id"))) else "🔗 View Original Post",
                       "callback_data": f"rem:view:{reminder_id}"}])
     rows += [[{"text": "🗑️ Delete", "callback_data": f"rem:del:{reminder_id}"}],
              MANAGE_ROW]
@@ -219,17 +219,37 @@ def drop_pending() -> None:
     _reminder_draft.clear()
 
 
+def original_picture(url: str) -> list[bytes]:
+    """The reminder's page as a picture, from the portal now (the saved session)."""
+    from uninotifier import checkin
+    png = checkin.screenshot(url)
+    return [png] if png else []
+
+
 def show_original(reminder_id: int, answer) -> None:
     """🔗 View Original Post: a reply to the pinned message — tapping its quote
     jumps straight to the announcement and its screenshot in the chat."""
     item = reminders.get(reminder_id)
-    if not item or not (item.get("message_id") or item.get("shots")):
+    if not item or not (item.get("message_id") or item.get("shots") or item.get("url")):
         answer("That reminder has no original post.")
         return
     way_back = [[{"text": "⏳ Tasks & Reminders", "callback_data": "tasks"}], chat.BACK_ROW]
     pictures = reminders.shots_of(reminder_id)
+    if not pictures and item.get("url") and (slack.mode() == "slack" or not item.get("message_id")):     # a reminder made before pictures were kept: the page is pictured again now, and kept
+        answer("📸 Taking the picture…")
+        pictures = original_picture(item["url"])
+        if pictures:
+            reminders.keep_shots(reminder_id, pictures)
+        else:
+            rows = [[{"text": "🌐 Open on Moodle", "url": item["url"]}]]
+            chat.send_view(f"⚠️ I couldn't take the picture just now.\n📝 {escape_md(item['note'])}", rows + way_back)
+            return
+        answered = True
+    else:
+        answered = False
     if pictures:                             # the picture itself, from the copy kept with the reminder: it never depends on the old message
-        answer()
+        if not answered:
+            answer()
         notifier.send_png_files(chat.BOT_TOKEN, chat.CHAT_ID, pictures, "original.png")
         rows = [[{"text": "🌐 Open on Moodle", "url": item["url"]}]] if item.get("url") else []
         chat.send_view(f"📌 *Original post*\n📝 {escape_md(item['note'])}", rows + way_back)

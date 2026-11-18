@@ -164,6 +164,25 @@ def _drop_shots(reminder_id: int) -> None:
     shutil.rmtree(SHOTS_DIR / f"r{reminder_id}", ignore_errors=True)
 
 
+def keep_shots(reminder_id: int, pngs: list[bytes]) -> None:
+    """Keep pictures with a reminder that has none yet (taken from its page again)."""
+    state = load()
+    found = next((r for r in state["items"] if r["id"] == reminder_id), None)
+    if not found or not pngs:
+        return
+    folder = SHOTS_DIR / f"r{reminder_id}"
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        for n, png in enumerate(pngs, 1):
+            (folder / f"{n}.png").write_bytes(png)
+    except OSError as e:
+        log.exception("Could not keep the pictures of reminder %s", reminder_id)
+        failsafe.bug("reminders", "A reminder's picture could not be kept", e, "The picture is taken again next time.")
+        return
+    found["shots"] = len(pngs)
+    save(state)
+
+
 def shots_of(reminder_id: int) -> list[bytes]:
     """The pictures kept with a reminder (an announcement's screenshot), in order."""
     folder = SHOTS_DIR / f"r{reminder_id}"

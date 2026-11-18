@@ -1020,12 +1020,15 @@ def test_slack_original_post_shows_the_post_not_a_quote_that_cannot_exist():
         slack.mode = lambda: "slack"
         chat.send_view = lambda text, rows: sent.append((text, rows))
         chat.send_reply_view = lambda *a, **k: (_ for _ in ()).throw(AssertionError("Slack has no quote to send"))
+        taken = reminder_flow.original_picture
+        reminder_flow.original_picture = lambda url: []          # the portal cannot be reached: the note and the link
         reminder_flow.show_original(1, lambda *a: told.append(a))
     finally:
+        reminder_flow.original_picture = taken
         reminders.get, slack.mode, chat.send_view, chat.send_reply_view = keep
     text, rows = sent[0]
     assert "quote" not in text and "امتحان منتصف الفصل" in text
-    assert rows[0][0]["url"] == "https://moodle.example/p" and rows[-1] == chat.BACK_ROW and told == [()]
+    assert rows[0][0]["url"] == "https://moodle.example/p" and rows[-1] == chat.BACK_ROW
 
 
 def test_a_pinned_announcement_keeps_its_picture_and_wording():
@@ -1049,3 +1052,31 @@ def test_a_pinned_announcement_keeps_its_picture_and_wording():
     reminders.remove(item["id"])
     assert reminders.shots_of(item["id"]) == [], "deleted with the reminder"
     reminders.remove(plain["id"])
+
+
+def test_show_original_pictures_an_old_reminder_again_and_keeps_it():
+    """A reminder made before pictures were kept has only its link: 🖼️ Show Original takes the page's picture
+    now, sends it, and keeps it with the reminder — the next time it is there at once. When the portal
+    cannot be reached the reminder says so and offers the link, never an empty answer."""
+    from uninotifier import reminders
+    from uninotifier.bot import reminder_flow, chat
+
+    item = reminders.add("Announcement", time.time() + 3600, "English", "https://x/forum", 0)
+    assert "🖼️ Show Original" in [b["text"] for row in reminder_flow.view_reminder(item["id"])[1] for b in row]
+    sent, views, taken = [], [], []
+    keep = (notifier.send_png_files, chat.send_view, reminder_flow.original_picture)
+    notifier.send_png_files = lambda token, chat_id, pngs, name: sent.append(pngs) or True
+    chat.send_view = lambda text, rows: views.append((text, rows))
+    reminder_flow.original_picture = lambda url: taken.append(url) or []
+    try:
+        reminder_flow.show_original(item["id"], lambda *a: None)
+        assert not sent and "couldn't take the picture" in views[-1][0]
+        reminder_flow.original_picture = lambda url: taken.append(url) or [b"\x89PNG-now"]
+        reminder_flow.show_original(item["id"], lambda *a: None)
+        assert sent[-1] == [b"\x89PNG-now"] and reminders.get(item["id"])["shots"] == 1
+        reminder_flow.original_picture = lambda url: taken.append("again") or []
+        reminder_flow.show_original(item["id"], lambda *a: None)
+        assert sent[-1] == [b"\x89PNG-now"] and "again" not in taken, "kept: not taken twice"
+    finally:
+        notifier.send_png_files, chat.send_view, reminder_flow.original_picture = keep
+        reminders.remove(item["id"])
