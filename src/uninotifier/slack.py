@@ -262,6 +262,11 @@ def buttons(reply_markup, prefix: str = "") -> list[dict]:
     return out
 
 
+def _only_title(blocks_: list[dict]) -> bool:
+    """Nothing yet but the card's title (and its small line): the box already draws a line under it."""
+    return all(b["type"] == "header" or b.get("block_id") == "subtitle" for b in blocks_)
+
+
 def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | None:
     """The message as a Slack card: its title as a header, its "Label: value" lines side by side in
     two columns, its paragraphs as sections, its italic notes small and grey, the links that open a
@@ -309,7 +314,11 @@ def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | Non
             continue
         if fields:
             flush_fields()
-        if _NOTE.match(line.strip()):
+        if _RULE.match(line.strip()):                          # a rule line is a light line, never a row of marks:
+            flush_prose()                                      # none under the title (its box has one), one between parts
+            if out and out[-1]["type"] != "divider" and not _only_title(out):
+                out.append({"type": "divider"})
+        elif _NOTE.match(line.strip()):
             flush_prose()
             out.append({"type": "context", "elements": [{"type": "mrkdwn", "text": mrkdwn(line.strip())[:2900]}]})
         elif line.strip():
@@ -320,7 +329,10 @@ def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | Non
     if fields:
         flush_fields()
     if live:
-        out.extend(buttons(reply_markup))
+        keyboard = buttons(reply_markup)
+        if keyboard and out and out[-1]["type"] != "divider" and not _only_title(out):
+            out.append({"type": "divider"})                    # the same everywhere: a light line above the buttons
+        out.extend(keyboard)
     else:
         links = link_lines(reply_markup)
         if links:
@@ -380,6 +392,9 @@ def boxed(card: list[dict], title: str = HOME_TITLE) -> list[dict]:
     for kind in ("actions", "section"):
         if len(children) > BOX_CHILDREN:
             children = _fewer(children, kind)
+    if len(children) > BOX_CHILDREN:                       # still too many for a box: the lines between parts go,
+        children = [b for i, b in enumerate(children)       # the one above the way back stays
+                    if b["type"] != "divider" or (i + 1 < len(children) and children[i + 1].get("block_id") == "nav")]
     box = {"type": "container", "title": {"type": "plain_text", "text": title[:HEADER_LIMIT], "emoji": False},
            "has_header_divider": True, "child_blocks": children[:BOX_CHILDREN]}
     if subtitle:

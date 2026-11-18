@@ -164,7 +164,7 @@ def handle_callback(cb: dict, action: str, message_id: int | None) -> None:
     elif what == "today":
         day = date.today()
         _show(message_id, view_ask(day) if attendance.courses_on(day)
-              else ("🎒 *Attendance*\nNo counted lectures today.", [[ATTENDANCE, MAIN]]))
+              else ("🎒 *Attendance*\nYou have no lectures today, so there is nothing to record.", [[ATTENDANCE, MAIN]]))
     elif what in ("ask", "pick", "t", "all", "none", "save"):
         try:
             day = date.fromisoformat(parts[2])

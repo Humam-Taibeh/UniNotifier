@@ -112,11 +112,10 @@ def blocks(markup, now: datetime | None = None, state: dict | None = None) -> li
     now = now or datetime.now()
     stamp = now.timestamp()
     state = chat.load_state() if state is None else state
-    courses = len(state.get("courses", {}))
     out: list[dict] = [
         {"type": "header", "text": {"type": "plain_text", "text": slack.HOME_TITLE, "emoji": True}},
         {"type": "context", "elements": [{"type": "mrkdwn", "text":
-            f"{_text(views.semester())} · {slack.mrkdwn(chat.monitor_status())} · {courses} course{'' if courses == 1 else 's'}"}]},
+            f"{_text(views.semester())} · {slack.mrkdwn(chat.monitor_status())}"}]},
         {"type": "divider"},
         _heading("📅 Today"),
         {"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(lecture_lines(now)) or "🎉 No lectures today"}},

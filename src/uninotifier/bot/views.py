@@ -32,15 +32,17 @@ SCHEDULE_IMAGE = paths.SCHEDULE_IMAGE
 
 
 def semester() -> str:
-    """The term's name from schedule.json ("First Semester 2026/2027"), read when a screen is drawn:
-    importing this module touches no file, and a new term shows without restarting the bot."""
-    return schedule.load_schedule().get("semester", "")
+    """The term's name ("First Semester 2026/2027", "Summer Semester 2026/2027"), worked out when a screen is
+    drawn from the term code Moodle puts in front of each of your courses (20261-… is the first semester of
+    2026/2027), so it follows the student and the time by itself; the schedule's own "semester" only when
+    Moodle's courses do not say. Importing this module touches no file."""
+    from uninotifier import autoschedule
+    names = [c.get("name", "") for c in chat.load_state().get("courses", {}).values()]
+    return autoschedule.semester_name(names) or schedule.load_schedule().get("semester", "")
 
 
 def view_menu() -> tuple[str, list]:
-    courses = len(chat.load_state().get("courses", {}))
-    text = (f"🎓 *UniNotifier System* • {semester()}\n"
-            f"{chat.monitor_status()} • {courses} Course{'' if courses == 1 else 's'} Tracked")
+    text = " • ".join(part for part in ("🎓 *UniNotifier System*", semester(), chat.monitor_status()) if part)
     return text, [
         [{"text": "📚 My Courses & Schedule", "callback_data": "courses"},
          {"text": "⏳ Upcoming Tasks & Reminders", "callback_data": "tasks"}],
@@ -147,9 +149,7 @@ def view_tasks() -> tuple[str, list]:
     pinned = [(n, r) for n, r in enumerate(shown, 1) if r.get("message_id")]
     first_post = len(rows)
     for n, r in pinned[:VIEW_POST_BUTTONS]:
-        if slack.mode() == "slack":          # Slack cannot quote a message, and the post is not in this chat: its page opens
-            if r.get("url"):
-                rows.append([{"text": f"🌐 Open Post on Moodle ({n})", "url": r["url"]}])
+        if slack.mode() == "slack":          # Slack cannot quote a message, and the reminder shows the whole post: no button
             continue
         rows.append([{"text": f"🔗 View Original Post ({n})", "callback_data": f"rem:view:{r['id']}"}])
     rows[first_post:] = slack.grouped(rows[first_post:], "items")        # the course's tasks and the posts: one group
@@ -169,8 +169,8 @@ def view_courses() -> tuple[str, list]:
     count = len(state.get("courses", {}))
     hours = sum(c["hours"] for c in gpa.load()["courses"].values()) or 3 * count
     text = "\n".join(["📚 *My Courses & Schedule*", media.DIVIDER,
-                      f"{count} course{'' if count == 1 else 's'} · {gpa.fmt(hours)} credit hours · {semester()}",
-                      "", "What would you like to see?"])
+                      f"What would you like to see?  ·  {count} course{'' if count == 1 else 's'} · "
+                      f"{gpa.fmt(hours)} credit hours"])
     return text, [[{"text": "📋 Course List & Details", "callback_data": "courselist"}],
                   [{"text": "📅 Weekly Timetable", "callback_data": "schedule"},
                    {"text": "🎒 Attendance", "callback_data": "att:home"}],

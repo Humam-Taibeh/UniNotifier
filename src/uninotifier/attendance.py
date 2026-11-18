@@ -28,7 +28,8 @@ ALLOWED = {"normal": 5, "blended": 2, "once": 2}   # absences allowed; one more 
 CAMPUS_MODES = ("In-Person", "Blended")           # "Blended" is the portal's own mark (م) for a blended course's campus day
 COUNTED_MODES = CAMPUS_MODES + ("Online",)
 ASK_AFTER_MINUTES = 60                           # asked this long after the day's last lecture ends
-ASK_AGAIN_HOURS = 3                              # asked once more if there was no answer
+ASK_AGAIN_AT = (22, 0)                           # asked once more at 10 PM if there was no answer (never sooner than
+ASK_AGAIN_GAP_MINUTES = 60                       # an hour after the first time: a late lecture's question is not repeated at once)
 ASK_TIMES = 2
 
 
@@ -193,8 +194,10 @@ def due(now: datetime | None = None, sched: dict | None = None) -> date | None:
     asked = data["asked"].get(stamp) or {}
     if asked.get("times", 0) >= ASK_TIMES:
         return None
-    if asked and now.timestamp() - asked.get("at", 0) < ASK_AGAIN_HOURS * 3600:
-        return None
+    if asked:
+        again = datetime.combine(day, datetime.min.time()).replace(hour=ASK_AGAIN_AT[0], minute=ASK_AGAIN_AT[1])
+        if now < again or now.timestamp() - asked.get("at", 0) < ASK_AGAIN_GAP_MINUTES * 60:
+            return None
     return day
 
 

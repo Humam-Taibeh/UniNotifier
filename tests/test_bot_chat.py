@@ -75,8 +75,8 @@ def test_bot_views():
         ["📊 GPA & Grade Hub", "📜 Academic Record & Balance"]], rows
     assert [b.get("callback_data") for row in rows for b in row] == [
         "courses", "tasks", "academic", "record"], "no external site buttons, no in-chat guide"
-    assert len(text.splitlines()) == 2 and text.startswith("🎓 *UniNotifier System* • First Semester 2026/2027")
-    assert text.splitlines()[1].endswith("• 6 Courses Tracked"), text
+    assert len(text.splitlines()) == 1 and text.startswith("🎓 *UniNotifier System* • First Semester 2026/2027")
+    assert "Courses Tracked" not in text and text.endswith("Monitor not started yet*"), text          # the status sits beside the semester, no course count
     # My Courses & Schedule is a menu, not a wall of text; Tracked Items and Campus Guide are gone
     text, rows = bot.view_courses()
     assert [[b["text"] for b in row] for row in rows] == [
@@ -1106,3 +1106,50 @@ def test_slack_autolinks_are_unwrapped():
     update = slackbot.from_event({"type": "message", "channel_type": "im", "user": "U1", "ts": "1.0",
                                   "text": "<http://202311988|202311988>"})
     assert update[0]["message"]["text"] == "202311988"
+
+
+def test_slack_cards_have_one_line_under_the_title_and_one_above_the_buttons():
+    """A rule line is a light line, never a row of marks: none directly under a title (the box already draws one),
+    one between parts; and every screen with buttons has one line above them (a screen with only its way back too)."""
+    from uninotifier import media, slack
+    nav = {"inline_keyboard": [[{"text": "🔙 My Courses & Schedule", "callback_data": "courses"},
+                                {"text": "🏠 Main Menu", "callback_data": "menu"}]]}
+    both = {"inline_keyboard": [[{"text": "📋 Course List", "callback_data": "courselist"}], *nav["inline_keyboard"]]}
+
+    def kinds(text, markup):
+        found = slack.blocks(text, markup, live=True)
+        assert not [b for b in found if b["type"] == "section" and ("━" in str(b) or "___" in str(b))], found
+        return [b["type"] for b in found]
+
+    title = "📚 *My Courses & Schedule*"
+    assert kinds(f"{title}\n{media.DIVIDER}\nWhat would you like to see?", both) == ["header", "section", "divider", "actions", "divider", "actions"]
+    assert kinds(f"{title}\n{media.DIVIDER}\nSome words", nav) == ["header", "section", "divider", "actions"]
+    assert kinds(f"{title}\nSome words\n{media.DIVIDER}\nMore words", None) == ["header", "section", "divider", "section"]
+    assert kinds(f"{title}\n{media.DIVIDER}", nav) == ["header", "actions"]           # nothing but a title: the box's own line
+    # too many blocks for one box: the lines between parts give way, the one above the way back stays
+    many = [{"type": "header", "text": {"type": "plain_text", "text": "T"}}]
+    for n in range(6):
+        many += [{"type": "section", "text": {"type": "mrkdwn", "text": f"part {n}"}}, {"type": "divider"}]
+    many += [{"type": "actions", "block_id": "nav", "elements": []}]
+    box = slack.boxed(many)
+    assert [b["type"] for b in box] == ["container"] and len(box[0]["child_blocks"]) <= slack.BOX_CHILDREN
+    assert box[0]["child_blocks"][-2]["type"] == "divider" and box[0]["child_blocks"][-1]["block_id"] == "nav"
+
+
+def test_the_menu_and_the_semester_follow_the_student():
+    """The semester comes from the term code Moodle puts before the student's own courses (20263 is the summer
+    of 2026/2027), not from a fixed word; the main menu is one line — the status beside it, no course count."""
+    from uninotifier.bot import chat, views
+    keep = chat.load_state
+    try:
+        for code, name in (("20261", "First Semester 2026/2027"), ("20262", "Second Semester 2026/2027"),
+                           ("20263", "Summer Semester 2026/2027"), ("20271", "First Semester 2027/2028")):
+            chat.load_state = lambda code=code: {"courses": {"1": {"name": f"{code}-Big Data-AllSec-3"},
+                                                              "2": {"name": f"{code}-Databases-AllSec-3"}}}
+            assert views.semester() == name, (code, views.semester())
+            text, rows = views.view_menu()
+            assert text.startswith(f"🎓 *UniNotifier System* • {name} • ") and "\n" not in text and "Tracked" not in text
+        assert "credit hours" in views.view_courses()[0] and "\n\n" not in views.view_courses()[0]
+        assert "First Semester" not in views.view_courses()[0] and "What would you like to see?" in views.view_courses()[0]
+    finally:
+        chat.load_state = keep

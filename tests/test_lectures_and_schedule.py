@@ -1386,3 +1386,28 @@ def test_slack_button_groups_never_run_into_each_other():
     finally:
         slack.mode = keep
     assert "credit hours" in views.view_course_list()[0] or "credit hours" in views.view_courses()[0]
+
+
+def test_attendance_asks_an_hour_after_the_day_and_again_at_ten():
+    """The question comes an hour after the day's last counted lecture (an online one too); if it is not
+    answered, once more at 10 PM — never sooner than an hour after the first time — and then no more."""
+    from datetime import date, datetime
+    from uninotifier import attendance
+    attendance.FILE = Path(tempfile.mkdtemp()) / "attendance.json"
+    sched = {"days": {"sun": [{"start": "09:00", "end": "17:00", "course": "A", "mode": "In-Person"}],
+                      "wed": [{"start": "19:00", "end": "20:30", "course": "Free", "mode": "Online"}]}}
+    sunday, wednesday = date(2026, 11, 15), date(2026, 11, 18)
+    assert attendance.due(datetime(2026, 11, 15, 17, 59), sched) is None
+    assert attendance.due(datetime(2026, 11, 15, 18, 0), sched) == sunday          # last lecture 5 PM: asked at 6
+    attendance.mark_asked(sunday, datetime(2026, 11, 15, 18, 0))
+    assert attendance.due(datetime(2026, 11, 15, 21, 59), sched) is None
+    assert attendance.due(datetime(2026, 11, 15, 22, 0), sched) == sunday          # and again at 10 PM
+    attendance.mark_asked(sunday, datetime(2026, 11, 15, 22, 0))
+    assert attendance.due(datetime(2026, 11, 15, 23, 30), sched) is None          # twice is all
+    assert attendance.due(datetime(2026, 11, 18, 21, 29), sched) is None
+    assert attendance.due(datetime(2026, 11, 18, 21, 30), sched) == wednesday      # an online lecture counts: 8:30 PM + 1 hour
+    attendance.mark_asked(wednesday, datetime(2026, 11, 18, 21, 30))
+    assert attendance.due(datetime(2026, 11, 18, 22, 0), sched) is None            # 10 PM, but only half an hour after the first
+    assert attendance.due(datetime(2026, 11, 18, 22, 30), sched) == wednesday
+    attendance.record_day(wednesday, [], sched)
+    assert attendance.due(datetime(2026, 11, 18, 22, 30), sched) is None           # answered: never again
