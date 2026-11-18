@@ -542,7 +542,7 @@ def test_study_plan_from_the_portal():
         "📊 *Degree Plan:* 22 hrs", "✅ *Passed:* 6 hrs", "⏳ *This Term:* 6 hrs · 2 courses (1 retake)",
         "❌ *Failed, Not Retaken Yet:* 3 hrs · 1 course", "🔁 *Repeated Courses:* 3 (2 done · 1 this term)",
         "🏁 *Remaining:* 16 hrs · 10 after this term",
-        "📝 *Placement Exams:* all 2 exempt — nothing added to the plan"]
+        "📝 *Placement Exams:* all 2 exempt (80%+) — nothing added to the plan"]
     done = degreeplan.parse(_plan_html([("متطلبات الكلية (اجبارية)", 3, 3, 0, [("مجتازة", "0900401", "مقدمة", 3)])]))
     assert degreeplan.progress_lines(done) == ["📊 *Degree Plan:* 3 hrs", "✅ *Passed:* 3 hrs", "🏁 *Remaining:* 0 hrs"]
 
@@ -573,8 +573,9 @@ def test_study_plan_from_the_portal():
     assert degreeplan.placement(behind) | {"courses": None} == {"courses": None, "extra": 9, "left": 6, "term": 3}
     tail = degreeplan.progress_lines(behind)[-2:]
     assert tail[0] == "🏁 *Remaining:* 16 hrs · 10 after this term · +6 remedial"
-    assert tail[1] == ("📝 *Placement Exams:* English ✅ · Computer Skills ⏳ · Arabic ▫️ — "
-                       "+9 hrs on top of the plan (6 still to pass)")
+    assert tail[1] == ("📝 *Placement Exams:* English ✅ passed +3h · Computer Skills ⏳ this term +3h · Arabic ▫️ to take +3h — "
+                       "*+9 hrs on top of the plan* (6 still to pass)")
+    assert "(+9 placement = " in degreeplan.progress_lines(behind)[0]       # the plan's total, and what it really is with them
     listed = [l.lstrip(degreeplan.LRM) for l in degreeplan.remaining_lines(behind)]
     assert "*Placement Exams* — +9 hrs on top of the plan, 6 still to pass" in listed
     assert "✅ English · 3h — taken as a course and passed" in listed and "▫️ Arabic · 3h — to take" in listed

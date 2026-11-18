@@ -176,6 +176,7 @@ def _markup(reply_markup) -> list[list[dict]]:
 
 NAV_MARKS = ("🔙", "🏠", "⬅", "↩")                  # the way back: kept apart, at the very bottom
 NAV_WORDS = ("Main Menu", "Back")
+FIELD_ROWS = 4                                      # up to so many rows of two fields get a section each
 ROW_SIZE = 5                                        # buttons side by side; Slack wraps a row that is too wide
 ROW_WIDTH = 62                                      # what a row of a message's buttons may hold, so no label is ever cut: the
                                                     # width of the words (an emoji counts double) plus 4 for each button
@@ -360,8 +361,9 @@ def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | Non
         if len(fields) == 1:                                   # one alone reads better as the line it was
             out.append({"type": "section", "text": {"type": "mrkdwn", "text": mrkdwn(field_lines[0])}})
         else:
-            for start in range(0, len(fields), 10):           # Slack shows up to 10 fields per section
-                out.append({"type": "section", "fields": fields[start:start + 10]})
+            size = 2 if len(fields) <= FIELD_ROWS * 2 else 10        # a pair a section: the rows have room between them
+            for start in range(0, len(fields), size):                # (Slack shows up to 10 fields per section)
+                out.append({"type": "section", "fields": fields[start:start + size]})
         field_lines.clear()
         fields.clear()
 

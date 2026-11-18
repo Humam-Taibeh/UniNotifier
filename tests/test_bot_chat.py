@@ -1429,7 +1429,7 @@ def test_the_transcript_summary_is_a_grid_in_the_order_you_read_it():
                       "Repeated Courses", "This Term", "Placement Exams"], labels
     blocks = slack.blocks("📜 *Transcript*\n" + "\n".join(head + rest), None, live=False)
     fields = [b for b in blocks if b["type"] == "section" and "fields" in b]
-    assert len(fields) == 2 and len(fields[0]["fields"]) == 2 and len(fields[1]["fields"]) == 8     # a gap under GPA and status
+    assert len(fields) == 5 and all(len(f["fields"]) == 2 for f in fields)      # a pair a section: room between the rows, a gap under GPA and status
 
 
 def test_in_slack_the_screen_you_leave_is_removed_but_a_notification_stays():

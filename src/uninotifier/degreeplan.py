@@ -212,16 +212,26 @@ def _subject(course: dict) -> str:
     return f"{FSI}{escape_md(course['name'] or course['code'])}{PDI}"
 
 
+_SHORT = {"exempt": "exempt", "passed": "passed", "in_progress": "this term", "failed": "failed", "open": "to take", "other": "to take"}
+
+
+def _mark(course: dict) -> str:
+    """One exam in the summary line: its subject, the outcome, and — when it is a course on top of the plan — its hours."""
+    icon = _OUTCOMES[course["status"]][0]
+    extra = "" if course["status"] == "exempt" else f" +{_n(course['hours'])}h"
+    return f"{_subject(course)} {icon} {_SHORT[course['status']]}{extra}"
+
+
 def placement_line(plan: dict) -> str | None:
     """One line for the summary: the exams and, when any was not passed, the hours on top of the plan."""
     p = placement(plan)
     if not p:
         return None
-    if not p["extra"]:
-        return f"📝 *Placement Exams:* all {len(p['courses'])} exempt — nothing added to the plan"
-    marks = " · ".join(f"{_subject(c)} {_OUTCOMES[c['status']][0]}" for c in p["courses"])
+    if not p["extra"]:                                   # 80% or more in every exam: exempt — the normal case
+        return f"📝 *Placement Exams:* all {len(p['courses'])} exempt (80%+) — nothing added to the plan"
+    marks = " · ".join(_mark(c) for c in p["courses"])
     left = f"{_n(p['left'])} still to pass" if p["left"] else "all passed"
-    return f"📝 *Placement Exams:* {marks} — +{_n(p['extra'])} hrs on top of the plan ({left})"
+    return f"📝 *Placement Exams:* {marks} — *+{_n(p['extra'])} hrs on top of the plan* ({left})"
 
 
 def placement_lines(plan: dict) -> list[str]:
@@ -251,7 +261,9 @@ def progress_lines(plan: dict, retakes: int = 0, repeated: int = 0) -> list[str]
     """The degree progress for the summary. `retakes`: how many of this term's courses are retakes;
     `repeated`: how many courses of the record were ever taken again (both from the transcript)."""
     p = progress(plan)
-    lines = [f"📊 *Degree Plan:* {_n(p['degree'])} hrs", f"✅ *Passed:* {_n(p['passed'])} hrs"]
+    exams = placement(plan)
+    on_top = f" (+{_n(exams['extra'])} placement = {_n(p['degree'] + exams['extra'])} hrs)" if exams and exams["extra"] else ""
+    lines = [f"📊 *Degree Plan:* {_n(p['degree'])} hrs{on_top}", f"✅ *Passed:* {_n(p['passed'])} hrs"]
     if p["term_courses"]:
         again = f" ({_count(retakes, 'retake')})" if retakes else ""
         lines.append(f"⏳ *This Term:* {_n(p['term'])} hrs · {_count(p['term_courses'], 'course')}{again}")
