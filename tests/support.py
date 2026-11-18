@@ -722,3 +722,8 @@ PUBLIC_REPO = f"https://{REPO_PATH}.git"
 def portal_sections():
     from uninotifier import portal
     return portal.SECTIONS
+
+
+# A reminder reading its post's words must never reach the portal from a test: no words.
+from uninotifier.bot import reminder_flow as _reminder_flow  # noqa: E402
+_reminder_flow.page_words = lambda url: ""

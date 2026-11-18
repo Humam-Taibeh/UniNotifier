@@ -1129,3 +1129,22 @@ def test_a_reminders_picture_is_the_whole_post_not_a_corner_of_the_page():
         else:
             sys.modules["playwright.sync_api"] = keep_mod
     assert asked == ["#region-main"]
+
+
+def test_a_pinned_announcement_takes_the_words_of_its_page():
+    """📌 on an announcement whose note is only a title ("Announcement") reads what the post says from its page
+    and puts it under the title — so the reminder list shows the wording, not just a picture. A note that
+    already has its wording is left alone, and a page that cannot be read leaves the title."""
+    from uninotifier.bot import reminder_flow
+
+    keep = reminder_flow.page_words
+    asked = []
+    reminder_flow.page_words = lambda url: asked.append(url) or "Exam on Thu 26 Nov, 1:00 PM"
+    try:
+        assert reminder_flow.with_words("Announcement", "https://x/f") == "Announcement\nExam on Thu 26 Nov, 1:00 PM"
+        assert reminder_flow.with_words("Title\nalready here", "https://x/f") == "Title\nalready here" and len(asked) == 1
+        assert reminder_flow.with_words("Announcement", None) == "Announcement"
+        reminder_flow.page_words = lambda url: ""
+        assert reminder_flow.with_words("Announcement", "https://x/f") == "Announcement"
+    finally:
+        reminder_flow.page_words = keep

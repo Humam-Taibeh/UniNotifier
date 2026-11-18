@@ -220,6 +220,38 @@ def drop_pending() -> None:
     _reminder_draft.clear()
 
 
+def page_words(url: str) -> str:
+    """What the post says, read from its page: an activity's description (#intro) or the post a link points at
+    (#p<id>). Empty when it cannot be read — the reminder then keeps its title, and never fails."""
+    try:
+        import re
+        from lxml import etree, html as lxml_html
+        from uninotifier import moodle, richtext
+        from uninotifier.httpctx import HttpContext
+        from uninotifier.monitor import state
+        http = HttpContext.from_state_file(state.SESSION_FILE)
+        page = moodle.fetch_html(http, url.partition("#")[0]) if http else None
+        if not page:
+            return ""
+        anchor = re.search(r"#(p\d+)$", url)
+        tree = lxml_html.fromstring(page)
+        found = tree.xpath(f'//*[@id="{anchor.group(1)}"]//*[contains(@class,"post-content-container")]') if anchor else []
+        found = found or tree.xpath('//*[@id="intro"]')
+        return richtext.to_text(etree.tostring(found[0], encoding="unicode")).strip() if found else ""
+    except Exception as e:
+        log.exception("Could not read the words of %s", url)
+        failsafe.bug("reminders", "A pinned post's words could not be read", e, "The reminder keeps its title only.")
+        return ""
+
+
+def with_words(note: str, url: str | None) -> str:
+    """The note with the post's own wording under its title (when the note is only a title so far)."""
+    if not url or "\n" in note.strip():
+        return note
+    words = page_words(url)
+    return f"{note.strip()}\n{words}" if words and words != note.strip() else note
+
+
 def original_picture(url: str) -> list[bytes]:
     """The reminder's page as a picture, from the portal now (the saved session)."""
     from uninotifier import checkin
@@ -253,6 +285,9 @@ def show_original(reminder_id: int, answer) -> None:
         answer("That reminder has no original post.")
         return
     way_back = [[{"text": "⏳ Tasks & Reminders", "callback_data": "tasks"}], chat.BACK_ROW]
+    words = with_words(item["note"], item.get("url"))          # a reminder that kept only a title gets the post's wording now
+    if words != item["note"]:
+        item = reminders.update(reminder_id, note=words) or item
     pictures = reminders.shots_of(reminder_id)
     if not pictures and item.get("url") and (slack.mode() == "slack" or not item.get("message_id")):     # a reminder made before pictures were kept: the page is pictured again now, and kept
         answer("📸 Taking the picture…")
@@ -328,7 +363,8 @@ def handle_reminder_callback(cb: dict, action: str, message_id: int | None) -> N
             answer("⌛ That post is too old to pin — add it with ➕ New Custom Reminder.")
             return
         answer()
-        start_reminder(dict(found, key=parts[1]), (cb.get("message") or {}).get("message_id"))
+        start_reminder(dict(found, key=parts[1], note=with_words(found["note"], found.get("url"))),
+                       (cb.get("message") or {}).get("message_id"))
     elif kind == "open":
         answer()
         _reminder_draft.clear()
