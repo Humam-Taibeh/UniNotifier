@@ -962,3 +962,57 @@ def test_view_original_post_buttons_carry_the_number_the_list_gives():
         assert buttons()[0] == []
     finally:
         reminders.pending, tasks.open_tasks, chat.load_state = keep
+
+
+def test_slack_tasks_screen_has_no_indent_a_long_line_could_wrap_out_of():
+    """In Slack a wrapped line goes back to the margin, so an indented line that wraps looks broken (a long
+    "Location: …" line of a pinned announcement): nothing is indented there. A line separates the course's
+    tasks from your reminders. There is no quote to tap in Slack, so a pinned reminder offers its Moodle page
+    (or nothing), never a 'View Original Post' that cannot work. Telegram keeps its indentation and button."""
+    from uninotifier import reminders, slack, tasks
+    from uninotifier.bot import chat, views
+    long_line = "📍 Location: Faculty of Science - Labs (9101, 9103, 9104, 9105)"
+    items = [{"id": 1, "note": "New Announcement\n" + long_line, "course": "English", "due": 1900000000,
+              "message_id": 101, "url": "https://moodle.example/post/1"},
+             {"id": 2, "note": "Typed by hand", "course": None, "due": 1900000100, "message_id": 102, "url": None}]
+    task = {"kind": "assign", "name": "Essay", "course": "English", "due": 1900000000, "opens": None,
+            "late": False, "progress": None, "url": None}
+    keep = (reminders.pending, tasks.open_tasks, chat.load_state, slack.mode)
+    try:
+        reminders.pending = lambda now=None: list(items)
+        tasks.open_tasks = lambda state, now: [task]
+        chat.load_state = lambda: {}
+        slack.mode = lambda: "slack"
+        text, rows = views.view_tasks()
+        lines = text.splitlines()
+        assert not [l for l in lines if l[:1] in (" ", "\u00a0") or l.lstrip("\u200e")[:1] in (" ", "\u00a0")], lines
+        assert any(long_line in l for l in lines)
+        assert lines.index(media.DIVIDER, 2) < lines.index("🔔 *Your reminders*")       # a line between course tasks and yours
+        buttons = [b for row in rows for b in row]
+        assert not [b for b in buttons if "View Original Post" in b["text"]]
+        assert [b["url"] for b in buttons if b["text"].startswith("🌐 Open Post on Moodle")] == ["https://moodle.example/post/1"]
+        slack.mode = lambda: "telegram"
+        text, rows = views.view_tasks()
+        assert any(l.startswith("\u200e      ") or l.startswith("    ") for l in text.splitlines())
+        assert [b["callback_data"] for row in rows for b in row if "View Original Post" in b["text"]] == ["rem:view:1", "rem:view:2"]
+    finally:
+        reminders.pending, tasks.open_tasks, chat.load_state, slack.mode = keep
+
+
+def test_slack_original_post_shows_the_post_not_a_quote_that_cannot_exist():
+    """A reminder pinned in Telegram, opened in Slack: no 'tap the quote' (Slack has none), the note itself, its page, a way back."""
+    from uninotifier import reminders, slack
+    from uninotifier.bot import chat, reminder_flow
+    sent, told = [], []
+    keep = (reminders.get, slack.mode, chat.send_view, chat.send_reply_view)
+    try:
+        reminders.get = lambda rid: {"id": rid, "note": "امتحان منتصف الفصل", "message_id": 55, "url": "https://moodle.example/p"}
+        slack.mode = lambda: "slack"
+        chat.send_view = lambda text, rows: sent.append((text, rows))
+        chat.send_reply_view = lambda *a, **k: (_ for _ in ()).throw(AssertionError("Slack has no quote to send"))
+        reminder_flow.show_original(1, lambda *a: told.append(a))
+    finally:
+        reminders.get, slack.mode, chat.send_view, chat.send_reply_view = keep
+    text, rows = sent[0]
+    assert "quote" not in text and "امتحان منتصف الفصل" in text
+    assert rows[0][0]["url"] == "https://moodle.example/p" and rows[-1] == chat.BACK_ROW and told == [()]

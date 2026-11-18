@@ -127,20 +127,22 @@ def _span(ts: float, now: float) -> str:
 
 
 def task_lines(n: int, task: dict, now: float) -> list[str]:
+    from uninotifier import slack
+    ind = "" if slack.mode() == "slack" else "    "          # Slack wraps a long line back to the margin: nothing is indented there
     course = task["course"] if task["kind"] == "cambridge" else media.clean_course_name(task["course"])
-    lines = [f"{n}. {KIND[task['kind']]} *{escape_md(task['name'])}*", f"    📘 *Course:* {escape_md(course)}"]
+    lines = [f"{n}. {KIND[task['kind']]} *{escape_md(task['name'])}*", f"{ind}📘 *Course:* {escape_md(course)}"]
     if task["kind"] == "quiz" and task["opens"] and task["opens"] > now:
-        lines.append(f"    🗓️ *Opens:* {format_timestamp(task['opens'])} · ⏱️ in {_span(task['opens'], now)}")
+        lines.append(f"{ind}🗓️ *Opens:* {format_timestamp(task['opens'])} · ⏱️ in {_span(task['opens'], now)}")
     if task.get("late"):
-        lines.append(f"    🕐 *Due:* {format_timestamp(task['due'])}")
-        lines.append("    ⚠️ Overdue — Moodle still accepts it")
+        lines.append(f"{ind}🕐 *Due:* {format_timestamp(task['due'])}")
+        lines.append(f"{ind}⚠️ Overdue — Moodle still accepts it")
     elif task["due"]:
         field = "Closes" if task["kind"] == "quiz" else "Due"
-        lines.append(f"    🕐 *{field}:* {format_timestamp(task['due'])} · ⏱️ {_span(task['due'], now)} left")
+        lines.append(f"{ind}🕐 *{field}:* {format_timestamp(task['due'])} · ⏱️ {_span(task['due'], now)} left")
     elif not (task["kind"] == "quiz" and task["opens"]):
-        lines.append("    🕐 No due date set")
+        lines.append(f"{ind}🕐 No due date set")
     if task["progress"]:
-        lines.append(f"    📊 {escape_md(task['progress'])}")
+        lines.append(f"{ind}📊 {escape_md(task['progress'])}")
     return lines
 
 

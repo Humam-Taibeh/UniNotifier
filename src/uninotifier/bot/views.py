@@ -103,11 +103,12 @@ def reminder_lines(number: int, reminder: dict) -> list[str]:
     Arabic note next to an English course name or a time never reorders the line."""
     written = [line.strip() for line in (reminder.get("note") or "").splitlines() if line.strip()] or ["Reminder"]
     title = written[0]
+    ind = "" if slack.mode() == "slack" else "      "      # Slack wraps a long line back to the margin: nothing is indented there
     lines = [f"{LRM}{number}. 📝 {FSI}{escape_md(title)}{PDI}"]
-    lines += [f"{LRM}      {FSI}{escape_md(line)}{PDI}" for line in written[1:]]
+    lines += [f"{LRM}{ind}{FSI}{escape_md(line)}{PDI}" for line in written[1:]]
     if reminder.get("course") and reminder["course"] not in title:
-        lines.append(f"{LRM}      📘 {escape_md(reminder['course'])}")
-    lines.append(f"{LRM}      🕐 {reminders.when_text(reminder['due'])} · ⏱️ {chat.remaining_text(reminder['due'])}")
+        lines.append(f"{LRM}{ind}📘 {escape_md(reminder['course'])}")
+    lines.append(f"{LRM}{ind}🕐 {reminders.when_text(reminder['due'])} · ⏱️ {chat.remaining_text(reminder['due'])}")
     return lines
 
 
@@ -128,7 +129,7 @@ def view_tasks() -> tuple[str, list]:
     rows = tasks.open_buttons(upcoming)
 
     mine = reminders.pending()
-    lines += ["", "🔔 *Your reminders*"]
+    lines += ["", media.DIVIDER, "🔔 *Your reminders*"]       # the course's own tasks, then yours: a line between them
     if not mine:
         lines.append("None yet — tap ➕ below, or 📌 Add to Reminders under any announcement.")
     shown = []
@@ -145,6 +146,10 @@ def view_tasks() -> tuple[str, list]:
     # (so a screen that is a little old still opens the right one).
     pinned = [(n, r) for n, r in enumerate(shown, 1) if r.get("message_id")]
     for n, r in pinned[:VIEW_POST_BUTTONS]:
+        if slack.mode() == "slack":          # Slack cannot quote a message, and the post is not in this chat: its page opens
+            if r.get("url"):
+                rows.append([{"text": f"🌐 Open Post on Moodle ({n})", "url": r["url"]}])
+            continue
         rows.append([{"text": f"🔗 View Original Post ({n})", "callback_data": f"rem:view:{r['id']}"}])
     last = chat.load_last_run().get("finished")
     if last:

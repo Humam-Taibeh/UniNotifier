@@ -9,6 +9,7 @@ import logging
 from uninotifier import daily
 from uninotifier import notifier
 from uninotifier import reminders
+from uninotifier import slack
 from uninotifier.bot import chat
 from uninotifier.notifier import escape_md
 
@@ -200,8 +201,13 @@ def show_original(reminder_id: int, answer) -> None:
     if not item or not item.get("message_id"):
         answer("That reminder has no original post.")
         return
-    text = f"📌 *Original post* ⬆️ — tap the quote to jump to it.\n📝 {escape_md(item['note'])}"
     way_back = [[{"text": "⏳ Tasks & Reminders", "callback_data": "tasks"}], chat.BACK_ROW]
+    if slack.mode() == "slack":              # no quote to tap in Slack, and the post is not in this chat: the post itself
+        rows = [[{"text": "🌐 Open on Moodle", "url": item["url"]}]] if item.get("url") else []
+        answer()
+        chat.send_view(f"📌 *Original post*\n📝 {escape_md(item['note'])}", rows + way_back)
+        return
+    text = f"📌 *Original post* ⬆️ — tap the quote to jump to it.\n📝 {escape_md(item['note'])}"
     sent = chat.send_reply_view(text, way_back, item["message_id"])       # the bottom of the chat, with its way back
     if sent:
         answer()
