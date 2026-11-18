@@ -1019,17 +1019,17 @@ def test_the_bot_lives_in_slack():
                                                        "text": "my own card", "ts": "1.1"}})
                 assert slackbot.get_updates(None, 0) == [], "the app's own messages are not news"
 
-                # a file under its card; deleting the message takes both away
+                # a file under its card, the buttons under the file; deleting the message takes all three away
                 calls.clear()
                 pic = notifier.upload("T", "sendPhoto", {"chat_id": OWNER, "caption": "🔑 *Sign in*",
                                                           "reply_markup": json.dumps({"inline_keyboard": [[{"text": "📱 SMS", "callback_data": "mfa:sms"}]]})},
                                       "photo", "sign-in.png", b"png")
                 assert [m for m, _ in calls] == ["chat.postMessage", "files.getUploadURLExternal", "Z",
-                                                 "files.completeUploadExternal"]
+                                                 "files.completeUploadExternal", "chat.postMessage"]      # card, picture, then the buttons
                 assert slackbot.entry(pic["message_id"])["files"] == ["F9"]
                 calls.clear()
                 assert notifier.call_api("T", "deleteMessage", {"message_id": pic["message_id"]}) is True
-                assert [m for m, _ in calls] == ["files.delete", "chat.delete"] and slackbot.entry(pic["message_id"]) is None
+                assert [m for m, _ in calls] == ["files.delete", "chat.delete", "chat.delete"] and slackbot.entry(pic["message_id"]) is None
 
                 # a file sent again replaces its older copies in Slack's Files tab (only the same name, never the new one)
                 old = slackbot.remember("1.9", "old", None, ["F1"], ["Weekly.pdf"])
@@ -1043,7 +1043,7 @@ def test_the_bot_lives_in_slack():
                 reply = {}
                 assert notifier.send_message("T", OWNER, "📢 *New post*", rows=[[{"text": "✅ Mark as done", "callback_data": "done:5"}]],
                                              reply=reply)
-                assert reply["body"]["result"]["message_id"] == slackbot.number_of("1700000003.0001")
+                assert reply["body"]["result"]["message_id"] == slackbot.number_of("1700000004.0001")
                 button = sent_rows(calls[-1][1])[0]["elements"][0]
                 assert button["value"] == "done:5" and button["style"] == "primary"
 
@@ -1187,3 +1187,35 @@ def test_a_slack_that_refuses_headers_in_a_box_gets_them_as_bold_lines():
         assert len(sent) == 1 and sent[0][0]["type"] == "container"          # straight to the flat box
     finally:
         slack.call, slack._BOX_HEADERS = keep
+
+
+def test_in_slack_the_controls_come_last_under_the_picture():
+    """A card with a screenshot: the card, then the picture, then the buttons — never the buttons above the picture
+    (where they were left). The buttons' message is the one that is numbered, pressed and changed; deleting it takes
+    the card and the picture with it. A card with no file keeps its buttons on it."""
+    from uninotifier import slack, slackbot
+    log, deleted = [], []
+    keep = (slack.post, slack.upload, slack.post_controls, slack.delete, slackbot._settings, slackbot.STORE, slack.call)
+    try:
+        slack.post = lambda token, channel, text, card=None, colour=None: log.append(("card", bool(card and any(
+            b["type"] == "actions" for b in card)))) or {"ts": f"1.{len(log)}"}
+        slack.upload = lambda token, channel, files, comment="": log.append(("file", files[0][0])) or {"file_ids": ["F1"]}
+        slack.post_controls = lambda token, channel, text, controls: log.append(("controls", controls[0]["type"])) or {"ts": "9.9"}
+        slack.delete = lambda token, channel, ts: deleted.append(ts) or True
+        slackbot._settings = lambda: ("t", "c")
+        slack.call = lambda *a, **k: {"ok": True}                # the picture's own deletion: nothing leaves the test
+        slackbot.STORE = Path(tempfile.mkdtemp()) / "slack_messages.json"
+        markup = {"inline_keyboard": [[{"text": "🏛️ Open Portal", "url": "https://portal.example"}],
+                                      [{"text": "🔙 Academic Record", "callback_data": "record"},
+                                       {"text": "🏠 Main Menu", "callback_data": "menu"}]]}
+        number = slackbot.send("💰 *Balance*\n1,700 JD", markup, files=[("Balance.png", b"png")])
+        assert log == [("card", False), ("file", "Balance.png"), ("controls", "actions")], log      # buttons last, not on the card
+        found = slackbot.entry(number)
+        assert found["ts"] == "9.9" and found["head"] == "1.1" and found["files"] == ["F1"]
+        slackbot._delete(number)
+        assert set(deleted) == {"1.1", "9.9"}, deleted                                              # the card goes with it
+        log.clear()
+        slackbot.send("✅ Done", markup)
+        assert log == [("card", True)], log                                                         # no file: buttons on the card
+    finally:
+        slack.post, slack.upload, slack.post_controls, slack.delete, slackbot._settings, slackbot.STORE, slack.call = keep

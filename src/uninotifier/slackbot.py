@@ -191,20 +191,36 @@ def _rows_json(markup) -> str:
 # ------------------------------------------------------------------ out: what the bot sends
 
 def send(text: str, markup=None, files: list[tuple[str, bytes]] | None = None) -> int:
-    """A card with its buttons — and, when given, its files right under it, as one thing: if a file
-    cannot follow, the card is taken back, so a retry never leaves a card twice. Its number."""
+    """A card with its buttons. With files (a screenshot): the card, then the files, then the buttons
+    under them — the controls are always the last thing in the chat, never left above a picture — all
+    as one thing: if a file cannot follow, the card is taken back, so a retry never leaves a card twice.
+    Its number (the buttons' message when there are files: it is the one that is pressed and changed)."""
     token, channel = _settings()
-    answer = slack.post(token, channel, slack.compose(text, markup), slack.blocks(text, markup, live=True),
-                        slack.tone(text))
-    ts, file_ids = answer["ts"], []
-    if files:
-        try:
-            file_ids = slack.upload(token, channel, files).get("file_ids", [])
-        except (slack.SlackError, requests.RequestException, OSError):
-            slack.delete(token, channel, ts)
-            raise
-        _retire_old_copies(token, [name for name, _ in files], file_ids)
-    return remember(ts, text, markup, file_ids, [name for name, _ in files] if files else None)
+    controls = slack.buttons(markup) if files and markup else []
+    if not controls:
+        answer = slack.post(token, channel, slack.compose(text, markup), slack.blocks(text, markup, live=True),
+                            slack.tone(text))
+        ts, file_ids = answer["ts"], []
+        if files:
+            try:
+                file_ids = slack.upload(token, channel, files).get("file_ids", [])
+            except (slack.SlackError, requests.RequestException, OSError):
+                slack.delete(token, channel, ts)
+                raise
+            _retire_old_copies(token, [name for name, _ in files], file_ids)
+        return remember(ts, text, markup, file_ids, [name for name, _ in files] if files else None)
+    head = slack.post(token, channel, slack.compose(text, None), slack.blocks(text, None, live=True),
+                      slack.tone(text))["ts"]
+    try:
+        file_ids = slack.upload(token, channel, files).get("file_ids", [])
+        tail = slack.post_controls(token, channel, text, controls)["ts"]
+    except (slack.SlackError, requests.RequestException, OSError):
+        slack.delete(token, channel, head)
+        raise
+    _retire_old_copies(token, [name for name, _ in files], file_ids)
+    number = remember(tail, text, markup, file_ids, [name for name, _ in files])
+    _change(number, head=head)                                 # the card above the files goes with the message
+    return number
 
 
 def _retire_old_copies(token: str, names: list[str], keep: list[str]) -> None:
@@ -252,6 +268,8 @@ def _delete(message_id) -> bool:
             slack.call(token, "files.delete", {"file": file_id})
         except (slack.SlackError, requests.RequestException):
             pass
+    if found.get("head"):
+        slack.delete(token, channel, found["head"])
     if not slack.delete(token, channel, found["ts"]):
         return False
     _forget(message_id)

@@ -726,6 +726,15 @@ def post(token: str, channel: str, text: str, card: list[dict] | None = None, co
                                                   "unfurl_links": "false", "unfurl_media": "false"}, card, colour)
 
 
+def post_controls(token: str, channel: str, text: str, controls: list[dict]) -> dict:
+    """The buttons of a message whose card and files are above them, as a message of their own — just the
+    buttons, no box (a box would need a title): what a notification shows is the card's first words."""
+    _wait_turn()
+    first = next((line for line in (text or "").splitlines() if line.strip()), "")
+    return call(token, "chat.postMessage", {"channel": channel, "text": preview(first) or "·", "mrkdwn": "true",
+                                            "blocks": json.dumps(controls, ensure_ascii=False)})
+
+
 def update(token: str, channel: str, ts: str, text: str, card: list[dict] | None, colour: str = DEFAULT_TONE) -> dict:
     """A message already sent, rewritten in place (a screen that changes, buttons that go) — at once."""
     return _send_card(token, "chat.update", {"channel": channel, "ts": ts, "text": text}, card, colour)
