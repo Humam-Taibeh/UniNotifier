@@ -747,12 +747,9 @@ _BOX_HEADERS = True                 # does this Slack take a header block inside
 
 
 def _layouts(card: list[dict], colour: str) -> list[tuple[str, dict]]:
-    """The card's looks, best first: a notification that fits as Slack's card; in a box; in a
-    coloured frame (a Slack without either)."""
+    """The card's looks, best first: in a box (every message — a notification too: Slack's compact card cut its
+    buttons and its words); in a coloured frame (a Slack without boxes)."""
     looks = []
-    short = notice(card)
-    if short:
-        looks.append(("card", {"blocks": json.dumps([short], ensure_ascii=False), "attachments": "[]"}))
     headings = any(b["type"] == "header" for b in card[1:])
     flat = ("box-flat", {"blocks": json.dumps(boxed(card, flat=True), ensure_ascii=False), "attachments": "[]"})
     if headings and not _BOX_HEADERS:

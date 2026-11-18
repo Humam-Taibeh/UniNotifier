@@ -873,15 +873,15 @@ def test_messages_go_to_slack_when_chosen():
                 return json.loads(sent["blocks"])
 
             short = top_of(data)
-            assert [b["type"] for b in short] == ["card"] and short[0]["title"]["text"] == "📢 New post"
-            assert "<https://teams.example/j|🎥 Join>" in short[0]["subtext"]["text"], "the links, small"
+            assert [b["type"] for b in short] == ["container"] and short[0]["title"]["text"] == "📢 New post"      # a box, never the compact card
+            assert "<https://teams.example/j|🎥 Join>" in json.dumps(short[0]["child_blocks"], ensure_ascii=False), "the links, whole"
             calls.clear()
             reminder = "⏰ *Reminder*\n\n📘 *Course:* Big Data\n📋 *Type:* Quiz\n\nSoon.\n🕒 *Detected:* now\n\n_A note._"
             assert notifier.send_message("T", "1", reminder)
             short = top_of(calls[-1][1])[0]
-            assert short["type"] == "card" and short["subtitle"]["text"] == "📘 Big Data", short
-            assert short["body"]["text"] == "*📋 Type:* Quiz\n\nSoon.", short
-            assert short["subtext"]["text"] == "🕒 Detected: now\n_A note._"
+            assert short["type"] == "container" and short["title"]["text"] == "⏰ Reminder", short
+            inside = json.dumps(short["child_blocks"], ensure_ascii=False)
+            assert "Big Data" in inside and "Quiz" in inside and "Soon." in inside and "A note." in inside, inside      # nothing cut
             # one that does not fit (or a screen: it has the way back) goes in a box — nothing is cut
             long_one = reminder.replace("Soon.", "Soon. " + "word " * 50)
             assert slack.notice(slack.blocks(long_one)) is None
@@ -932,12 +932,12 @@ def test_messages_go_to_slack_when_chosen():
             assert card[3]["elements"][0]["text"] == "_A note._"
             # a card Slack refuses: the box; the box refused: the coloured frame; that too: the words
             # as text — a layout Slack does not take never costs the message
-            replies["chat.postMessage"] = [{"ok": False, "error": "invalid_blocks"}] * 3 + [{"ok": True}]
+            replies["chat.postMessage"] = [{"ok": False, "error": "invalid_blocks"}] * 2 + [{"ok": True}]
             calls.clear()
             assert notifier.send_message("T", "1", "⏰ *Reminder*\n\nx")
-            assert len(calls) == 4 and '"card"' in calls[0][1]["blocks"] and "container" in calls[1][1]["blocks"], calls
-            assert json.loads(calls[2][1]["attachments"])[0]["color"] == "#e0a020", "time-bound: gold"
-            assert "blocks" not in calls[3][1]
+            assert len(calls) == 3 and "container" in calls[0][1]["blocks"] and '"card"' not in calls[0][1]["blocks"], calls
+            assert json.loads(calls[1][1]["attachments"])[0]["color"] == "#e0a020", "time-bound: gold"
+            assert "blocks" not in calls[2][1]
             replies["chat.postMessage"] = {"ok": True, "ts": "1.1"}
 
             # a file: uploaded in two steps, its caption above it — a Telegram file Id is never used
