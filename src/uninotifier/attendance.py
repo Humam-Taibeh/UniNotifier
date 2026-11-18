@@ -24,7 +24,7 @@ from datetime import date, datetime, timedelta
 from uninotifier import fileio, paths, schedule
 
 FILE = paths.DATA / "attendance.json"
-ALLOWED = {"normal": 5, "blended": 2, "once": 2}   # absences allowed; one more deprives (حرمان)
+ALLOWED = {"normal": 5, "blended": 2, "once": 2}   # absences allowed; one more deprives
 CAMPUS_MODES = ("In-Person", "Blended")           # "Blended" is the portal's own mark (م) for a blended course's campus day
 COUNTED_MODES = CAMPUS_MODES + ("Online",)
 ASK_AFTER_MINUTES = 60                           # asked this long after the day's last lecture ends
@@ -217,13 +217,13 @@ MARK = {"ok": "🟢", "last": "🟠", "limit": "🔴", "deprived": "🚫"}
 
 
 def state_text(info: dict) -> str:
-    """The state in words, the Arabic term beside the English one."""
+    """The state in words."""
     if info["state"] == "deprived":
-        return "*Deprived (حرمان)* — over the limit"
+        return "*Deprived* — over the limit"
     if info["state"] == "limit":
-        return "no absences left — the next one means *حرمان* (deprivation)"
+        return "no absences left — the next one means *deprivation*"
     if info["state"] == "last":
-        return "ONE absence left before *حرمان* (deprivation)"
+        return "ONE absence left before *deprivation*"
     return f"{info['left']} left"
 
 

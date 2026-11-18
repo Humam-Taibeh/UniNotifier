@@ -1322,7 +1322,7 @@ def test_attendance_courses_follow_the_week_and_slack_draws_cards():
 
 def test_attendance_once_a_week_course_and_wording():
     """A course attended one day a week (an online course with an Activity day) has 2 absences, like a blended one;
-    over the limit the screen says حرمان, with a way back."""
+    over the limit the screen says deprivation, with a way back."""
     import importlib
     from uninotifier import attendance
     attendance.FILE = Path(tempfile.mkdtemp()) / "attendance.json"
@@ -1331,7 +1331,7 @@ def test_attendance_once_a_week_course_and_wording():
     assert attendance.kinds(sched) == {"Arabic": "once"} and attendance.ALLOWED["once"] == 2
     assert attendance.set_count("Arabic", 3) == 3 and attendance.status("Arabic", "once")["state"] == "deprived"
     assert attendance.set_count("Arabic", 1) == 1
-    assert "حرمان" in attendance.state_text(attendance.status("Arabic", "once", {"absences": {"Arabic": ["a", "b"]}}))
+    assert "deprivation" in attendance.state_text(attendance.status("Arabic", "once", {"absences": {"Arabic": ["a", "b"]}}))
     flow = importlib.import_module("uninotifier.bot.attendance_flow")
     for view in (flow.view_home(), flow.view_set(), flow.view_ask(__import__('datetime').date(2026, 11, 18)), flow.view_pick(__import__('datetime').date(2026, 11, 18))):
         labels = [b["text"] for row in view[1] for b in row]

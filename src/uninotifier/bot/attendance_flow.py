@@ -23,7 +23,7 @@ TICK = 60                                   # seconds between looks at whether t
 MAIN = {"text": "🏠 Main Menu", "callback_data": "menu"}
 ATTENDANCE = {"text": "🔙 Attendance", "callback_data": "att:home"}
 RULES = ("*Absences allowed:* 5 for a course you attend 2 days or more a week; 2 for a blended, a free or a "
-         "once-a-week course. One more than that means *حرمان* (deprivation).")
+         "once-a-week course. One more than that means *deprivation*.")
 KIND_TAG = {"blended": " · blended", "once": " · once a week", "normal": ""}
 
 
@@ -124,7 +124,7 @@ def view_set() -> tuple[str, list]:
         info = attendance.status(course, kind[course], data)
         if _in_slack():
             top = max(info["allowed"] + 2, info["count"])
-            options = [[f"{k} of {info['allowed']}" if k <= info["allowed"] else f"🚫 {k} — حرمان", f"att:to:{i}:{k}"]
+            options = [[f"{k} of {info['allowed']}" if k <= info["allowed"] else f"🚫 {k} — deprived", f"att:to:{i}:{k}"]
                        for k in range(top + 1)]
             rows.append([{"text": "Set", "callback_data": f"att:to:{i}:{info['count']}",
                           "line": {"text": _course_text(i, course, kind[course], info), "options": options,
