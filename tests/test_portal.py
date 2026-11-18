@@ -837,7 +837,7 @@ def test_portal():
         assert "⏱️ *Passed Hours:* 33 hrs" in caption and "📌 *Academic Status:* Regular / Good Standing" in caption
         assert "📚 *Total Attempted Hours:* 36 hrs" in caption
         assert "🏁 *Remaining Hours:* 99 hrs" in caption, "your own transcript shows the hours left too (132 − 33 passed)"
-        body = caption.split("Retrieved")[1].split("\n", 1)[1]        # without the clock: "6:18:35 PM" holds a 35
+        body = caption.split("Retrieved")[0]        # without the clock (small print at the bottom): "6:18:35 PM" holds a 35
         for internal in ("35", "attempted", "synced", "record"):
             assert internal not in body, (internal, caption)
         assert rows == [[{"text": "🏛️ Open Registration Portal ↗️", "url": portal.LOGIN_URL}], bot.RECORD_ROW],             "the portal link, and the way back on the answer itself"
@@ -856,7 +856,7 @@ def test_portal():
         assert "couldn't find the Grades page" in sent_files[-1][1] and "Student Services" in sent_files[-1][1]
         bot.send_portal_result(portal.Result("balance", True, None, [], {"balance": 120.0}, [],
                                              ["💰 *Total balance:* 120 JD — owed", "• First semester 2026/2027 · 120 JD"]))
-        assert "Total balance:* 120" in sent_msgs[-1][0] and sent_msgs[-1][0].endswith("• First semester 2026/2027 · 120 JD"),             "no screenshot: the caption, with the details in it, goes out as ONE text message"
+        assert "Total balance:* 120" in sent_msgs[-1][0] and "• First semester 2026/2027 · 120 JD" in sent_msgs[-1][0],             "no screenshot: the caption, with the details in it, goes out as ONE text message"
         bot.send_portal_result(portal.Result("transcript", True, b"png", [], {"passed_hours": 63.0, "cgpa": 71.3, "record_hours": 72.0, "record_cgpa": 71.26}, [],
                                              ["📅 *First semester 2026/2027*"]))
         assert "⏱️ *Passed Hours:* 63 hrs" in sent_files[-1][1], sent_files[-1][1]
@@ -1574,7 +1574,7 @@ def test_portal_answers_from_the_saved_copy():
         reset()
         run("balance")
         assert reads == [] and sent[0][0] == "doc" and sent[0][1] == "ZUJ Portal - Tuition Balance.png"
-        assert "🕒 *As of:*" in sent[0][2] and bot.REFRESHING not in sent[0][2] and "1,250 JD" in sent[0][2]
+        assert "🕒 As of:" in sent[0][2] and bot.REFRESHING not in sent[0][2] and "1,250 JD" in sent[0][2]
         assert screens == [], "the answer carries its own way back: no menu is repeated under it"
 
         # an old copy, nothing changed: answered at once, then only its stamp changes
@@ -1585,7 +1585,7 @@ def test_portal_answers_from_the_saved_copy():
         assert bot.REFRESHING in sent[0][2] and reads == [["balance"]]
         assert [c[0] for c in calls] == ["editMessageCaption"], calls
         caption = calls[0][1]["caption"]
-        assert "🕒 *Retrieved:*" in caption and bot.UPDATED not in caption
+        assert "🕒 Retrieved:" in caption and bot.UPDATED not in caption
         assert calls[0][1]["message_id"] == sent[0][3], "the message that was sent is the one updated"
         assert json.loads((bot.CACHE_DIR / "balance.json").read_text(encoding="utf-8"))["at"] > time.time() - 60
 

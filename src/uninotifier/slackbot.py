@@ -196,7 +196,7 @@ def send(text: str, markup=None, files: list[tuple[str, bytes]] | None = None) -
     as one thing: if a file cannot follow, the card is taken back, so a retry never leaves a card twice.
     Its number (the buttons' message when there are files: it is the one that is pressed and changed)."""
     token, channel = _settings()
-    controls = slack.buttons(markup) if files and markup else []
+    controls = slack.buttons(markup, width=slack.ROW_WIDTH) if files and markup else []
     if not controls:
         answer = slack.post(token, channel, slack.compose(text, markup), slack.blocks(text, markup, live=True),
                             slack.tone(text))
@@ -252,9 +252,28 @@ def _edit(message_id, text: str | None, markup, keep_markup: bool = False) -> di
     markup = found.get("markup") if keep_markup else markup
     if found.get("ts") == HOME_TS:                   # a screen on the Home page: the page is redrawn
         return show_home(text, markup)
+    if found.get("head"):                            # a card with files and its buttons under them (see send)
+        return _edit_with_files(message_id, found, text, markup)
     slack.update(token, channel, found["ts"], slack.compose(text, markup), slack.blocks(text, markup, live=True),
                  slack.tone(text))
     _change(message_id, text=text, markup=_rows_json(markup))
+    return {"message_id": int(message_id), "chat": {"id": _chat_id()}, "text": text}
+
+
+def _edit_with_files(message_id, found: dict, text: str, markup) -> dict:
+    """A message made of a card, its files and the buttons under them: the words change ON THE CARD (it never stays
+    stale above a new copy), the buttons change where they are; with no buttons left their message goes and the card
+    is the message."""
+    token, channel = _settings()
+    controls = slack.buttons(markup, width=slack.ROW_WIDTH) if markup else []
+    slack.update(token, channel, found["head"], slack.compose(text, None), slack.blocks(text, None, live=True),
+                 slack.tone(text))
+    if controls:
+        slack.update_controls(token, channel, found["ts"], text, controls)
+        _change(message_id, text=text, markup=_rows_json(markup))
+    else:
+        slack.delete(token, channel, found["ts"])
+        _change(message_id, text=text, markup="", ts=found["head"], head=None)
     return {"message_id": int(message_id), "chat": {"id": _chat_id()}, "text": text}
 
 

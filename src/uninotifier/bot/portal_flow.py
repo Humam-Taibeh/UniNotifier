@@ -91,9 +91,9 @@ def ask_portal_code(attempt: int, rejected: bool, for_guest: bool = False) -> st
 
 
 def stamp(at: float | None = None, note: str = "") -> str:
-    """🕒 Retrieved: <now> for a fresh read, 🕒 As of: <then> for a cached one."""
+    """🕒 Retrieved: <now> for a fresh read, 🕒 As of: <then> for a cached one — small print, at the bottom."""
     head = "Retrieved" if at is None else "As of"
-    return f"🕒 *{head}:* {notifier.audit_timestamp(at)}" + (f" · {note}" if note else "")
+    return f"_🕒 {head}: {notifier.audit_timestamp(at)}" + (f" · {note}" if note else "") + "_"
 
 
 def compose(result: portal.Result, when: str) -> tuple[str, list[str], list]:
@@ -101,7 +101,7 @@ def compose(result: portal.Result, when: str) -> tuple[str, list[str], list]:
     emoji, title = PORTAL_TITLES[result.section]
     portal_row = [{"text": "🏛️ Open Registration Portal ↗️", "url": portal.LOGIN_URL}]
     rows = [portal_row]
-    lines = [f"{emoji} *ZUJ Portal — {title}*", when]
+    lines = [f"{emoji} *ZUJ Portal — {title}*"]
     body: list[str] = []
 
     if not result.found:
@@ -132,6 +132,7 @@ def compose(result: portal.Result, when: str) -> tuple[str, list[str], list]:
             else:
                 lines += ["", total]
                 body = rest
+    lines += ["", when]                                   # when it was read: small print under the content
     if own_way_back(result.section):
         rows = rows + [chat.RECORD_ROW]
     return "\n".join(lines), body, rows

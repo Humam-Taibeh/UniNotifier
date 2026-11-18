@@ -1299,3 +1299,65 @@ def test_the_attendance_question_fits_the_day():
         assert labels[-1] == "🏠 Main Menu"
     finally:
         schedule.load_schedule = keep
+
+
+def test_a_card_with_a_picture_is_updated_on_the_card_never_left_stale_above_a_new_copy():
+    """The saved copy is sent first ('As of … checking for changes…'), then the fresh read changes it in place: the words
+    change on the CARD (above the picture), the buttons stay under the picture, nothing is posted twice. With no buttons
+    left the card is the message."""
+    from uninotifier import slack, slackbot
+    log = []
+    keep = (slack.post, slack.upload, slack.post_controls, slack.delete, slack.update, slack.update_controls,
+            slackbot._settings, slackbot.STORE, slack.call)
+    try:
+        slack.post = lambda token, channel, text, card=None, colour=None: log.append(("post", text)) or {"ts": f"1.{len(log)}"}
+        slack.upload = lambda token, channel, files, comment="": {"file_ids": ["F1"]}
+        slack.post_controls = lambda token, channel, text, controls: log.append(("controls", text)) or {"ts": "9.9"}
+        slack.delete = lambda token, channel, ts: log.append(("delete", ts)) or True
+        slack.update = lambda token, channel, ts, text, card, colour=None: log.append(("update", ts, text)) or {}
+        slack.update_controls = lambda token, channel, ts, text, controls: log.append(("update controls", ts)) or {}
+        slack.call = lambda *a, **k: {"ok": True}
+        slackbot._settings = lambda: ("t", "c")
+        slackbot.STORE = Path(tempfile.mkdtemp()) / "slack_messages.json"
+        markup = {"inline_keyboard": [[{"text": "🔙 Academic Record", "callback_data": "record"}]]}
+        number = slackbot.send("💰 *Balance*\n\n_🕒 As of 4:41 PM · checking for changes…_", markup, files=[("B.png", b"png")])
+        head = slackbot.entry(number)["head"]
+        log.clear()
+        slackbot._edit(number, "💰 *Balance*\n\n_🕒 Retrieved: 5:02 PM_", markup)
+        assert [e[0] for e in log] == ["update", "update controls"] and log[0][1] == head and "Retrieved" in log[0][2], log
+        assert slackbot.entry(number)["text"].endswith("Retrieved: 5:02 PM_")
+        log.clear()
+        slackbot._edit(number, "💰 *Balance*", [])                    # no buttons any more
+        assert [e[0] for e in log] == ["update", "delete"] and slackbot.entry(number)["ts"] == head and not slackbot.entry(number).get("head")
+    finally:
+        (slack.post, slack.upload, slack.post_controls, slack.delete, slack.update, slack.update_controls,
+         slackbot._settings, slackbot.STORE, slack.call) = keep
+
+
+def test_no_button_label_is_ever_cut_and_a_balance_keeps_its_time_at_the_bottom():
+    """A row of buttons holds only what fits (a long label stands alone, short ones share a row); and the time a portal
+    answer was read is small print under its content, not the first thing on the card."""
+    import importlib
+    from uninotifier import portal, slack
+    portal_flow = importlib.import_module("uninotifier.bot.portal_flow")
+    keep = slack.mode
+    try:
+        slack.mode = lambda: "slack"
+        rows = {"inline_keyboard": [[{"text": t, "callback_data": f"x{n}"}] for n, t in enumerate(
+            ["📚 My Courses & Schedule", "⏳ Upcoming Tasks & Reminders", "📊 GPA & Grade Hub", "📜 Academic Record & Balance",
+             "🏛️ Open Registration Portal ↗️", "🎯 Grade Needed", "🏁 Finals Watch", "✅ Attended all", "🎯 Missed some"])]}
+        for block in slack.buttons(rows, width=slack.ROW_WIDTH):
+            widths = sum(slack._width(e) for e in block["elements"])
+            assert widths <= slack.ROW_WIDTH or len(block["elements"]) == 1, ([e["text"]["text"] for e in block["elements"]], widths)
+        result = portal.Result("balance", True, None, [], {"balance": 1700.0}, [],
+                               ["💰 *Total balance:* 1,700 JD — owed", "• First semester 2026/2027 · 18h · 1,700 JD"])
+        text, body, rows = portal_flow.compose(result, portal_flow.stamp(1.7e9, portal_flow.REFRESHING))
+        lines = text.splitlines()
+        assert lines[0].startswith("💰 *ZUJ Portal") and lines[-1].startswith("_🕒 As of:") and lines[-1].endswith("checking for changes…_")
+        assert "Total balance" in lines[2] and "As of" not in "\n".join(lines[:-1])
+        blocks = slack.blocks(text, {"inline_keyboard": rows}, live=True)
+        small = [b for b in blocks if b["type"] == "context"]
+        assert small and "As of" in small[-1]["elements"][0]["text"], blocks          # small print, after the content
+        assert blocks.index(small[-1]) > max(i for i, b in enumerate(blocks) if b["type"] == "section")
+    finally:
+        slack.mode = keep

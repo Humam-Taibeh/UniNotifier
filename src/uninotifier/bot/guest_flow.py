@@ -295,7 +295,7 @@ def send_guest_results(user: str, results: dict) -> None:
     plan = record.data.get("plan")
     summary = transcript.summary_lines(semesters, record.figures, status, major, remaining, plan=plan,
                                        retakes=len(record.data.get("retakes") or {}))
-    caption = "\n".join([f"{head} — 📜 Transcript", f"🕒 *Retrieved:* {notifier.audit_timestamp()}", "", *summary])
+    caption = "\n".join([f"{head} — 📜 Transcript", "", *summary, "", f"_🕒 Retrieved: {notifier.audit_timestamp()}_"])
     rows = [portal_flow.record_buttons("guest", bool(plan))]       # the courses are a button away
     if plan:
         rows.append([{"text": "🗓️ Registration Plan", "callback_data": "guest:reg"}])

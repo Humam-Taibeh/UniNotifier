@@ -177,6 +177,24 @@ def _markup(reply_markup) -> list[list[dict]]:
 NAV_MARKS = ("🔙", "🏠", "⬅", "↩")                  # the way back: kept apart, at the very bottom
 NAV_WORDS = ("Main Menu", "Back")
 ROW_SIZE = 5                                        # buttons side by side; Slack wraps a row that is too wide
+ROW_WIDTH = 62                                      # what a row of a message's buttons may hold, so no label is ever cut: the
+                                                    # width of the words (an emoji counts double) plus 4 for each button
+
+
+def _width(element: dict) -> int:
+    label = element.get("text", {}).get("text", "")
+    return sum(2 if ord(c) > 0x2300 else 1 for c in label) + 4
+
+
+def _by_width(elements: list[dict], limit: int) -> list[list[dict]]:
+    """The buttons in rows that each fit `limit`: a long label stands alone, short ones share a row."""
+    rows: list[list[dict]] = []
+    for element in elements:
+        if rows and sum(_width(e) for e in rows[-1]) + _width(element) <= limit:
+            rows[-1].append(element)
+        else:
+            rows.append([element])
+    return rows
 
 
 def _is_nav(label: str) -> bool:
@@ -228,7 +246,7 @@ def grouped(rows: list[list[dict]], name: str) -> list[list[dict]]:
     return [[{**row[0], "group": name}, *row[1:]] if row else row for row in rows]
 
 
-def buttons(reply_markup, prefix: str = "") -> list[dict]:
+def buttons(reply_markup, prefix: str = "", width: int | None = None) -> list[dict]:
     """Telegram's keyboard as Slack's: the buttons side by side (Telegram stacks one per row, which in
     Slack reads as a long list), the way back apart under a line, a button that opens a page opening
     it, any other carrying its Telegram callback data as its value (slackbot hands the press to the
@@ -265,8 +283,9 @@ def buttons(reply_markup, prefix: str = "") -> list[dict]:
         if out:
             out.append({"type": "divider"})              # a group of buttons never runs into the one before it
         size = 25 if group else ROW_SIZE                 # a named group is one block: Slack wraps it by the width
-        for n in range(0, len(content), size):
-            out.append({"type": "actions", "block_id": f"{prefix}row{next(numbers)}", "elements": content[n:n + size]})
+        rows = _by_width(content, width) if width else [content[n:n + size] for n in range(0, len(content), size)]
+        for row in rows:                                 # `width`: a message's buttons, none of them with its label cut
+            out.append({"type": "actions", "block_id": f"{prefix}row{next(numbers)}", "elements": row})
     if cards:
         out[:0] = _row_lines(cards)
     if nav:                                              # the way back — Back and Main Menu — under a line of its own
@@ -375,7 +394,7 @@ def blocks(text: str, reply_markup=None, live: bool = False) -> list[dict] | Non
     if fields:
         flush_fields()
     if live:
-        keyboard = buttons(reply_markup)
+        keyboard = buttons(reply_markup, width=ROW_WIDTH)
         if keyboard and out and out[-1]["type"] != "divider" and not _only_title(out) and not _one_liner(out):
             out.append({"type": "divider"})                    # the same everywhere: a light line above the buttons
         out.extend(keyboard)
@@ -735,6 +754,13 @@ def post_controls(token: str, channel: str, text: str, controls: list[dict]) -> 
     first = next((line for line in (text or "").splitlines() if line.strip()), "")
     return call(token, "chat.postMessage", {"channel": channel, "text": preview(first) or "·", "mrkdwn": "true",
                                             "blocks": json.dumps(controls, ensure_ascii=False)})
+
+
+def update_controls(token: str, channel: str, ts: str, text: str, controls: list[dict]) -> dict:
+    """The buttons message of a card with files, rewritten where it is (see post_controls)."""
+    first = next((line for line in (text or "").splitlines() if line.strip()), "")
+    return call(token, "chat.update", {"channel": channel, "ts": ts, "text": preview(first) or "·", "mrkdwn": "true",
+                                       "blocks": json.dumps(controls, ensure_ascii=False), "attachments": "[]"})
 
 
 def update(token: str, channel: str, ts: str, text: str, card: list[dict] | None, colour: str = DEFAULT_TONE) -> dict:
