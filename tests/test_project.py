@@ -616,3 +616,77 @@ def test_the_readme_translations_say_the_same():
         assert f"git clone {PUBLIC_REPO}\n" in text and "%USERPROFILE%" in text, (name, "clone address and placeholder")
     assert [line.count("|") for line in en.splitlines() if line.startswith("|")] == \
            [line.count("|") for line in ar.splitlines() if line.startswith("|")], "the tables have the same shape"
+
+
+def test_a_student_on_slack_needs_no_telegram_at_all():
+    """The messages go to Slack: a missing Telegram token or Id is no problem (the monitor and the bot start), and
+    with the Telegram settings absent the programs still get plain strings to pass around. Telegram stays required
+    when Telegram is the way."""
+    from uninotifier import envcheck
+    slack_only = {"NOTIFY_VIA": "slack", "SLACK_BOT_TOKEN": "xoxb-good-token-1111", "SLACK_CHANNEL": "D0999ZZZZ",
+                  "SLACK_USER": "U0999ZZZZ", "TELEGRAM_BOT_TOKEN": "", "TELEGRAM_CHAT_ID": "", "ADMIN_USER_ID": ""}
+    assert _with_env(slack_only, envcheck.problems) == [], "Slack alone is a complete setup"
+    assert _with_env({**slack_only, "ZUJ_PASSWORD": ""}, envcheck.problems), "...but the university password is still needed"
+    half = {**slack_only, "SLACK_CHANNEL": ""}
+    assert any("TELEGRAM_BOT_TOKEN is not set" in p for p in _with_env(half, envcheck.problems)), "Slack half set up: Telegram is still asked for"
+    telegram = {**slack_only, "NOTIFY_VIA": "telegram"}
+    assert any("TELEGRAM_BOT_TOKEN is not set" in p for p in _with_env(telegram, envcheck.problems))
+
+
+def test_the_setup_begins_by_asking_where_the_messages_go_and_slack_is_the_default():
+    """The student's setup: 1 = Slack (the default, one conversation — e-mail, password, the Slack app, the
+    portal), 2 = Telegram. In Slack's way no Telegram question is asked, the buttons' token is required, and
+    the file written has NOTIFY_VIA=slack with the Slack settings and no Telegram ones."""
+    from dotenv import dotenv_values
+    from uninotifier import setup, slack
+
+    class Script(setup.Console):
+        def __init__(self, answers):
+            self.answers, self.said, self.asked = list(answers), [], []
+
+        def say(self, text=""):
+            self.said.append(text)
+
+        def ask(self, prompt, secret=False):
+            self.asked.append((prompt, secret))
+            if not self.answers:
+                raise EOFError
+            return self.answers.pop(0)
+
+    tmp = Path(tempfile.mkdtemp(prefix="uninotifier-choice-"))
+    keep = (setup.restrict, paths.ENV_FILE, slack.who, slack.people, slack.conversation, slack.post,
+            setup.copy_to_clipboard, slack.call)
+    setup.restrict = lambda path: True
+    paths.ENV_FILE = tmp / ".env"
+    slack.who = lambda token: {"team": "My Uni", "bot": "uninotifier"}
+    slack.people = lambda token: [{"id": "U2", "name": "Sam"}]
+    slack.conversation = lambda token, user: "D0999ZZZZ"
+    slack.post = lambda token, channel, text: {"ok": True}
+    setup.copy_to_clipboard = lambda text: True
+    slack.call = lambda token, method, data=None, timeout=None: {"ok": True}
+    try:
+        console = Script(["",                                              # where: Enter = Slack
+                          "209900001@std-zuj.edu.jo", "pass-word-1",         # the university
+                          "xoxb-good-token-1111", "y",                       # the Slack app; "I see Sam. Is that you?"
+                          "xapp-good-token-2222",                            # the buttons' token — required here
+                          "209900001", "portal-pass", "n"])                  # the portal; no automatic check-in
+        assert setup.main([], console) == 0, console.said
+        saved = dotenv_values(paths.ENV_FILE)
+        assert (saved["NOTIFY_VIA"], saved["SLACK_USER"], saved["SLACK_APP_TOKEN"]) == ("slack", "U2", "xapp-good-token-2222")
+        assert not saved.get("TELEGRAM_BOT_TOKEN") and not any("Telegram bot" in l or "BotFather" in l for l in console.said)
+        assert saved["ZUJ_USERNAME"] == "209900001@std-zuj.edu.jo" and saved["PORTAL_USERNAME"] == "209900001"
+        assert all(secret for prompt, secret in console.asked if "Token" in prompt or "Password" in prompt or "password" in prompt)
+        # the buttons' token cannot be skipped in this way (without it the bot has no menus)
+        paths.ENV_FILE = tmp / "second.env"
+        console = Script(["1", "209900001@std-zuj.edu.jo", "pass-word-1", "xoxb-good-token-1111", "y", "", "xapp-good-token-2222",
+                          "", ])
+        assert setup.main([], console) == 0
+        assert sum("App-Level Token" in prompt for prompt, _ in console.asked) == 2, "an empty answer asks again"
+        # 2 = Telegram: the old conversation, unchanged
+        paths.ENV_FILE = tmp / "third.env"
+        telegram = Script(["2", "209900001@std-zuj.edu.jo", "pass-word-1"])      # then the window closes at the bot token
+        assert setup.main([], telegram) == 1 and any("Telegram bot" in l for l in telegram.said), telegram.said
+    finally:
+        (setup.restrict, paths.ENV_FILE, slack.who, slack.people, slack.conversation, slack.post,
+         setup.copy_to_clipboard, slack.call) = keep
+        shutil.rmtree(tmp, ignore_errors=True)

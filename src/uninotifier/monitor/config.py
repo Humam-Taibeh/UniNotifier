@@ -25,10 +25,10 @@ USERNAME = os.getenv("ZUJ_USERNAME")
 PASSWORD = os.getenv("ZUJ_PASSWORD")
 
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or ("0:slack" if os.getenv("SLACK_BOT_TOKEN") else None)   # Slack alone: a stand-in, never contacted
 
 
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID") or os.getenv("SLACK_USER")
 
 
 STUDENT_ID = os.getenv("STUDENT_ID") or os.getenv("PORTAL_USERNAME") or ""   # for finding your marks in files

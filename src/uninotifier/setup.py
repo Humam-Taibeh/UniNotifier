@@ -246,15 +246,58 @@ def find_chat(console: Console, token: str, bot: str, current: str = "") -> str:
     return _ask(console, "TELEGRAM_CHAT_ID", "Your Telegram Id", current)
 
 
+def _ask_university(console: Console, values: dict[str, str], saved) -> None:
+    console.say("1/5  Your university e-mail - the one you open Moodle (e-learning) with")
+    values["ZUJ_USERNAME"] = _ask(console, "ZUJ_USERNAME", "E-mail", saved("ZUJ_USERNAME"))
+    console.say("2/5  The password of that e-mail")
+    values["ZUJ_PASSWORD"] = _ask(console, "ZUJ_PASSWORD", "Password", saved("ZUJ_PASSWORD"), secret=True)
+
+
+def _ask_portal(console: Console, values: dict[str, str], saved) -> None:
+    console.say("5/5  The registration portal (portal.zuj.edu.jo) - optional. With it the bot reads your")
+    console.say("     timetable by itself and draws it, and shows your transcript and balance when you ask.")
+    values["PORTAL_USERNAME"] = _ask(console, "PORTAL_USERNAME", "Portal user name (usually your university number)",
+                                     saved("PORTAL_USERNAME"), optional=True)
+    if values["PORTAL_USERNAME"]:
+        values["PORTAL_PASSWORD"] = _ask(console, "PORTAL_PASSWORD", "Portal password", saved("PORTAL_PASSWORD"), secret=True)
+        on = _yes(console, "Check you in to your ONLINE lectures automatically (with a screenshot as proof)?",
+                  saved("AUTO_CHECK_IN").lower() == "true")
+        values["AUTO_CHECK_IN"] = "true" if on else "false"
+    else:
+        values["PORTAL_PASSWORD"], values["AUTO_CHECK_IN"] = "", ""
+        console.say("   Skipped: you can run this setup again later to add it.")
+
+
+def converse_choice(console: Console, saved=envcheck.value) -> dict[str, str]:
+    """The setup a student runs: it asks where the messages should go (Slack is the default: it works on
+    every network), then the same questions with that way of reaching you."""
+    console.say("UniNotifier setup - a few short questions. Passwords are not shown while you type.")
+    console.say("")
+    console.say("Where do you want your messages?")
+    console.say("   1. Slack (recommended - it works on every network, with menus and buttons)")
+    console.say("   2. Telegram (some networks in Jordan block it)")
+    while True:
+        pick = console.ask("   Type 1 or 2 [1]: ") or "1"
+        if pick in ("1", "2"):
+            break
+    console.say("")
+    if pick == "2":
+        return converse(console, saved=saved)
+    values: dict[str, str] = {}
+    _ask_university(console, values, saved)
+    console.say("3/5  Your Slack - a free private workspace and a small app of your own")
+    values.update(converse_slack(console, saved, whole=True))
+    values.update(TELEGRAM_BOT_TOKEN="", TELEGRAM_CHAT_ID="", ADMIN_USER_ID="")      # not used: no example text is left behind in .env
+    _ask_portal(console, values, saved)
+    return values
+
+
 def converse(console: Console, offline: bool = False, saved=envcheck.value) -> dict[str, str]:
     """Ask everything and return {NAME: value} for .env. `saved(name)` gives what is already kept."""
     values: dict[str, str] = {}
     console.say("UniNotifier setup - five short questions. Passwords are not shown while you type.")
     console.say("")
-    console.say("1/5  Your university e-mail - the one you open Moodle (e-learning) with")
-    values["ZUJ_USERNAME"] = _ask(console, "ZUJ_USERNAME", "E-mail", saved("ZUJ_USERNAME"))
-    console.say("2/5  The password of that e-mail")
-    values["ZUJ_PASSWORD"] = _ask(console, "ZUJ_PASSWORD", "Password", saved("ZUJ_PASSWORD"), secret=True)
+    _ask_university(console, values, saved)
 
     console.say("3/5  Your Telegram bot. In Telegram open @BotFather, send /newbot, choose a name,")
     console.say("     and copy the token it gives you (it looks like 123456789:AAH...).")
@@ -290,18 +333,7 @@ def converse(console: Console, offline: bool = False, saved=envcheck.value) -> d
         chat = _ask(console, "TELEGRAM_CHAT_ID", "Your Telegram Id", saved("TELEGRAM_CHAT_ID"))
     values["TELEGRAM_CHAT_ID"] = values["ADMIN_USER_ID"] = chat
 
-    console.say("5/5  The registration portal (portal.zuj.edu.jo) - optional. With it the bot reads your")
-    console.say("     timetable by itself and draws it, and shows your transcript and balance when you ask.")
-    values["PORTAL_USERNAME"] = _ask(console, "PORTAL_USERNAME", "Portal user name (usually your university number)",
-                                     saved("PORTAL_USERNAME"), optional=True)
-    if values["PORTAL_USERNAME"]:
-        values["PORTAL_PASSWORD"] = _ask(console, "PORTAL_PASSWORD", "Portal password", saved("PORTAL_PASSWORD"), secret=True)
-        on = _yes(console, "Check you in to your ONLINE lectures automatically (with a screenshot as proof)?",
-                  saved("AUTO_CHECK_IN").lower() == "true")
-        values["AUTO_CHECK_IN"] = "true" if on else "false"
-    else:
-        values["PORTAL_PASSWORD"], values["AUTO_CHECK_IN"] = "", ""
-        console.say("   Skipped: you can run this setup again later to add it.")
+    _ask_portal(console, values, saved)
     return values
 
 
@@ -322,12 +354,14 @@ def copy_to_clipboard(text: str) -> bool:
         return False
 
 
-def converse_slack(console: Console, saved=envcheck.value) -> dict[str, str]:
+def converse_slack(console: Console, saved=envcheck.value, whole: bool = False) -> dict[str, str]:
     """Slack as the way messages reach you: the app made from the manifest, its token checked, you found
-    in the workspace by yourself, a first message sent. Returns the .env values."""
+    in the workspace by yourself, a first message sent. Returns the .env values. whole: it is part of the
+    full setup — the buttons' token is needed and Slack is simply the way (no question about it)."""
     from uninotifier import slack
-    console.say("UniNotifier on Slack - for a network that blocks Telegram, or if you prefer Slack.")
-    console.say("")
+    if not whole:
+        console.say("UniNotifier on Slack - for a network that blocks Telegram, or if you prefer Slack.")
+        console.say("")
     console.say("1. Make a free Slack workspace if you have none: slack.com/get-started")
     console.say("2. Open api.slack.com/apps -> Create New App -> From a manifest -> pick your workspace")
     try:
@@ -378,8 +412,8 @@ def converse_slack(console: Console, saved=envcheck.value) -> dict[str, str]:
     console.say("6. The buttons and menus: Basic Information -> App-Level Tokens -> Generate Token and Scopes,")
     console.say("   name it socket, Add Scope connections:write, Generate, and copy the token (it starts with xapp-)")
     while True:
-        app = _ask(console, "SLACK_APP_TOKEN", "App-Level Token (Enter = messages only, no buttons)",
-                   saved("SLACK_APP_TOKEN"), secret=True, optional=True)
+        app = _ask(console, "SLACK_APP_TOKEN", "App-Level Token" + ("" if whole else " (Enter = messages only, no buttons)"),
+                   saved("SLACK_APP_TOKEN"), secret=True, optional=not whole)
         if not app:
             console.say("   Messages only: run this again with the token to get the buttons and menus.")
             break
@@ -391,7 +425,7 @@ def converse_slack(console: Console, saved=envcheck.value) -> dict[str, str]:
             console.say("   Slack does not accept this token. It is the App-Level Token (xapp-), with connections:write.")
         except requests.RequestException:
             raise SetupError("Slack cannot be reached from this PC right now - nothing was changed. Try again later.")
-    on = _yes(console, "Send your notifications to Slack from now on (instead of Telegram)?", True)
+    on = True if whole else _yes(console, "Send your notifications to Slack from now on (instead of Telegram)?", True)
     return {"SLACK_BOT_TOKEN": token, "SLACK_CHANNEL": channel, "SLACK_USER": person["id"],
             "SLACK_APP_TOKEN": app, "NOTIFY_VIA": "slack" if on else "telegram"}
 
@@ -465,8 +499,10 @@ def main(argv: list[str], console: Console | None = None) -> int:
                 raise SetupError("--answers needs the path of a JSON file.")
             with open(source[0], encoding="utf-8-sig") as f:
                 values = from_answers(json.load(f))
-        else:
+        elif "--telegram" in argv or "--offline" in argv:
             values = converse(console, offline="--offline" in argv)
+        else:
+            values = converse_choice(console)
         private = write_env(values)
     except SetupError as e:
         console.say(f"[FAIL] {e}")

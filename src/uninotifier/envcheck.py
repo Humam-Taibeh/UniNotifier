@@ -76,6 +76,14 @@ VARIABLES = (
 _PLACEHOLDER = re.compile(r"^(your[_-]|\.\.\.$|changeme$)|<[\w-]+>|your[_-](bot[_-])?check[_-]uuid|\\path\\to\\", re.I)
 
 
+TELEGRAM_ONLY = ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID")
+
+
+def slack_only() -> bool:
+    """True when the messages go to Slack and Slack is set up: then no Telegram bot is needed at all."""
+    return value("NOTIFY_VIA").lower() == "slack" and bool(value("SLACK_BOT_TOKEN") and value("SLACK_CHANNEL"))
+
+
 def value(name: str) -> str:
     """The setting as the program sees it (the process environment wins over .env, as with
     load_dotenv), stripped; "" when unset or still an example value."""
@@ -97,9 +105,12 @@ def problems(role: str | None = None) -> list[str]:
     """What stops `role` ("monitor" / "bot"; None = both) from running. Empty = fine."""
     found = []
     roles = (role,) if role else ("monitor", "bot")
+    on_slack = slack_only()
     for var in VARIABLES:
         val = value(var.name)
         if not val:
+            if on_slack and var.name in TELEGRAM_ONLY:
+                continue                                  # the messages go to Slack: no Telegram bot is needed
             if set(var.needed_by) & set(roles):
                 found.append(f"{var.name} is not set - {var.hint}.")
         elif var.pattern and not re.fullmatch(var.pattern, val):

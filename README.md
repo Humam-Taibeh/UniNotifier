@@ -17,13 +17,13 @@
 **Your university, on your phone — the moment anything changes.**
 
 UniNotifier watches Al-Zaytoonah University of Jordan's Moodle (`elearning.zuj.edu.jo`) from your
-own Windows PC and sends everything that matters to a private Telegram bot of your own: new files,
+own Windows PC and sends everything that matters to a private Slack app of your own (or a Telegram bot, if you prefer): new files,
 assignments, quizzes, announcements and forum posts, deadline reminders, online-lecture alerts with a
 **Join** button, your transcript and balance on demand, and a GPA planner. Every course file is saved
 into a tidy folder per course.
 
 It runs quietly in the background through two Windows scheduled tasks, needs no server and no
-subscription, and nothing about you ever leaves your PC except the messages it sends to *your* bot.
+subscription, and nothing about you ever leaves your PC except the messages it sends to *your* Slack.
 
 - [Features](#features) · [What it looks like](#what-it-looks-like)
 - [Install in 3 steps](#install-in-3-steps)
@@ -71,13 +71,13 @@ subscription, and nothing about you ever leaves your PC except the messages it s
 **Lectures, sign-in and reminders:** a Join button for Teams lectures, attendance, Microsoft 2FA answered from your phone, your own reminders.
 
 *Previews drawn with the bot's real message texts and invented sample data — the people, courses and
-marks are made up. In Telegram they look the same, in your own theme, with tappable buttons.*
+marks are made up. In Slack they are cards with tappable buttons; in Telegram they read the same.*
 
 ---
 
 ## Install in 3 steps
 
-About 10 minutes, and no file to edit.
+About 15 minutes, and no file to edit.
 
 ### 1. Install Python and Git (once)
 
@@ -86,16 +86,25 @@ About 10 minutes, and no file to edit.
 | Windows 10 or 11 | a PC that is on and online for most of the day: UniNotifier runs on it, so while it is off or asleep nothing is checked (it catches up when it wakes) | — |
 | **Python 3.11 or newer** | [python.org/downloads](https://www.python.org/downloads/) — its default **Python install manager** downloads Python by itself the first time you run `py --version`; with the classic installer instead, tick **"Add python.exe to PATH"** | `py --version` |
 | **Git** | [git-scm.com/download/win](https://git-scm.com/download/win) (all defaults are fine) | `git --version` |
-| Telegram | on your phone | — |
+| Slack | the free app on your phone and PC — you make your own workspace in step 2 | — |
 | Your ZUJ Microsoft account | the one you sign in to Moodle with, and the Authenticator app if you use it | — |
 
-### 2. Make your own Telegram bot
+### 2. Make your Slack (about 5 minutes, free)
 
-1. In Telegram, open **[@BotFather](https://t.me/BotFather)** → **Start** → send `/newbot`.
-2. Choose a display name (e.g. *My Uni Bot*) and a username ending in `bot` (e.g. `my_uni_2027_bot`).
-3. BotFather replies with a **token** like `123456789:AAH4x…` — copy it, and keep it secret: it is your bot's password.
+Slack works on every network, and gives you the whole assistant — menus, buttons, cards. You make a small
+private Slack of your own; nobody else is in it.
 
-That is all you need from Telegram: the installer finds out who you are by itself.
+1. Go to **[slack.com/get-started](https://slack.com/get-started)** and create a free workspace (any name).
+2. Go to **[api.slack.com/apps](https://api.slack.com/apps)** → **Create New App** → **From a manifest** →
+   pick your workspace → **JSON**. The installer copies the app's settings for you: just paste them
+   (**Ctrl+V**) and press **Next → Create**.
+3. **Install to Workspace → Allow**, then copy the **Bot User OAuth Token** (it starts with `xoxb-`).
+4. **Basic Information → App-Level Tokens → Generate Token and Scopes**: name it `socket`, add the scope
+   `connections:write`, and copy the token (it starts with `xapp-`).
+
+You do these while the installer waits for you — it tells you each step again on the screen, checks every
+token you paste, and finds you in your Slack by itself. *(Prefer Telegram? The installer asks which one
+you want; see [Telegram instead](#optional-extras).)*
 
 ### 3. Get UniNotifier and run the installer
 
@@ -111,14 +120,14 @@ cd UniNotifier
 The installer does everything else, and tells you what it is doing at each step:
 
 1. it prepares UniNotifier on your PC (a few minutes the first time);
-2. it asks you **five short questions** — your university e-mail and password, the bot token from step 2,
-   then it asks you to press **Start** in your bot and recognises you, then the registration portal
+2. it asks you **a few short questions** — where you want your messages (press **Enter** for Slack), your
+   university e-mail and password, then your Slack tokens from step 2, then the registration portal
    login (optional, but it is what reads your timetable) and whether to check you in to online lectures;
 3. it checks everything, opens a browser window to sign in to Moodle (approve Microsoft on your phone if
    it asks), makes the first, quiet check, and switches UniNotifier on.
 
-Open your bot in Telegram and send **/start**. That's it — from now on it runs by itself, and your
-timetable arrives a few minutes later, read from the portal and drawn for you.
+Open the **UniNotifier** app in your Slack (under *Apps*) and type **menu**. That's it — from now on it
+runs by itself, and your timetable arrives a few minutes later, read from the portal and drawn for you.
 
 > **Use `git clone`, not Download ZIP:** only a cloned copy is told about new versions and fixes in the
 > chat and can install them with one tap (see [Updating](#updating-pausing-uninstalling)).
@@ -190,8 +199,8 @@ one (see [assets/README.md](assets/README.md)).
 [ OK ] Timetable: read from the portal - First Semester 2026/2027, 12 weekly classes
 [ OK ] Course files are saved to C:\Users\you\Documents\University
 [ OK ] Chromium for Playwright is installed
-[ OK ] Telegram bot: @my_uni_2027_bot
-[ OK ] The bot can message you
+[ OK ] Slack app in "My Uni" - your messages go to Slack
+[ OK ] Test message sent to Slack
 ...
 All set.
 ```
@@ -279,8 +288,10 @@ you in to every *online* lecture as soon as the instructor opens attendance and 
 proof, or tells you to do it by hand when it cannot. Never an in-person or activity day. It needs the
 portal login above, which is how it knows which days are online.
 
-**Your messages on Slack** — for a network that blocks Telegram, or if you prefer Slack: run
-`.venv\Scripts\python -m uninotifier.setup --slack`. It walks you through a free Slack workspace and
+**Telegram instead of Slack** — the installer asks where you want your messages; answer **2** for
+Telegram (make a bot with [@BotFather](https://t.me/BotFather), `/newbot`, and paste its token; the installer
+finds you when you press Start). Some networks in Jordan block Telegram, which is why Slack is the default.
+To move a working install to Slack later: `.venv\Scripts\python -m uninotifier.setup --slack`. It walks you through a free Slack workspace and
 app (the app's settings are copied for you to paste), finds you there, and from then on every
 message goes to Slack — files, reminders, lecture alerts and alerts included, each as a card with
 its buttons. The whole bot comes with it: its menus on the app's **Home** page, redrawn in place at
@@ -378,11 +389,12 @@ Then look at `data\logs\monitor.log` and `data\logs\bot.log`.
 | *"UniNotifier can't start - some settings in .env need your attention"* | the list under it names each setting; fix `.env` and run the doctor |
 | The doctor says *"The bot can't reach your chat yet"* | open your bot in Telegram and press **Start** |
 | The doctor says *"this network blocks Telegram"* (nothing arrives, the internet works) | some providers and routers block Telegram's address. Try a phone hotspot to be sure; to fix it for good, turn on a VPN such as [Cloudflare WARP](https://one.one.one.one/) on the PC, or get your messages on Slack (*Optional extras*). Nothing is lost meanwhile: what could not be sent goes out once Telegram is reachable |
+| Slack shows messages but the buttons do nothing | the App-Level Token (`xapp-`, scope `connections:write`) is missing or wrong: run `.venv\Scripts\python -m uninotifier.setup --slack` and paste it again |
 | The bot doesn't answer | is `UniNotifier_BotListener` running? (`Get-ScheduledTask UniNotifier*`) — is `ADMIN_USER_ID` your own Id? |
 | *"running scripts is disabled on this system"* | start the script as shown: `powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1` |
 | `No module named uninotifier` | run `.venv\Scripts\pip install --no-deps -e .` **from the project folder** (or double-click `install.bat` again) |
 | `Executable doesn't exist … chromium` | `.venv\Scripts\python -m playwright install chromium` |
-| Microsoft asks for verification | the bot relays it to Telegram — approve it on your phone (or reply with the SMS code). Last resort: `.venv\Scripts\python -m uninotifier.tools.login_refresh` |
+| Microsoft asks for verification | the bot relays it to Slack (or Telegram) — approve it on your phone (or reply with the SMS code). Last resort: `.venv\Scripts\python -m uninotifier.tools.login_refresh` |
 | The doctor says *"schedule.json still holds the example classes"* | replace them with your own week (*Installing by hand*, c.) — left as they are, the bot would announce lectures you don't have |
 | *"schedule.json needs fixing"* on Telegram | the message lists each mistake; reminders keep using the last good copy until it is fixed |
 | Nothing happens after a restart | sign in to Windows — the tasks run while you are signed in; checks catch up by themselves |
@@ -447,7 +459,7 @@ Then look at `data\logs\monitor.log` and `data\logs\bot.log`.
   instantly from the last copy and refreshing it behind ("stale-while-revalidate") — plus one
   look at your timetable there each semester, and, if you turn it on,
   watches Cambridge One.
-- **Telegram** is the only thing that leaves your PC: your bot, talking only to you.
+- **Slack** (or Telegram) is the only thing that leaves your PC: your own app, talking only to you.
 
 ---
 

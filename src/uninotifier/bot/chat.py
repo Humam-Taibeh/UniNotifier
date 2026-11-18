@@ -26,10 +26,10 @@ log = logging.getLogger("uninotifier")
 load_dotenv(paths.ENV_FILE)
 
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or ("0:slack" if os.getenv("SLACK_BOT_TOKEN") else None)   # Slack alone: a stand-in, never contacted
 
 
-CHAT_ID = str(os.getenv("TELEGRAM_CHAT_ID") or "")
+CHAT_ID = str(os.getenv("TELEGRAM_CHAT_ID") or os.getenv("SLACK_USER") or "")
 
 
 DATA_FILE = paths.DATA / "saved_items.json"
