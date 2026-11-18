@@ -586,7 +586,7 @@ def test_tasks_and_reminders_planner():
             finally:
                 monitor.deliver = keep_deliver
             assert delivered[-1] == [[{"text": "📌 Add to Reminders", "callback_data": "rem:s:p101"}]]
-            assert reminders.source("p101") == {**reminders.source("p101"), "note": "Install Hadoop before Sunday",
+            assert reminders.source("p101") == {**reminders.source("p101"), "note": "Install Hadoop before Sunday\nx",
                                                 "course": "Big Data", "url": "https://x/d#p101"}
 
             tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y%m%d")
@@ -604,7 +604,7 @@ def test_tasks_and_reminders_planner():
             cb(f"rem:hr:{tomorrow}:1800")
             assert edits[-1][0].startswith("✅ *Reminder set*")
             mine = reminders.pending()
-            assert len(mine) == 1 and mine[0]["note"] == "Install Hadoop before Sunday" and mine[0]["url"] == "https://x/d#p101"
+            assert len(mine) == 1 and mine[0]["note"] == "Install Hadoop before Sunday\nx" and mine[0]["url"] == "https://x/d#p101"
             assert mine[0]["message_id"] == 5, "remembers the chat message the 📌 sat under"
             assert datetime.fromtimestamp(mine[0]["due"]).strftime("%Y%m%d %H:%M") == f"{tomorrow} 18:00"
             cb("rem:s:p101")
@@ -1026,3 +1026,26 @@ def test_slack_original_post_shows_the_post_not_a_quote_that_cannot_exist():
     text, rows = sent[0]
     assert "quote" not in text and "امتحان منتصف الفصل" in text
     assert rows[0][0]["url"] == "https://moodle.example/p" and rows[-1] == chat.BACK_ROW and told == [()]
+
+
+def test_a_pinned_announcement_keeps_its_picture_and_wording():
+    """📌 Add to Reminders keeps the announcement whole: its wording in the reminder, and its screenshot
+    on disk with the reminder — so 🖼️ Show Original brings the picture back whenever it is needed, and
+    deleting the reminder removes the picture."""
+    from uninotifier import reminders
+    from uninotifier.bot import reminder_flow
+
+    png = b"\x89PNG-test-picture"
+    reminders.remember_source("i42", "Announcement\nBring your ID card", "English", "https://x/a", [png])
+    reminders.remember_source("i43", "No picture", "English", None)
+    item = reminders.add("Announcement\nBring your ID card", time.time() + 3600, "English", "https://x/a", 7, "i42")
+    plain = reminders.add("No picture", time.time() + 3600, key="i43")
+    assert item["shots"] == 1 and "shots" not in plain
+    assert reminders.shots_of(item["id"]) == [png]
+    assert "Bring your ID card" in reminders.get(item["id"])["note"], "the wording is kept, not only the title"
+    buttons = [b["text"] for row in reminder_flow.view_reminder(item["id"])[1] for b in row]
+    assert "🖼️ Show Original" in buttons
+    assert "🖼️ Show Original" not in [b["text"] for row in reminder_flow.view_reminder(plain["id"])[1] for b in row]
+    reminders.remove(item["id"])
+    assert reminders.shots_of(item["id"]) == [], "deleted with the reminder"
+    reminders.remove(plain["id"])

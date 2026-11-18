@@ -53,7 +53,8 @@ CAMPUS_DAYS = ("sun", "mon", "tue", "wed")   # the regular university days; Thu�
 CAMPUS_MODE = "In-Person"                    # online sessions and activity slots are not on campus
 HOURS = ("08:00", "09:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00")
 SNOOZE = timedelta(hours=1)
-NOTE_LIMIT = 300
+NOTE_LIMIT = 1500                        # a pinned post keeps its whole wording
+SHOTS_DIR = paths.DATA / "reminder_shots"   # the pictures of a pinned post, kept so it can be shown again
 
 PIN_BUTTON = "📌 Add to Reminders"
 TIME_RE = re.compile(r"\s*(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|ص|م)?\s*", re.I)
@@ -73,11 +74,15 @@ def save(state: dict) -> None:
 
 
 def add(note: str, due: float, course: str | None = None, url: str | None = None,
-        message_id: int | None = None) -> dict:
-    """message_id: the Telegram message the 📌 was tapped on (None for a typed note)."""
+        message_id: int | None = None, key: str | None = None) -> dict:
+    """message_id: the chat message the 📌 was tapped on (None for a typed note). key: what the 📌 referred to —
+    its pictures are copied to the reminder, which then keeps them until it is deleted."""
     state = load()
     item = {"id": state["next_id"], "note": note.strip()[:NOTE_LIMIT], "due": due,
             "course": course, "url": url, "message_id": message_id, "created": time.time()}
+    kept = _copy_source_shots(key, item["id"]) if key else 0
+    if kept:
+        item["shots"] = kept
     state["next_id"] += 1
     state["items"].append(item)
     prune(state)
@@ -95,6 +100,7 @@ def remove(reminder_id: int) -> dict | None:
     if found:
         state["items"].remove(found)
         save(state)
+        _drop_shots(found["id"])
     return found
 
 
@@ -124,7 +130,47 @@ def snooze(reminder_id: int, now: float | None = None) -> dict | None:
 def prune(state: dict, now: float | None = None) -> None:
     """Forget reminders delivered more than a week ago."""
     cutoff = (now or time.time()) - KEEP_DELIVERED_SECONDS
-    state["items"] = [r for r in state["items"] if not (delivered(r) and r["due"] < cutoff)]
+    gone = [r for r in state["items"] if delivered(r) and r["due"] < cutoff]
+    state["items"] = [r for r in state["items"] if r not in gone]
+    for r in gone:
+        _drop_shots(r["id"])
+
+
+def _safe_key(key: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_-]", "", key)[:60] or "x"
+
+
+def _copy_source_shots(key: str, reminder_id: int) -> int:
+    """The pictures filed with a 📌 -> the reminder's own folder. Returns how many."""
+    import shutil
+    src = SHOTS_DIR / f"src-{_safe_key(key)}"
+    files = sorted(src.glob("*.png"), key=lambda f: int(f.stem)) if src.is_dir() else []
+    if not files:
+        return 0
+    dest = SHOTS_DIR / f"r{reminder_id}"
+    try:
+        dest.mkdir(parents=True, exist_ok=True)
+        for n, f in enumerate(files, 1):
+            shutil.copyfile(f, dest / f"{n}.png")
+    except OSError as e:
+        log.exception("Could not keep the pictures of reminder %s", reminder_id)
+        failsafe.bug("reminders", "A reminder's picture could not be kept", e, "The reminder works; 🖼️ Show Original is missing.")
+        return 0
+    return len(files)
+
+
+def _drop_shots(reminder_id: int) -> None:
+    import shutil
+    shutil.rmtree(SHOTS_DIR / f"r{reminder_id}", ignore_errors=True)
+
+
+def shots_of(reminder_id: int) -> list[bytes]:
+    """The pictures kept with a reminder (an announcement's screenshot), in order."""
+    folder = SHOTS_DIR / f"r{reminder_id}"
+    try:
+        return [f.read_bytes() for f in sorted(folder.glob("*.png"), key=lambda f: int(f.stem))] if folder.is_dir() else []
+    except (OSError, ValueError):
+        return []
 
 
 def pending(now: float | None = None) -> list[dict]:
@@ -134,8 +180,20 @@ def pending(now: float | None = None) -> list[dict]:
 
 # ----------------------------------------------------------------- sources
 
-def remember_source(key: str, note: str, course: str | None, url: str | None) -> None:
-    """What a 📌 button refers to (written by the monitor when it sends one)."""
+def remember_source(key: str, note: str, course: str | None, url: str | None, shots=()) -> None:
+    """What a 📌 button refers to (written by the monitor when it sends one). Its pictures are kept too:
+    a reminder made from it can show the original again."""
+    if shots:
+        import shutil
+        folder = SHOTS_DIR / f"src-{_safe_key(key)}"
+        shutil.rmtree(folder, ignore_errors=True)
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            for n, png in enumerate(shots, 1):
+                (folder / f"{n}.png").write_bytes(png)
+        except OSError as e:
+            log.exception("Could not keep the pictures of %s", key)
+            failsafe.bug("reminders", "An announcement's picture could not be kept", e, "📌 still works; 🖼️ Show Original will be missing.")
     try:
         sources = json.loads(SOURCES_FILE.read_text(encoding="utf-8"))
     except (OSError, ValueError):

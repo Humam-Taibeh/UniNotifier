@@ -96,7 +96,7 @@ def notify_content_update(item: dict, artifact: dict) -> bool:
     if not changed and not artifact.get("shots"):
         changed = body_text(item)                      # nothing to compare with and no picture: the current wording
     return deliver(f"{header}\n{note}" if note else header, changed, item["url"],
-                   media.completion_rows(item) + reminder_rows(item, "e"),
+                   media.completion_rows(item) + reminder_rows(item, "e", artifact.get("shots", [])),
                    artifact.get("shots", []), shot_filename(item))
 
 
@@ -105,22 +105,24 @@ def notify_grade(item: dict, grade: str, artifact: dict) -> bool:
                    shots=artifact.get("shots", []), shot_name=shot_filename(item))
 
 
-def reminder_rows(item: dict, prefix: str = "i") -> list[list[dict]]:
+def reminder_rows(item: dict, prefix: str = "i", shots=()) -> list[list[dict]]:
     """📌 Add to Reminders for anything but an assignment or a quiz (those are
     in Upcoming Tasks already). prefix keeps a new item, a file update and an
     edit of the same activity apart: i / u / e + cmid."""
     if item["type"] in media.TASK_TYPES:
         return []
     key = f"{prefix}{item.get('cmid') or item.get('sectionid') or ''}"
-    return pin_rows(key, item["name"], item["course"], item["url"])
+    body = richtext.to_text(item.get("_body", "")).strip()
+    note = f'{item["name"]}\n{body}' if body and body != item["name"] else item["name"]     # the title, then what it says
+    return pin_rows(key, note, item["course"], item["url"], shots)
 
 
 def notify_new_item(item: dict, deadline: dict | None, artifact: dict,
                     submitted: bool | None = None) -> bool:
     kind = artifact.get("kind") or media.classify(item)
     url = item["url"]
-    rows = media.completion_rows(item) + reminder_rows(item)
     shots, shot_name = artifact.get("shots", []), shot_filename(item)
+    rows = media.completion_rows(item) + reminder_rows(item, shots=shots)
     body = body_text(item, shown=bool(shots))
 
     if kind == "link" and artifact.get("target"):
@@ -156,11 +158,11 @@ def notify_new_item(item: dict, deadline: dict | None, artifact: dict,
     return deliver(header, body_text(item, shown=bool(shots or document)), url, rows, shots, shot_name, document)
 
 
-def pin_rows(key: str, note: str, course: str, url: str) -> list[list[dict]]:
+def pin_rows(key: str, note: str, course: str, url: str, shots=()) -> list[list[dict]]:
     """📌 Add to Reminders under an announcement or course page; the bot looks
     the key up in reminder_sources.json when it is tapped. Never fails a send."""
     try:
-        reminders.remember_source(key, note, media.clean_course_name(course), url)
+        reminders.remember_source(key, note, media.clean_course_name(course), url, shots)
     except Exception as e:
         log.exception("Could not file the reminder source %s", key)
         failsafe.bug("monitor:pin", "📌 Add to Reminders could not be attached", e,
@@ -172,8 +174,11 @@ def pin_rows(key: str, note: str, course: str, url: str) -> list[list[dict]]:
 def notify_forum_post(forum: dict, post: dict) -> bool:
     """The post itself, then its attachments as files (best effort: the
     message already says how many there are)."""
-    rows = pin_rows(f"p{post['id']}", post["subject"] or forum["name"], forum["course"], post["url"])
     shots = post.get("_shots") or []
+    title = post["subject"] or forum["name"]
+    said = richtext.to_text(post["html"]).strip()
+    rows = pin_rows(f"p{post['id']}", f"{title}\n{said}" if said and said != title else title,
+                    forum["course"], post["url"], shots)
     if not deliver(media.build_forum_post_message(forum, post), "" if shots else richtext.to_text(post["html"]),
                    post["url"], rows, shots, archive.safe_name(post["subject"] or forum["name"], "post")[:120] + ".png"):
         return False

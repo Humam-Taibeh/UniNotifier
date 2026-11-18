@@ -79,7 +79,7 @@ def schedule_draft(due: datetime) -> tuple[str, list]:
             return view_reminder(item_id, "✅ *Time changed*")
         return "That reminder is already gone.", [TASKS_ROW]
     item = reminders.add(_reminder_draft["note"], due.timestamp(), _reminder_draft.get("course"),
-                         _reminder_draft.get("url"), _reminder_draft.get("message_id"))
+                         _reminder_draft.get("url"), _reminder_draft.get("message_id"), _reminder_draft.get("key"))
     _reminder_draft.clear()
     text = "\n".join(["✅ *Reminder set*", "", f"📝 {escape_md(item['note'])}",
                       f"🕐 {reminders.when_text(item['due'])} · in {chat.remaining_text(item['due'])}",
@@ -126,8 +126,9 @@ def view_reminder(reminder_id: int, header: str = "📝 *Reminder*") -> tuple[st
     rows = [[{"text": "✏️ Edit Text", "callback_data": f"rem:et:{reminder_id}"}],
             [{"text": "🗓️ Change Date", "callback_data": f"rem:ed:{reminder_id}"},
              {"text": "🕐 Change Time", "callback_data": f"rem:eh:{reminder_id}"}]]
-    if item.get("message_id"):
-        rows.append([{"text": "🔗 View Original Post", "callback_data": f"rem:view:{reminder_id}"}])
+    if item.get("message_id") or item.get("shots"):
+        rows.append([{"text": "🖼️ Show Original" if item.get("shots") else "🔗 View Original Post",
+                      "callback_data": f"rem:view:{reminder_id}"}])
     rows += [[{"text": "🗑️ Delete", "callback_data": f"rem:del:{reminder_id}"}],
              MANAGE_ROW]
     return "\n".join(lines), rows
@@ -165,7 +166,7 @@ def start_reminder(source: dict | None = None, message_id: int | None = None) ->
         return
     _reminder_wait = None
     _reminder_draft.update(note=source["note"], course=source.get("course"), url=source.get("url"),
-                           message_id=message_id)
+                           message_id=message_id, key=source.get("key"))
     chat.send_view(*view_when(_reminder_draft))
 
 
@@ -222,10 +223,17 @@ def show_original(reminder_id: int, answer) -> None:
     """🔗 View Original Post: a reply to the pinned message — tapping its quote
     jumps straight to the announcement and its screenshot in the chat."""
     item = reminders.get(reminder_id)
-    if not item or not item.get("message_id"):
+    if not item or not (item.get("message_id") or item.get("shots")):
         answer("That reminder has no original post.")
         return
     way_back = [[{"text": "⏳ Tasks & Reminders", "callback_data": "tasks"}], chat.BACK_ROW]
+    pictures = reminders.shots_of(reminder_id)
+    if pictures:                             # the picture itself, from the copy kept with the reminder: it never depends on the old message
+        answer()
+        notifier.send_png_files(chat.BOT_TOKEN, chat.CHAT_ID, pictures, "original.png")
+        rows = [[{"text": "🌐 Open on Moodle", "url": item["url"]}]] if item.get("url") else []
+        chat.send_view(f"📌 *Original post*\n📝 {escape_md(item['note'])}", rows + way_back)
+        return
     if slack.mode() == "slack":              # no quote to tap in Slack, and the post is not in this chat: the post itself
         rows = [[{"text": "🌐 Open on Moodle", "url": item["url"]}]] if item.get("url") else []
         answer()
@@ -273,7 +281,7 @@ def handle_reminder_callback(cb: dict, action: str, message_id: int | None) -> N
             answer("⌛ That post is too old to pin — add it with ➕ New Custom Reminder.")
             return
         answer()
-        start_reminder(found, (cb.get("message") or {}).get("message_id"))
+        start_reminder(dict(found, key=parts[1]), (cb.get("message") or {}).get("message_id"))
     elif kind == "open":
         answer()
         _reminder_draft.clear()

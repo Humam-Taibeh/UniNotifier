@@ -134,6 +134,7 @@ _REMINDER_TMP = Path(tempfile.mkdtemp(prefix="uninotifier-test-"))
 reminders.STATE_FILE = _REMINDER_TMP / "reminders.json"
 reminders.SOURCES_FILE = _REMINDER_TMP / "reminder_sources.json"
 reminders.CLAIM_DIR = _REMINDER_TMP / "reminders_sent"
+reminders.SHOTS_DIR = _REMINDER_TMP / "reminder_shots"
 gpa.STATE_FILE = _REMINDER_TMP / "gpa.json"
 finals.STATE_FILE = _REMINDER_TMP / "finals.json"
 lecturelinks.LINKS_FILE = _REMINDER_TMP / "lecture_links.json"
