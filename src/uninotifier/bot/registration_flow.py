@@ -78,7 +78,7 @@ def view_home() -> tuple[str, list]:
     lines.insert(1, media.DIVIDER)
     rows = []
     if advice["left"]:
-        lines += [slack.small(registration.allowed_short(advice)), "", "✨ *Suggest my courses* — choose the hours:"]     # the hours are the last thing, the buttons under them
+        lines += ["", "✨ *Suggest my courses* — choose the hours:"]     # the hours are the last thing, the buttons under them
         rows.append([{"text": text, "callback_data": f"reg:h:{hours:g}"} for hours, text in registration.options(advice)])
         rows.append([{"text": "✋ Choose Courses Myself", "callback_data": "reg:pick"}])
         rows.append([{"text": "✅ What I Can Take", "callback_data": "reg:open"},

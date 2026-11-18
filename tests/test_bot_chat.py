@@ -1571,26 +1571,24 @@ def test_a_new_transcript_replaces_the_old_card_and_a_heading_has_room_above_it(
         slack.mode = keep
 
 
-def test_the_term_hours_rule_is_small_print_in_one_piece_with_the_overview():
-    """Registration Plan (Slack): Left to take / Open to you / Not yet, and right under them — no gap — the hours the term may have,
-    short and small; the 'Suggest my courses' line comes last, apart."""
+def test_the_term_hours_rule_ends_the_left_to_take_line():
+    """Registration Plan: what a term may hold is part of the 'Left to take' line — one short sentence — not a line of its own."""
     from uninotifier import registration, slack
-    assert registration.allowed_short({"kind": registration.REGULAR, "graduating": False}) == (
-        "📏 12–18 hrs a term · 21 with an excellent CGPA or in your graduation term")
-    assert registration.allowed_short({"kind": registration.REGULAR, "graduating": True}).startswith("📏 Up to 21 hrs")
+    regular = {"kind": registration.REGULAR, "graduating": False}
+    assert registration.allowed_short(regular) == "a term takes 12–18 hrs, 21 with an excellent CGPA or in your graduation term"
+    assert registration.allowed_short({"kind": registration.REGULAR, "graduating": True}).startswith("up to 21 hrs")
     assert "12 only in your last term" in registration.allowed_short({"kind": registration.SUMMER, "graduating": False})
+    advice = {"entries": [], "left": 58, "term_courses": 6, "open_hours": 30, "held_hours": 28, "graduating": False, **regular}
+    lines = registration.overview_lines(advice, "Second semester")
+    assert lines[1] == ("🏁 *Left to take* — 58 hrs (this term's 6 courses counted as passed) · "
+                        "a term takes 12–18 hrs, 21 with an excellent CGPA or in your graduation term"), lines[1]
+    assert not any(l.startswith("📏") for l in lines)
     keep = slack.mode
     try:
         slack.mode = lambda: "slack"
-        text = "\n".join(["🗓️ *Registration Plan* — Second semester", "━━━━━━━━━━━━━━━━━━",
-                          "🏁 *Left to take* — 58 hrs", "✅ *Open to you* — 30 hrs", "⛔ *Not yet* — 28 hrs",
-                          slack.small(registration.allowed_short({"kind": registration.REGULAR, "graduating": False})),
-                          "", "✨ *Suggest my courses* — choose the hours:"])
-        blocks = slack.blocks(text, None, live=False)
-        kinds = [(b["type"], b.get("block_id", "")[:5]) for b in blocks]
-        assert [k[0] for k in kinds] == ["header", "context", "section", "context", "section"], kinds
-        assert kinds[3][1] == "small" and "12–18 hrs a term" in blocks[3]["elements"][0]["text"]     # small, right under the overview
-        assert "Left to take" in blocks[2]["text"]["text"] and "Not yet" in blocks[2]["text"]["text"]      # the three lines stacked in one block
+        text = "\n".join([lines[0], "━━━━━━━━━━━━━━━━━━", *lines[1:], "", "✨ *Suggest my courses* — choose the hours:"])
+        kinds = [b["type"] for b in slack.blocks(text, None, live=False)]
+        assert kinds == ["header", "context", "section", "section"], kinds       # title, the overview in one block, the hours line
     finally:
         slack.mode = keep
 
