@@ -93,6 +93,12 @@ SECTIONS = {
         "match": r"$^",
         "skip": r"$^",
     },
+    "registration": {                           # التسجيل ← التسجيل الإلكتروني: closed outside the registration period
+        "title": "Registration",
+        "path": "/faces/ui/pages/student/registration/index.xhtml",           # a guess: the menu is the fallback
+        "match": r"التسجيل",
+        "skip": r"$^",
+    },
     "balance": {
         "title": "Balance",
         "path": "/faces/ui/pages/student/financialRecord/index.xhtml",       # "السجل المالي"
@@ -395,6 +401,10 @@ def _interpret(page, result: Result, text: str) -> None:
             if info["total"] is not None:
                 result.figures = {"balance": info["total"]}
                 result.lines = balance_lines(info)
+        elif result.section == "registration":
+            result.data["open"] = not re.search(r"غير\s*مسموح|not\s*allowed", text or "", re.I)
+            result.data["said"] = re.sub(r"\s+", " ", next((ln for ln in (text or "").splitlines()
+                                                           if re.search(r"غير\s*مسموح|not\s*allowed", ln, re.I)), "")).strip()
         elif result.section == "home":
             result.data["timetable"] = read_timetable(page)
         elif result.section == "grades":

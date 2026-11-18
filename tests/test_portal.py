@@ -75,7 +75,7 @@ def test_portal_parsers():
     full = [[["رمز المقرر", "اسم المقرر", "العلامة"], ["1", "Algebra", "80"]]]
     out = portal_pages.results_lines({"term": "الفصل الأول 2026/2027", "text": ""}, full)
     assert out[0] == "📅 *First semester 2026/2027*" and out[1] == "*Code | Course | Mark*" and out[2] == "1 | Algebra | 80"
-    assert set(portal.SECTIONS) == {"grades", "transcript", "balance", "home"}
+    assert set(portal.SECTIONS) == {"grades", "transcript", "balance", "home", "registration"}
     assert all(s["path"].startswith("/faces/ui/pages/student/") for s in portal.SECTIONS.values())
 
 
@@ -486,7 +486,7 @@ def test_registration_plan():
         text, rows = registration_flow.view_home()
         assert "Registration Plan* — Second semester 2030/2031" in text and "Left to take* — 22 hrs" in text
         assert [b["callback_data"] for b in rows[0]] == ["reg:h:12", "reg:h:15", "reg:h:18", "reg:h:21"]
-        assert rows[1][0]["callback_data"] == "reg:pick" and [b["callback_data"] for b in rows[-2]] == ["reg:open", "reg:held"]
+        assert rows[1][0]["callback_data"] == "reg:pick" and [b["callback_data"] for b in rows[-3]] == ["reg:open", "reg:held"] and rows[-2][0]["callback_data"] == "reg:register"
         assert rows[-1] == chat.RECORD_ROW and not any("reg:k:" in b["callback_data"] or b["callback_data"] == "portal:transcript" for r in rows for b in r)
         assert "open with the portal's registration period" not in text and "Your plan as read" not in text and "Update My Plan" not in text
         assert "Regular term* — 12–18 hrs" in text and text.splitlines()[-1].startswith("✨ *Suggest my courses*"), text    # the hours are last
@@ -574,7 +574,7 @@ def test_study_plan_from_the_portal():
     tail = degreeplan.progress_lines(behind)[-2:]
     assert tail[0] == "🏁 *Remaining:* 16 hrs · 10 after this term · +6 remedial"
     assert tail[1] == ("📝 *Placement Exams:* English ✅ passed +3h · Computer Skills ⏳ this term +3h · Arabic ▫️ to take +3h — "
-                       "*+9 hrs on top of the plan* (6 still to pass)")
+                       "*+9 hrs on top of the plan*")
     assert "(+9 placement = " in degreeplan.progress_lines(behind)[0]       # the plan's total, and what it really is with them
     listed = [l.lstrip(degreeplan.LRM) for l in degreeplan.remaining_lines(behind)]
     assert "*Placement Exams* — +9 hrs on top of the plan, 6 still to pass" in listed
@@ -1713,3 +1713,45 @@ def test_the_balance_watch_tells_you_only_when_the_balance_changed():
         assert balance_watch.load()["checked"] >= before
     finally:
         balance_watch.STATE_FILE, portal.fetch_many, notifier.send_png_file, notifier.send_message = keep
+
+
+def test_the_registration_page_is_read_said_and_watched():
+    """The portal's e-registration page says 'غير مسموح التسجيل بهذه الفترة' while it is closed. The Register button reads it and says
+    so (its sentence, the screenshot); the watch tells you ONCE when that sentence is gone; a first look that finds it closed is silent."""
+    import importlib
+    import tempfile
+    from pathlib import Path
+    from uninotifier import notifier, portal, registration_watch
+    portal_flow = importlib.import_module("uninotifier.bot.portal_flow")
+    registration_flow = importlib.import_module("uninotifier.bot.registration_flow")
+    registration_watch_flow = importlib.import_module("uninotifier.bot.registration_watch_flow")
+    closed = portal.Result("registration", True, b"PNG")
+    portal._interpret(None, closed, "التسجيل الالكتروني\nغير مسموح التسجيل بهذه الفترة\nجامعة الزيتونة")
+    assert closed.data == {"open": False, "said": "غير مسموح التسجيل بهذه الفترة"}
+    opened = portal.Result("registration", True, b"PNG")
+    portal._interpret(None, opened, "التسجيل الالكتروني\nاختر الشعب\nجامعة الزيتونة")
+    assert opened.data["open"] is True
+    sent = []
+    keep = (registration_watch.STATE_FILE, portal.fetch_many, notifier.send_png_file, notifier.send_message)
+    try:
+        registration_watch.STATE_FILE = Path(tempfile.mkdtemp()) / "registration_watch.json"
+        notifier.send_png_file = lambda token, chat_id, png, name, caption="", rows=None, **k: sent.append(("png", caption, rows)) or True
+        notifier.send_message = lambda token, chat_id, text, rows=None, **k: sent.append(("text", text, rows)) or True
+        portal_flow.send_registration_answer(closed)
+        kind, text, rows = sent[-1]
+        assert kind == "png" and "not open right now" in text and "غير مسموح التسجيل بهذه الفترة" in text and "every 30 minutes" in text
+        assert [b.get("callback_data") for r in rows for b in r][-2:] == ["reg:home", "menu"]
+        portal_flow.send_registration_answer(opened, alert=True)
+        assert sent[-1][1].startswith("🚨 *Registration is open!*")
+        sent.clear()
+        portal.fetch_many = lambda sections, ask: {"registration": closed}
+        assert registration_watch_flow.watch_once() is False and sent == [] and registration_watch.load()["open"] is False   # closed: silent
+        assert registration_watch.due(now=registration_watch.load()["checked"] + 1801) and not registration_watch.due(now=registration_watch.load()["checked"] + 60)
+        portal.fetch_many = lambda sections, ask: {"registration": opened}
+        assert registration_watch_flow.watch_once() is True and len(sent) == 1 and "Registration is open" in sent[0][1]     # opened: told
+        assert registration_watch_flow.watch_once() is False and len(sent) == 1                                          # ... once
+        # the Register button is on the plan screen, and its press is routed
+        rows = registration_flow.view_home()[1] if registration_flow.saved_plan() else None
+        assert rows is None or any(b["callback_data"] == "reg:register" for r in rows for b in r)
+    finally:
+        registration_watch.STATE_FILE, portal.fetch_many, notifier.send_png_file, notifier.send_message = keep

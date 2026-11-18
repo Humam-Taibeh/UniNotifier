@@ -204,6 +204,19 @@ def page_url(activity: dict) -> str:
     return activity["url"] + ("&" if "?" in activity["url"] else "?") + "view=5"
 
 
+def recorded_today(course: str, now: datetime | None = None) -> bool:
+    """Moodle already shows you present for one of this course's sessions today (the proof was sent): there is nothing
+    left to promise or to repeat about the check-in."""
+    now = now or datetime.now()
+    try:
+        content = json.loads(STATE_FILE.read_text(encoding="utf-8")).get("content", {})
+    except (OSError, ValueError):
+        return False
+    ids = {str(it.get("cmid")) for it in content.values()
+           if it.get("type") in media.ATTENDANCE_TYPES and media.clean_course_name(it.get("course", "")) == course}
+    return any(next(daily.CLAIM_DIR.glob(f"checkin-{cmid}-{now:%Y%m%d}-*-done.sent"), None) is not None for cmid in ids)
+
+
 def session_key(activity: dict, start: datetime) -> str:
     return f"checkin-{activity['cmid']}-{start:%Y%m%d-%H%M}"
 

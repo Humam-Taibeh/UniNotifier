@@ -75,6 +75,20 @@ Cases to handle:
 - A wanted course has no section on the chosen days: say so and offer to change the days to its
   days, attend all four days, or use an alternate.
 - Difficulty balancing has no reliable generic source; the manual choice covers it.
+- The days are a choice too: two days (Sunday + Tuesday, or Monday + Wednesday), three days, or four days with the
+  courses split half and half; one blended course (alternating days) may sit beside them. A course with no section on
+  the chosen days is offered three ways: take it anyway, choose another, or move the whole schedule to its days (when
+  it matters most).
+- Open sections first. If a wanted section is closed, register the others and keep looking (about every minute, never
+  hammering) until a seat frees or a matching section appears; with several closed wanted sections, watch them all.
+  Offer swaps when the only fix is another slot (a morning course moved to its evening section and the other way round).
+- The term is never chosen by hand: in the first semester the plan is for the second, in the second for the summer, in the
+  summer for the first of next year (from the transcript, and the term code on Moodle's course names).
+
+Built 2026-11-18 (ahead of the rest): the **Register** button reads the portal's registration page and says whether it is
+open (its own sentence *غير مسموح التسجيل بهذه الفترة* while closed, with a screenshot), and a watch looks every 30 minutes
+and tells the owner once the moment that sentence is gone (`registration_watch.py`, `bot/registration_watch_flow.py`).
+Everything above this paragraph is still to build, from the real open page.
 
 Hard rules (a mistake here costs a student a seat, and other students will use it):
 - Register only a section of a course the owner approved by name.

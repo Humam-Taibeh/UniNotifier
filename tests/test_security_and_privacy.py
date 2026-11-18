@@ -144,7 +144,7 @@ def test_no_personal_values_in_the_code():
     example = (project / ".env.example").read_text(encoding="utf-8")
     assert "\nARCHIVE_ROOT=\n" in example and "\nSTUDENT_ID=\n" in example, "optional settings are empty: off until filled in"
     assert archive.ARCHIVE_ROOT.is_absolute() and bot.semester() == schedule.load_schedule().get("semester", "")
-    assert set(portal_sections()) == {"transcript", "grades", "balance", "home"}, "a new portal page is a decision (home: the timetable)"
+    assert set(portal_sections()) == {"transcript", "grades", "balance", "home", "registration"}, "a new portal page is a decision (home: the timetable)"
 
 
 def test_forwarded_messages_are_never_acted_on():

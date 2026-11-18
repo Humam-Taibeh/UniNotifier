@@ -89,12 +89,33 @@ def save_shot(course: str, png: bytes) -> None:
     _save(links)
 
 
+def image_is_blank(png: bytes) -> bool:
+    """True for a picture of one colour (a page that had not drawn anything when it was taken): sent, it would only be
+    an empty white box. PNG only; anything that cannot be read is NOT called blank."""
+    import struct
+    import zlib
+    try:
+        if not png.startswith(b"\x89PNG\r\n\x1a\n"):
+            return False
+        data, at = b"", 8
+        while at + 8 <= len(png):
+            size, kind = struct.unpack(">I4s", png[at:at + 8])
+            if kind == b"IDAT":
+                data += png[at + 8:at + 8 + size]
+            at += 12 + size
+        raw = zlib.decompress(data)
+        return bool(raw) and max(raw.count(b"\xff"), raw.count(b"\x00")) / len(raw) > 0.995
+    except Exception:
+        return False
+
+
 def shot_bytes(course: str) -> bytes | None:
     name = entry(course).get("shot")
     try:
-        return (_shots_dir() / name).read_bytes() if name else None
+        png = (_shots_dir() / name).read_bytes() if name else None
     except OSError:
         return None
+    return None if png and image_is_blank(png) else png                # an empty page is not a proof of anything
 
 
 def set_link(course: str, url: str | None, source: str, origin: str = "") -> None:

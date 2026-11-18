@@ -90,16 +90,18 @@ def send_with_link(token: str, chat_id: str, text: str, course: str, hint: bool 
     can't be sent."""
     link = lecturelinks.entry(course)
     attendance = attendance_rows(course) if check_in else []
-    if attendance and checkin.covers(course):
+    done = bool(check_in) and checkin.recorded_today(course)        # already checked in: it was told, with its proof
+    if attendance and checkin.covers(course) and not done:
         text += f"\n\n{checkin.LECTURE_NOTE}"
     if not link.get("url"):
         return notifier.send_message(token, chat_id, f"{text}\n\n{NO_LINK_NOTE}", rows=attendance or None)
     rows = lecturelinks.join_rows(link) + attendance
-    if hint:
+    if hint and not done:
         text += "\n\nTap *Join Meeting* below."
     png = lecturelinks.shot_bytes(course)
     if png:
-        text += "\n📸 The post that published the link is attached."
+        if not done:
+            text += "\n📸 The post that published the link is attached."
         if len(text) <= notifier.CAPTION_LIMIT and notifier.send_png_file(
                 token, chat_id, png, f"{archive.safe_name(course, 'lecture')} - link source.png",
                 text, rows=rows):

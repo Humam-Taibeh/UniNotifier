@@ -1422,3 +1422,60 @@ def test_attendance_asks_an_hour_after_the_day_and_again_at_ten():
     assert attendance.due(datetime(2026, 11, 18, 22, 30), late) is None           # answered: never again
 
 
+
+
+def test_a_lecture_alert_does_not_repeat_what_a_recorded_check_in_already_told_and_never_sends_an_empty_picture():
+    """Once the check-in is recorded (its proof was sent), the lecture alert no longer promises 'Auto check-in is on…', says 'Tap Join
+    Meeting' or 'the post is attached'; and a blank white screenshot (a page that had not drawn) is never sent."""
+    import importlib
+    import json
+    import struct
+    import zlib
+    lectures = importlib.import_module("uninotifier.lectures")
+    checkin = importlib.import_module("uninotifier.checkin")
+    lecturelinks = importlib.import_module("uninotifier.lecturelinks")
+    notifier = importlib.import_module("uninotifier.notifier")
+    daily = importlib.import_module("uninotifier.daily")
+
+    def png(pixels: bytes, w: int, h: int) -> bytes:
+        def chunk(kind, body):
+            return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body))
+        rows = b"".join(b"\x00" + pixels[y * w * 3:(y + 1) * w * 3] for y in range(h))
+        return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
+
+    white = png(b"\xff" * (600 * 40 * 3), 600, 40)
+    page = png(bytes((x * 7 + y * 13) % 256 for y in range(40) for x in range(600) for _ in range(3)), 600, 40)
+    assert lecturelinks.image_is_blank(white) and not lecturelinks.image_is_blank(page) and not lecturelinks.image_is_blank(b"not a png")
+    sent = []
+    tmp = Path(tempfile.mkdtemp())
+    keep = (lectures.STATE_FILE, checkin.STATE_FILE, daily.CLAIM_DIR, lecturelinks.entry, lecturelinks.shot_bytes, lecturelinks.join_rows,
+            checkin.covers, notifier.send_png_file, notifier.send_message)
+    try:
+        state = tmp / "saved_items.json"
+        state.write_text(json.dumps({"content": {"1": {"cmid": "70280", "type": "attendance", "course": "20261-Arabic-AllSec-3",
+                                                      "url": "https://e/mod/attendance/view.php?id=70280"}}}), encoding="utf-8")
+        lectures.STATE_FILE = checkin.STATE_FILE = state
+        daily.CLAIM_DIR = tmp / "claims"
+        daily.CLAIM_DIR.mkdir()
+        lecturelinks.entry = lambda course: {"url": "https://teams/x"}
+        lecturelinks.join_rows = lambda link: [[{"text": "🎥 Join Meeting", "url": link["url"]}]]
+        checkin.covers = lambda course, *a, **k: True
+        notifier.send_png_file = lambda token, chat, png_, name, text, rows=None: sent.append(("png", text)) or True
+        notifier.send_message = lambda token, chat, text, rows=None, **k: sent.append(("text", text)) or True
+        lecturelinks.shot_bytes = lambda course: page
+        assert checkin.recorded_today("Arabic") is False
+        lectures.send_with_link("t", "c", "🎥 *Lecture starting now:* Arabic", "Arabic", check_in=True)
+        assert "Auto check-in is on" in sent[-1][1] and "Tap *Join Meeting*" in sent[-1][1] and "attached" in sent[-1][1]
+        (daily.CLAIM_DIR / f"checkin-70280-{datetime.now():%Y%m%d}-1900-done.sent").write_text("")        # checked in: the proof was sent
+        assert checkin.recorded_today("Arabic") is True and checkin.recorded_today("Other") is False
+        sent.clear()
+        lectures.send_with_link("t", "c", "🎥 *Lecture starting now:* Arabic", "Arabic", check_in=True)
+        text = sent[-1][1]
+        assert "Auto check-in" not in text and "Tap *Join Meeting*" not in text and "attached" not in text, text
+        sent.clear()
+        lecturelinks.shot_bytes = lambda course: None if lecturelinks.image_is_blank(white) else white
+        lectures.send_with_link("t", "c", "🎥 *Lecture starting now:* Arabic", "Arabic", check_in=True)
+        assert sent[-1][0] == "text" and "attached" not in sent[-1][1]                                   # no empty picture, no word of one
+    finally:
+        (lectures.STATE_FILE, checkin.STATE_FILE, daily.CLAIM_DIR, lecturelinks.entry, lecturelinks.shot_bytes, lecturelinks.join_rows,
+         checkin.covers, notifier.send_png_file, notifier.send_message) = keep

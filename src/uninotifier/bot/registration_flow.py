@@ -82,6 +82,7 @@ def view_home() -> tuple[str, list]:
         rows.append([{"text": "✋ Choose Courses Myself", "callback_data": "reg:pick"}])
         rows.append([{"text": "✅ What I Can Take", "callback_data": "reg:open"},
                      {"text": "⛔ Not Yet — Why", "callback_data": "reg:held"}])
+        rows.append([{"text": "📝 Register", "callback_data": "reg:register"}])
     return "\n".join(lines), rows + [chat.RECORD_ROW]
 
 
@@ -158,6 +159,10 @@ def handle_callback(cb: dict, action: str, message_id: int | None) -> None:
     global _kind
     chat.answer(cb["id"])
     what = action.partition(":")[2]
+    if what == "register":                           # the portal's registration page: open, or closed (and said so)
+        if not portal_flow.start_registration(None if chat.is_file_message(cb.get("message")) else message_id):
+            chat.answer(cb["id"], "⏳ A portal request is already running")
+        return
     if what == "fresh":                              # opened from the record: the plan is read from the portal now, then shown
         if not portal_flow.start_plan(None if chat.is_file_message(cb.get("message")) else message_id):
             show(view_home(), message_id)            # a portal request is already running: what was last read

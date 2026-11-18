@@ -553,6 +553,76 @@ def refresh_plan(message_id: int | None) -> None:
         _portal_lock.release()
 
 
+SAID_CLOSED = "غير مسموح التسجيل بهذه الفترة"             # the portal's own sentence while registration is closed
+ISOLATE = (chr(0x2068), chr(0x2069))                       # an Arabic sentence stays one piece beside English words
+
+
+def send_registration_answer(result: portal.Result, alert: bool = False) -> None:
+    """What the portal's registration page says: closed (its own sentence, with the screenshot) or open. `alert`: the watch found
+    it open — a message of its own, not an answer to a button."""
+    said = result.data.get("said") or SAID_CLOSED
+    if result.data.get("open"):
+        text = ("🚨 *Registration is open!*" if alert else "📝 *Registration*") + (
+            "\n\nThe portal's registration page no longer says it is closed. Choosing sections and registering from here "
+            "is not built yet — open the portal below.")
+    elif not result.found:
+        text = "📝 *Registration*\n\n⚠️ I could not find the registration page in the portal's menu."
+    else:
+        text = (f"📝 *Registration*\n\n🔒 *Registration is not open right now.*\nThe portal says: {ISOLATE[0]}{said}{ISOLATE[1]}"
+                "\n\nI look every 30 minutes and tell you the moment it opens.")
+    rows = [[{"text": "🏛️ Open Registration Portal ↗️", "url": portal.LOGIN_URL}],
+            [{"text": "🔙 Registration Plan", "callback_data": "reg:home"}, {"text": "🏠 Main Menu", "callback_data": "menu"}]]
+    if not (result.png and notifier.send_png_file(chat.BOT_TOKEN, chat.CHAT_ID, result.png,
+                                                  "ZUJ Portal - Registration.png", text, rows=rows)):
+        notifier.send_message(chat.BOT_TOKEN, chat.CHAT_ID, text, rows=rows)
+
+
+def check_registration(message_id: int | None) -> None:
+    """Worker thread: the Register button — the portal's registration page is read now (a "reading…" screen with Back and Main
+    Menu) and said: open, or closed with the portal's own sentence and a screenshot."""
+    from uninotifier import registration_watch
+    _cancelled.clear()
+    try:
+        if message_id:
+            chat.edit_view(message_id, "📝 *Registration*\n\n⏳ Looking at the portal's registration page… "
+                                       "usually about 10 seconds, up to a minute if the portal is slow",
+                           [chat.cancel_row("reg:home")])
+        try:
+            result = portal.fetch_many(["registration"], ask_portal_code)["registration"]
+        except (maintenance.PortalUnavailable, portal.PortalError) as e:
+            if cancelled():
+                return
+            problem = f"⚠️ *Registration* — the portal could not be read: {escape_md(notifier.redact(str(e)))}"
+            rows = [[{"text": "🔄 Try Again", "callback_data": "reg:register"}],
+                    [{"text": "🔙 Registration Plan", "callback_data": "reg:home"}, {"text": "🏠 Main Menu", "callback_data": "menu"}]]
+            chat.edit_view(message_id, problem, rows) if message_id else chat.send_view(problem, rows)
+            return
+        if cancelled():
+            return
+        if result.found and "open" in result.data:
+            registration_watch.observe(result.data["open"])           # what you saw is not news later
+        send_registration_answer(result)
+        chat.leave_menu()
+        if message_id and slack.mode() == "slack":
+            chat.retire(message_id)
+    except Exception as e:
+        log.exception("Registration check failed")
+        failsafe.bug("bot:registration-check", "The registration page could not be checked", e)
+    finally:
+        _portal_lock.release()
+
+
+def start_registration(message_id: int | None) -> bool:
+    """False when a portal request is already running."""
+    if portal.credentials() is None:
+        chat.send_view(portal_setup_text(), [chat.BACK_ROW])
+        return True
+    if not _portal_lock.acquire(blocking=False):
+        return False
+    threading.Thread(target=check_registration, args=(message_id,), daemon=True).start()
+    return True
+
+
 def start_plan(message_id: int | None) -> bool:
     """False when a portal request is already running (the saved plan is shown instead)."""
     if portal.credentials() is None or not _portal_lock.acquire(blocking=False):

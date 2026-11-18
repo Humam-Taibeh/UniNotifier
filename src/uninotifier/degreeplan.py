@@ -230,8 +230,7 @@ def placement_line(plan: dict) -> str | None:
     if not p["extra"]:                                   # 80% or more in every exam: exempt — the normal case
         return f"📝 *Placement Exams:* all {len(p['courses'])} exempt (80%+) — nothing added to the plan"
     marks = " · ".join(_mark(c) for c in p["courses"])
-    left = f"{_n(p['left'])} still to pass" if p["left"] else "all passed"
-    return f"📝 *Placement Exams:* {marks} — *+{_n(p['extra'])} hrs on top of the plan* ({left})"
+    return f"📝 *Placement Exams:* {marks} — *+{_n(p['extra'])} hrs on top of the plan*"
 
 
 def placement_lines(plan: dict) -> list[str]:
