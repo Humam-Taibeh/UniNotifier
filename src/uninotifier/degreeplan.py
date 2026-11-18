@@ -107,7 +107,23 @@ def parse(html: str) -> dict | None:
             continue
         seen.add(name)
         categories.append({"name": name, **totals, "courses": courses})
+    for category in categories:
+        _count_exempt(category)
     return {"categories": categories} if categories else None
+
+
+def _count_exempt(category: dict) -> None:
+    """A course you are exempt from counts as passed. The portal does that in its own totals (the remedial category: 9 hrs required,
+    9 passed — all of it exempt); if a category's `passed` does not include its exempt courses' hours, they are added here and the
+    hours left lowered by them, so what is required of you is never over-stated whichever way the portal counts."""
+    if is_remedial(category):
+        return
+    exempt = sum(c["hours"] for c in category["courses"] if c["status"] == "exempt")
+    taken = sum(c["hours"] for c in category["courses"] if c["status"] == "passed")
+    if exempt and category["passed"] < taken + exempt - 1e-6:
+        category["passed"] += exempt
+        category["remaining"] = max(category["remaining"] - exempt, 0)
+        category["exempt_added"] = exempt
 
 
 def prerequisites(cell: str) -> list[str]:
@@ -186,7 +202,7 @@ def unknown_line(plan: dict) -> str | None:
 
 def exempted(plan: dict) -> dict | None:
     """The plan's own courses the student is EXEMPT from (a placement exam above 80% exempts from the course itself: Arabic or English
-    Communication Skills, the remedial computer course...): {"courses": [...], "hours"}. Their hours are not required of the student.
+    Communication Skills, the remedial computer course...): {"courses": [...], "hours"}. Their hours count as passed (_count_exempt).
     None when there are none. (A remedial course marked exempt adds nothing: see placement.)"""
     courses = [c for cat in _counted(plan) for c in cat["courses"] if c["status"] == "exempt"]
     return {"courses": courses, "hours": sum(c["hours"] for c in courses)} if courses else None
@@ -207,7 +223,7 @@ def exempted_line(plan: dict) -> str | None:
     if not found:
         return None
     names = " · ".join(_course_name(c) for c in found["courses"])
-    return f"🎓 *Exempt Courses:* {names} — −{_n(found['hours'])} hrs required"
+    return f"🎓 *Exempt Courses:* {names} — {_n(found['hours'])} hrs counted as passed"
 
 
 def placement(plan: dict) -> dict | None:
@@ -286,10 +302,8 @@ def progress_lines(plan: dict, retakes: int = 0, repeated: int = 0) -> list[str]
     """The degree progress for the summary. `retakes`: how many of this term's courses are retakes;
     `repeated`: how many courses of the record were ever taken again (both from the transcript)."""
     p = progress(plan)
-    exams, free = placement(plan), exempted(plan)
-    extra, exempt = (exams["extra"] if exams else 0), (free["hours"] if free else 0)
-    parts = ([f"+{_n(extra)} placement"] if extra else []) + ([f"−{_n(exempt)} exempt"] if exempt else [])
-    on_top = f" ({' '.join(parts)} = {_n(p['degree'] + extra - exempt)} hrs)" if parts else ""     # the real total: the plan's, plus, minus
+    exams = placement(plan)
+    on_top = f" (+{_n(exams['extra'])} placement = {_n(p['degree'] + exams['extra'])} hrs)" if exams and exams["extra"] else ""
     lines = [f"📊 *Degree Plan:* {_n(p['degree'])} hrs{on_top}", f"✅ *Passed:* {_n(p['passed'])} hrs"]
     if p["term_courses"]:
         again = f" ({_count(retakes, 'retake')})" if retakes else ""

@@ -24,6 +24,7 @@ log = logging.getLogger("uninotifier")
 _kind: str | None = None            # the term kind chosen with 🔁; None = the term after this one
 _chosen: list[str] = []             # ✋ the course codes of your own choice (in memory: gone on a restart)
 
+REGISTER_BUTTON = {"text": "📝 Register", "callback_data": "reg:register"}      # on the screens where the courses are fixed
 HOME_ROW = [{"text": "🔙 Registration Plan", "callback_data": "reg:home"},
             {"text": "🏠 Main Menu", "callback_data": "menu"}]
 SCREEN_LIMIT = 3900                 # a longer list goes out as a message of its own
@@ -82,7 +83,6 @@ def view_home() -> tuple[str, list]:
         rows.append([{"text": "✋ Choose Courses Myself", "callback_data": "reg:pick"}])
         rows.append([{"text": "✅ What I Can Take", "callback_data": "reg:open"},
                      {"text": "⛔ Not Yet — Why", "callback_data": "reg:held"}])
-        rows.append([{"text": "📝 Register", "callback_data": "reg:register"}])
     return "\n".join(lines), rows + [chat.RECORD_ROW]
 
 
@@ -97,14 +97,15 @@ def view_pick(advice: dict, term: str) -> tuple[str, list]:
     _chosen[:] = [code for code in _chosen if code in codes]          # a plan that changed: only what is still open
     if slack.mode() == "slack":                     # one drop-down with every course whole, ticked as you choose
         options = [(f"{e['course']['name']} · {e['course']['hours']:g}h", e["course"]["code"]) for e in open_entries]
-        rows = [[{"text": "Choose courses", "callback_data": "reg:pick", "stack": True,
-                  "multi": {"prefix": "reg:set", "placeholder": "Choose your courses", "options": options, "initial": list(_chosen)}}]]
+        rows = [[{"text": "Choose courses", "callback_data": "reg:pick", "line": {
+            "text": "✋ *Your courses* — tick the ones you want, untick to take one out",
+            "multi": {"prefix": "reg:set", "placeholder": "Choose your courses", "options": options, "initial": list(_chosen)}}}]]
     else:
         rows = [[{"text": f"{'✅' if e['course']['code'] in _chosen else '▫️'} {_short(e['course']['name'])} · "
                           f"{e['course']['hours']:g}h", "callback_data": f"reg:t:{e['course']['code']}"}]
                 for e in open_entries]
-    if _chosen:
-        rows.append([{"text": "🧹 Clear My Choice", "callback_data": "reg:clear"}])
+    if _chosen:                                      # a set is chosen: it can be cleared, or registered
+        rows.append([{"text": "🧹 Clear My Choice", "callback_data": "reg:clear"}, REGISTER_BUTTON])
     return "\n".join(registration.choice_lines(advice, _chosen, term)), rows + [HOME_ROW]
 
 
@@ -124,7 +125,7 @@ def view_screen(what: str) -> tuple[str, list]:
             return view_home()
         _chosen[:] = [e["course"]["code"] for e in registration.propose(advice, hours)["entries"]]
         return ("\n".join(registration.proposal_lines(advice, hours, term)),
-                [[{"text": "✋ Change These Courses", "callback_data": "reg:pick"}], HOME_ROW])
+                [[{"text": "✋ Change These Courses", "callback_data": "reg:pick"}, REGISTER_BUTTON], HOME_ROW])
     if what.startswith("set:"):                     # the drop-down: the whole choice at once
         picked = [c for c in what[4:].split(",") if c]
         _chosen[:] = [e["course"]["code"] for e in advice["entries"] if e["state"] != "blocked" and e["course"]["code"] in picked]

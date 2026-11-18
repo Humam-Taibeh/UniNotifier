@@ -212,7 +212,16 @@ def _row_lines(rows: list[list[dict]]) -> list[dict]:
         info, button = row[0]["line"], row[0]
         block = {"type": "section", "block_id": f"line{n}",
                  "text": {"type": "mrkdwn", "text": str(info.get("text", ""))[:SECTION_LIMIT] or " "}}
-        if info.get("options"):
+        if info.get("multi"):                    # a drop-down to tick several things (Slack allows it only beside a line of words)
+            many = info["multi"]
+            options = [{"text": {"type": "plain_text", "text": str(t)[:75], "emoji": True}, "value": str(v)[:150]}
+                       for t, v in many["options"][:100]]
+            block["accessory"] = {"type": "multi_static_select", "action_id": f"msel:{many['prefix']}", "options": options,
+                                  "placeholder": {"type": "plain_text", "text": many.get("placeholder", "Choose"), "emoji": True}}
+            chosen = [o for o in options if o["value"] in {str(x) for x in many.get("initial", [])}]
+            if chosen:
+                block["accessory"]["initial_options"] = chosen
+        elif info.get("options"):
             options = [{"text": {"type": "plain_text", "text": str(label)[:75], "emoji": True}, "value": str(value)[:150]}
                        for label, value in info["options"][:100]]
             block["accessory"] = {"type": "static_select", "action_id": f"line{n}", "options": options,
@@ -264,17 +273,6 @@ def buttons(reply_markup, prefix: str = "", width: int | None = None) -> list[di
         for c, button in enumerate(row[:25]):
             label = str(button.get("text") or "·")
             element = {"type": "button", "text": {"type": "plain_text", "text": label[:75], "emoji": True}}
-            if button.get("multi"):                        # a drop-down to tick several things: every name whole, in the list
-                info = button["multi"]
-                options = [{"text": {"type": "plain_text", "text": str(t)[:75], "emoji": True}, "value": str(v)[:150]}
-                           for t, v in info["options"][:100]]
-                element = {"type": "multi_static_select", "action_id": f"msel:{info['prefix']}", "options": options,
-                           "placeholder": {"type": "plain_text", "text": info.get("placeholder", "Choose"), "emoji": True}}
-                chosen = [o for o in options if o["value"] in {str(x) for x in info.get("initial", [])}]
-                if chosen:
-                    element["initial_options"] = chosen
-                mine.append(element)
-                continue
             if button.get("url"):
                 element.update(url=str(button["url"])[:3000], action_id=f"{prefix}u{r}_{c}")
             elif button.get("callback_data"):

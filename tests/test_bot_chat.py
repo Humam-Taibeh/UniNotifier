@@ -1470,13 +1470,14 @@ def test_the_registration_plan_picks_courses_from_one_drop_down_and_shows_every_
     import json
     from uninotifier import slack, slackbot
 
-    rows = [[{"text": "Choose courses", "callback_data": "reg:pick", "stack": True,
-              "multi": {"prefix": "reg:set", "placeholder": "Choose your courses",
-                        "options": [("تراكيب البيانات · 3h", "0142210"), ("Operating Systems · 3h", "0142211")], "initial": ["0142210"]}}],
+    rows = [[{"text": "Choose courses", "callback_data": "reg:pick", "line": {"text": "✋ *Your courses*", "multi": {
+                "prefix": "reg:set", "placeholder": "Choose your courses",
+                "options": [("تراكيب البيانات · 3h", "0142210"), ("Operating Systems · 3h", "0142211")], "initial": ["0142210"]}}}],
             [{"text": "🔙 Registration Plan", "callback_data": "reg:home"}, {"text": "🏠 Main Menu", "callback_data": "menu"}]]
     blocks = slack.buttons({"inline_keyboard": rows}, width=slack.ROW_WIDTH)
-    select = blocks[0]["elements"][0]
-    assert blocks[0]["type"] == "actions" and select["type"] == "multi_static_select" and select["action_id"] == "msel:reg:set"
+    select = blocks[0]["accessory"]                  # Slack takes a multi-select only beside a line of words (never in a row of buttons)
+    assert blocks[0]["type"] == "section" and select["type"] == "multi_static_select" and select["action_id"] == "msel:reg:set"
+    assert not [e for b in blocks if b["type"] == "actions" for e in b["elements"] if e["type"] == "multi_static_select"]
     assert [o["text"]["text"] for o in select["options"]] == ["تراكيب البيانات · 3h", "Operating Systems · 3h"]
     assert [o["value"] for o in select["initial_options"]] == ["0142210"]
     press = slackbot.from_press({"type": "block_actions", "user": {"id": "U1"}, "container": {"message_ts": "1.1"},

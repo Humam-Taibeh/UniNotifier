@@ -486,13 +486,14 @@ def test_registration_plan():
         text, rows = registration_flow.view_home()
         assert "Registration Plan* — Second semester 2030/2031" in text and "Left to take* — 22 hrs" in text
         assert [b["callback_data"] for b in rows[0]] == ["reg:h:12", "reg:h:15", "reg:h:18", "reg:h:21"]
-        assert rows[1][0]["callback_data"] == "reg:pick" and [b["callback_data"] for b in rows[-3]] == ["reg:open", "reg:held"] and rows[-2][0]["callback_data"] == "reg:register"
+        assert rows[1][0]["callback_data"] == "reg:pick" and [b["callback_data"] for b in rows[-2]] == ["reg:open", "reg:held"] and not any(b["callback_data"] == "reg:register" for r in rows for b in r)
         assert rows[-1] == chat.RECORD_ROW and not any("reg:k:" in b["callback_data"] or b["callback_data"] == "portal:transcript" for r in rows for b in r)
         assert "open with the portal's registration period" not in text and "Your plan as read" not in text and "Update My Plan" not in text
         assert "Regular term* — 12–18 hrs" in text and text.splitlines()[-1].startswith("✨ *Suggest my courses*"), text    # the hours are last
         assert text.index("Not yet*") < text.index("Regular term*") < text.index("Suggest my courses")
         suggested, rows = registration_flow.view_screen("h:12")
         assert "✨ *Suggested: 12 hrs*" in suggested and "*Total:* 12 hrs" in suggested and rows[0][0]["callback_data"] == "reg:pick"
+        assert [b["callback_data"] for b in rows[0]] == ["reg:pick", "reg:register"], "Register is where the courses are fixed"
         # ✋ starts from the suggestion; a tap takes a course out or adds one; every open course is a button
         picked, rows = registration_flow.view_screen("pick")
         assert "*Total:* 12 hrs · 4 courses" in picked and len([r for r in rows if r[0]["callback_data"].startswith("reg:t:")]) == 6
@@ -1757,25 +1758,31 @@ def test_the_registration_page_is_read_said_and_watched():
         registration_watch.STATE_FILE, portal.fetch_many, notifier.send_png_file, notifier.send_message = keep
 
 
-def test_exempt_courses_lower_the_hours_required_and_a_remedial_exemption_adds_nothing():
-    """A placement exam above 80% exempts you from the COURSE itself (Communication Skills, the remedial computer course): its hours
-    are not required of you — the Degree Plan line says the real total, a line names the courses. A remedial course that is exempt
-    adds nothing (the normal case) and says no percentage."""
+def test_exempt_courses_count_as_passed_whichever_way_the_portal_totals_them():
+    """A placement exam above 80% exempts you from the COURSE itself. Its hours count as PASSED: the portal does so in its own totals
+    (the remedial category: 9 required, 9 passed, all exempt); if a category's passed total leaves them out, they are added and the hours
+    left lowered — what is required of you is never over-stated. The plan's total stays; a line names the courses; a remedial
+    exemption adds nothing and says no percentage."""
     from support import PLAN_CATEGORIES, _plan_html
     from uninotifier import degreeplan, transcript
     normal = degreeplan.parse(_plan_html())
     assert degreeplan.exempted(normal) is None
     assert degreeplan.progress_lines(normal)[0] == "📊 *Degree Plan:* 22 hrs"
     assert "all 2 exempt — nothing added to the plan" in degreeplan.placement_line(normal) and "80" not in degreeplan.placement_line(normal)
+    exempt_course = [("معفاة", "0900101", "مهارات الدراسة", 3), ("قيد الدراسة", "0900102", "الكتابة الأكاديمية", 3), ("", "0900103", "العمل التطوعي", 3)]
+    # the portal counted it: the category says 3 passed, 6 left — nothing is added twice
     cats = [list(c) for c in PLAN_CATEGORIES]
-    cats[0][4] = [("معفاة", "0900101", "مهارات الدراسة", 3), ("قيد الدراسة", "0900102", "الكتابة الأكاديمية", 3), ("", "0900103", "العمل التطوعي", 3)]
-    one = degreeplan.parse(_plan_html(cats))
-    assert degreeplan.exempted(one)["hours"] == 3
-    lines = degreeplan.progress_lines(one)
-    assert lines[0] == "📊 *Degree Plan:* 22 hrs (−3 exempt = 19 hrs)", lines[0]
-    assert any(l.startswith("🎓 *Exempt Courses:*") and "−3 hrs required" in l for l in lines)
-    cats[2][4] = [("معفاة", "0900301", "هياكل البيانات", 3), ("", "0900302", "نظم التشغيل", 3), ("", "0900303", "حلقة بحث", 1)]
-    two = degreeplan.parse(_plan_html(cats))
-    assert degreeplan.exempted(two)["hours"] == 6 and degreeplan.progress_lines(two)[0].endswith("(−6 exempt = 16 hrs)")
-    ordered = transcript._in_grid_order(degreeplan.progress_lines(two))
-    assert ordered[-1].startswith("🎓 *Exempt Courses:*")                    # in the summary's grid, after the placement exams
+    cats[0][4] = exempt_course
+    counted = degreeplan.parse(_plan_html(cats))
+    assert degreeplan.exempted(counted)["hours"] == 3
+    assert [counted["categories"][0][k] for k in ("passed", "remaining")] == [3, 6] and "exempt_added" not in counted["categories"][0]
+    # the portal left it out: 0 passed, 9 left — the exempt 3 hours are passed now, 6 left
+    cats[0][2], cats[0][3] = 0, 9
+    left_out = degreeplan.parse(_plan_html(cats))
+    assert [left_out["categories"][0][k] for k in ("passed", "remaining")] == [3, 6] and left_out["categories"][0]["exempt_added"] == 3
+    assert degreeplan.progress(left_out)["passed"] == degreeplan.progress(counted)["passed"] == 6      # the same answer either way
+    lines = degreeplan.progress_lines(left_out)
+    assert lines[0] == "📊 *Degree Plan:* 22 hrs"                                    # the plan's total stays
+    assert any(l.startswith("🎓 *Exempt Courses:*") and "3 hrs counted as passed" in l for l in lines)
+    ordered = transcript._in_grid_order(lines)
+    assert ordered[-1].startswith("🎓 *Exempt Courses:*")                              # in the summary's grid, after the placement exams
