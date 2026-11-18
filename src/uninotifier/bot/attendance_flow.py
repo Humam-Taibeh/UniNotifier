@@ -92,19 +92,18 @@ def view_home() -> tuple[str, list]:
 
 
 def view_set() -> tuple[str, list]:
-    """Absences from before the bot counted: − and + on every course."""
+    """Absences from before the bot counted. The courses are numbered in the text and a ➕ row and a ➖ row
+    carry the numbers: Slack runs a row's buttons together, so a button per course line could not be told apart."""
     data = attendance.load()
     kind = attendance.kinds()
-    lines = ["📝 *Your earlier absences*", media.DIVIDER,
-             "Set each course to the number of absences you have now. − and + change it by one."]
-    rows = []
-    for i, course in enumerate(sorted(kind)):
+    names = sorted(kind)
+    lines = ["📝 *Your earlier absences*", media.DIVIDER, "Tap ➕ or ➖ with a course's number to change its count.", ""]
+    for i, course in enumerate(names, 1):
         info = attendance.status(course, kind[course], data)
-        rows.append([{"text": "➖", "callback_data": f"att:adj:{i}:down"},
-                     {"text": f"{course[:26]} · {info['count']}/{info['allowed']}", "callback_data": "att:set"},
-                     {"text": "➕", "callback_data": f"att:adj:{i}:up"}])
-    rows.append([{"text": "✅ Done", "callback_data": "att:home"}])
-    return "\n".join(lines), rows
+        lines.append(f"*{i}.* {course} — {info['count']} of {info['allowed']}")
+    plus = [{"text": f"➕ {i}", "callback_data": f"att:adj:{i - 1}:up"} for i in range(1, len(names) + 1)]
+    minus = [{"text": f"➖ {i}", "callback_data": f"att:adj:{i - 1}:down"} for i in range(1, len(names) + 1)]
+    return "\n".join(lines), [plus, minus, [{"text": "🔙 Attendance", "callback_data": "att:home"}]]
 
 
 # ------------------------------------------------------------------ buttons

@@ -1270,4 +1270,4 @@ def test_attendance_earlier_absences_can_be_entered():
     import importlib
     flow = importlib.import_module("uninotifier.bot.attendance_flow")
     text, rows = flow.view_set()
-    assert "earlier absences" in text and rows[-1][0]["callback_data"] == "att:home"
+    assert "earlier absences" in text and rows[-1][0]["callback_data"] == "att:home" and len(rows[0]) == len(rows[1])
