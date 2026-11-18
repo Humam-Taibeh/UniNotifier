@@ -22,8 +22,8 @@ log = logging.getLogger("uninotifier")
 TICK = 60                                   # seconds between looks at whether the question is due
 MAIN = {"text": "🏠 Main Menu", "callback_data": "menu"}
 ATTENDANCE = {"text": "🔙 Attendance", "callback_data": "att:home"}
-RULES = ("*Absences allowed:* 5 for a course you attend 2 days or more a week; 2 for a blended, a free or a "
-         "once-a-week course. One more than that means *deprivation*.")
+RULES = ("*Twice a week:* 5 absences allowed, the 6th is deprivation." + chr(10)
+         + "*Once a week* (blended, online or free): 2 allowed, the 3rd is deprivation.")
 KIND_TAG = {"blended": " · blended", "once": " · once a week", "normal": ""}
 
 
