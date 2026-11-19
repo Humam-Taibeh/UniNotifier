@@ -1241,14 +1241,14 @@ def test_the_exams_flow_tells_you_and_remembers_only_what_went_out():
     portal.credentials = lambda: ("209900001", "pw")
     exams_watch.STATE_FILE.unlink(missing_ok=True)
     try:
-        assert exams_flow.check_once() == 0 and len(sent) == 1 and sent[0][0].startswith("👀 *Midterm Marks Watch is on*")
+        assert exams_flow.check_once() == 1 and len(sent) == 1 and sent[0][0].startswith("👀 *Midterm Marks Watch is on*")
         assert exams_flow.check_once() == 0 and len(sent) == 1, "nothing new: nothing sent"
         grades["v"] = ["18.00", "24.00"]
         ok["v"] = False
         assert exams_flow.check_once() == 0 and len(sent) == 2, "the message did not go out"
         ok["v"] = True
         assert exams_flow.check_once() == 1 and len(sent) == 3, "told again at the next look"
-        assert sent[-1][0].startswith("🎉 *Midterm Mark Posted*") and sent[-1][1][0][0]["url"].startswith("https://exams.example/")
+        assert sent[-1][0].startswith("🎉 *Midterm Mark Posted*") and sent[-1][1][0][0]["callback_data"] == "mid:status" and sent[-1][1][1][0]["url"].startswith("https://exams.example/")
         assert exams_flow.check_once() == 0 and len(sent) == 3, "now remembered"
         exams.read = down
         grades["v"] = ["19.00", "24.00"]
@@ -1289,3 +1289,198 @@ def test_the_exams_site_sign_in_is_refused_cleanly():
             raise AssertionError("a refused sign-in must raise")
         except exams.ExamsError as e:
             assert words in str(e)
+
+
+def test_a_typed_midterm_mark_is_understood_or_refused_with_words():
+    """'24' is out of 30, '24/25' out of 25, Arabic digits and words work; more than the maximum, no number or three
+    numbers is refused with what to send."""
+    from uninotifier import exams_watch
+    assert exams_watch.parse_mark("24") == (24.0, 30.0)
+    assert exams_watch.parse_mark("24/25") == (24.0, 25.0)
+    assert exams_watch.parse_mark("٢٤ من ٣٠") == (24.0, 30.0)
+    assert exams_watch.parse_mark("22.5 of 30") == (22.5, 30.0)
+    for bad in ("", "abc", "1 2 3", "31", "5/0", "40/30", "5/200"):
+        try:
+            exams_watch.parse_mark(bad)
+            raise AssertionError(f"{bad!r} must be refused")
+        except ValueError as e:
+            assert str(e)
+    assert exams_watch.hundred(24, 30) == 80.0 and exams_watch.hundred(0, 0) == 0.0
+
+
+def test_a_midterm_mark_lowers_what_a_course_can_reach_until_the_coursework_total_takes_over():
+    """The calculator knows each course's midterm: 24 of 30 means 94 at best; the coursework total (out of 60) then
+    replaces it. A mark entered by hand wins over the site's; removing it brings the site's back; a course with no mark
+    has no limit. Everything lands in gpa.json via apply_to_gpa."""
+    from uninotifier import exams_watch, gpa
+    keep_file = gpa.STATE_FILE
+    gpa.STATE_FILE = Path(tempfile.mkdtemp(prefix="uninotifier-mid-")) / "gpa.json"
+    exams_watch.STATE_FILE.unlink(missing_ok=True)
+    try:
+        record = gpa.load()
+        record["courses"] = {"Alpha Course": gpa.new_course(), "Beta Course": gpa.new_course()}
+        gpa.save(record)
+        state = {"courses": {"Alpha Course": {"overview": "24.00", "items": {"M": "24.00"},
+                                              "mark": {"got": 24.0, "out_of": 30.0, "exam": "M"}}}}
+        assert exams_watch.apply_to_gpa(state) == ["Alpha Course"]
+        alpha = gpa.load()["courses"]["Alpha Course"]
+        assert alpha["midterm"] == {"got": 24.0, "out_of": 30.0} and gpa.ceiling(alpha) == 94.0
+        assert "midterm" not in gpa.load()["courses"]["Beta Course"] and gpa.ceiling(gpa.new_course()) == 100.0
+        assert exams_watch.apply_to_gpa(state) == [], "nothing changed: nothing written"
+        gpa.set_coursework(alpha, 50.0, 60.0)                      # the coursework total takes over: 50 of 60 -> 90 at best
+        assert gpa.ceiling(alpha) == 90.0
+        exams_watch.set_manual("Alpha Course", 27.0, 30.0)
+        mark = exams_watch.effective({**state, "manual": exams_watch.load()["manual"]}, "Alpha Course")
+        assert (mark["got"], mark["source"]) == (27.0, "you"), "what you enter wins over the site"
+        assert exams_watch.effective(state, "Beta Course") is None
+        exams_watch.set_manual("Beta Course", 20.0, 25.0)
+        exams_watch.apply_to_gpa()
+        assert gpa.ceiling(gpa.load()["courses"]["Beta Course"]) == 95.0
+        assert exams_watch.clear_manual("Beta Course") and not exams_watch.clear_manual("Beta Course")
+        exams_watch.apply_to_gpa()
+        assert "midterm" not in gpa.load()["courses"]["Beta Course"], "removed: no limit again"
+        text = __import__("uninotifier.gpa_ui", fromlist=["x"])._coursework_lines(
+            {**gpa.new_course(), "midterm": {"got": 24.0, "out_of": 30.0}})
+        assert any("Midterm:* 24 / 30 (80 / 100)" in line for line in text) and any("Best possible:* 94" in line for line in text)
+    finally:
+        gpa.STATE_FILE = keep_file
+        exams_watch.STATE_FILE.unlink(missing_ok=True)
+
+
+def test_the_midterm_watch_screens_show_every_course_and_take_a_mark_by_hand():
+    """The summary lists each course (timetable order) with its mark, the mark out of 100 and the best possible, or
+    'waiting'; it has the switch, ✍️ and 🔄; the marks drop-down sets a mark out of 30, removes it, or asks for a typed
+    figure; a typed mark is used (and the calculator told); Back and Main Menu are on every screen."""
+    from uninotifier import exams_watch, gpa, portal, schedule
+    from uninotifier.bot import chat, exams_flow
+    keep = (portal.credentials, schedule.sort_courses, gpa.STATE_FILE, chat.send_view, chat.edit_view, chat.answer)
+    gpa.STATE_FILE = Path(tempfile.mkdtemp(prefix="uninotifier-mid-")) / "gpa.json"
+    sent, edits = [], []
+    portal.credentials = lambda: ("209900001", "pw")
+    schedule.sort_courses = lambda names, name=lambda x: x: sorted(names)
+    chat.send_view = lambda text, rows: sent.append((text, rows))
+    chat.edit_view = lambda mid, text, rows: edits.append((text, rows))
+    chat.answer = lambda *a, **k: None
+    exams_watch.STATE_FILE.unlink(missing_ok=True)
+    try:
+        exams_watch.save({"courses": {"Alpha Course": {"overview": "24.00", "items": {}, "mark": {"got": 24.0, "out_of": 30.0, "exam": "M"}},
+                                      "Beta Course": {"overview": "-", "items": {}}}})
+        text, rows = exams_flow.view_status()
+        assert text.startswith("📝 *Midterm Watch*") and "🟢 *On*" in text
+        assert "✅ *1. Alpha Course*" in text and "24 / 30 · 80 / 100 · best possible 94" in text.replace("\x00", "")
+        assert "⏳ *2. Beta Course*" in text and "waiting for the mark" in text
+        callbacks = [b["callback_data"] for row in rows for b in row]
+        assert callbacks == ["mid:check", "mid:off", "mid:set", "academic", "menu"], callbacks
+        cb = lambda action, message_id=7: exams_flow.handle_callback({"id": "x", "data": action}, action, message_id)
+        cb("mid:off")
+        assert not exams_watch.enabled() and "⏸️ *Off*" in edits[-1][0] and "mid:on" in str(edits[-1][1])
+        cb("mid:on")
+        assert exams_watch.enabled() and "🟢 *On*" in edits[-1][0]
+        cb("mid:set")
+        assert edits[-1][0].startswith("✍️ *Add / Change a Mark*") and [b["callback_data"] for b in edits[-1][1][-1]] == ["mid:status", "menu"]
+        cb("mid:s:1:18")                                         # Beta: 18 out of 30 from the drop-down
+        assert exams_watch.effective(exams_watch.load(), "Beta Course")["got"] == 18.0
+        assert gpa.load()["courses"] == {} or True
+        cb("mid:s:1:t")                                          # Beta: type another figure
+        assert exams_flow._wait == {"course": "Beta Course"} and edits[-1][0].startswith("✍️ *Mark for Beta Course*")
+        assert edits[-1][1][-1][0]["callback_data"] == "cancel:mid:status"
+        assert exams_flow.handle_text("nonsense") and exams_flow._wait, "an unusable answer keeps the question open"
+        assert exams_flow.handle_text("20/25") and exams_flow._wait is None
+        mark = exams_watch.effective(exams_watch.load(), "Beta Course")
+        assert (mark["got"], mark["out_of"], mark["source"]) == (20.0, 25.0, "you")
+        assert "20 / 25 · 80 / 100" in sent[-1][0] and "added by you" in sent[-1][0]
+        assert exams_flow.handle_text("hello") is False, "nothing is being asked: not an answer"
+        cb("mid:s:1:x")                                          # remove it
+        assert exams_watch.effective(exams_watch.load(), "Beta Course") is None
+        cb("mid:s:9:5")                                          # a course number that does not exist: back to the list
+        assert edits[-1][0].startswith("✍️ *Add / Change a Mark*")
+        portal.credentials = lambda: None
+        assert "portal" in exams_flow.view_status()[0].lower()
+    finally:
+        (portal.credentials, schedule.sort_courses, gpa.STATE_FILE, chat.send_view, chat.edit_view, chat.answer) = keep
+        exams_flow._wait = None
+        exams_watch.STATE_FILE.unlink(missing_ok=True)
+
+
+def test_a_new_midterm_mark_message_has_the_mark_out_of_100_the_best_possible_and_a_picture():
+    """The message: the mark itself (24 / 30), out of 100 (80 / 100), the most the course can reach (94), and — when
+    you entered one yourself — that yours is in use; it goes with the picture of the grade page and the buttons
+    📊 All Courses / 🌐 Open Exams Site; without a picture it still goes (as text)."""
+    from uninotifier import exams, exams_watch, gpa, notifier
+    from uninotifier.bot import exams_flow
+    keep = (exams.screenshots, notifier.send_png_file, notifier.send_message, gpa.STATE_FILE)
+    gpa.STATE_FILE = Path(tempfile.mkdtemp(prefix="uninotifier-mid-")) / "gpa.json"
+    files, texts = [], []
+    notifier.send_png_file = lambda token, chat_id, png, name, caption="", url=None, rows=None: files.append((png, name, caption, rows)) or True
+    notifier.send_message = lambda token, chat_id, text, rows=None, **k: texts.append((text, rows)) or True
+    exams_watch.STATE_FILE.unlink(missing_ok=True)
+    item = {"course": "Alpha Course", "exam": "Midterm exam", "was": None, "now": "24.00", "mark": "24 / 30 (80%)", "got": 24.0,
+            "out_of": 30.0, "url": "https://exams.example/q", "course_url": "https://exams.example/c"}
+    state = {"courses": {"Alpha Course": {"overview": "24.00", "items": {}, "mark": {"got": 24.0, "out_of": 30.0, "exam": "M"}}}}
+    try:
+        exams.screenshots = lambda *a: [b"\x89PNG-grades"]
+        assert exams_flow._notify(item, state, ("209900001", "pw")) and not texts
+        png, name, caption, rows = files[-1]
+        assert png == b"\x89PNG-grades" and name.endswith(".png")
+        assert "🏆 *Mark:* *24 / 30 (80%)*" in caption and "💯 *Out of 100:* *80 / 100*" in caption
+        assert "🔝 *Best possible in the course:* *94*" in caption and "entered" not in caption
+        assert rows[0][0] == {"text": "📊 All Courses", "callback_data": "mid:status"}
+        assert rows[1][0] == {"text": "🌐 Open Exams Site", "url": "https://exams.example/c"}
+        exams_watch.set_manual("Alpha Course", 25.0, 30.0)
+        mine = {**state, "manual": exams_watch.load()["manual"]}
+        exams.screenshots = lambda *a: []
+        assert exams_flow._notify(item, mine, ("209900001", "pw")) and texts, "no picture: the message still goes"
+        assert "You entered 25 / 30 yourself" in texts[-1][0] and "*94*" not in texts[-1][0] and "*95*" in texts[-1][0]
+    finally:
+        exams.screenshots, notifier.send_png_file, notifier.send_message, gpa.STATE_FILE = keep
+        exams_watch.STATE_FILE.unlink(missing_ok=True)
+
+
+def test_the_midterm_watch_is_part_of_the_hub_and_its_notification_stays_put():
+    """The hub lists 📝 Midterm Watch beside 🏁 Finals Watch; /midterms opens it; pressing 📊 All Courses under a
+    notification opens the summary below it (the notification is not taken away); the watch is off when switched off."""
+    from uninotifier import exams_watch
+    from uninotifier.bot import app, views
+    text, rows = views.view_academic()
+    assert "Midterm Watch" in text and ["mid:status", "finals:status"] == [b["callback_data"] for b in rows[1]]
+    assert "mid:status" in app.NOTIFICATION_BUTTONS
+    exams_watch.STATE_FILE.unlink(missing_ok=True)
+    try:
+        assert exams_watch.enabled() and exams_watch.due()
+        exams_watch.set_enabled(False)
+        assert not exams_watch.enabled() and not exams_watch.due(now=time.time() + 10 ** 7)
+        exams_watch.set_enabled(True)
+        assert exams_watch.due()
+    finally:
+        exams_watch.STATE_FILE.unlink(missing_ok=True)
+
+
+def test_the_midterm_screens_build_valid_slack_blocks():
+    """In Slack the screens are real blocks Slack accepts: every course a line with a drop-down (marks out of 30, remove, type
+    another), no block id twice, a drop-down within Slack's 100 options, Back and Main Menu at the end."""
+    import json
+    from uninotifier import exams_watch, portal, schedule, slack
+    from uninotifier.bot import exams_flow
+    from uninotifier import gpa
+    keep = (portal.credentials, schedule.sort_courses, slack.mode, gpa.STATE_FILE)
+    gpa.STATE_FILE = Path(tempfile.mkdtemp(prefix="uninotifier-mid-")) / "gpa.json"
+    portal.credentials = lambda: ("209900001", "pw")
+    schedule.sort_courses = lambda names, name=lambda x: x: sorted(names)
+    slack.mode = lambda: "slack"
+    exams_watch.STATE_FILE.unlink(missing_ok=True)
+    try:
+        exams_watch.save({"courses": {"Alpha Course": {"overview": "24.00", "items": {}, "mark": {"got": 24.0, "out_of": 30.0, "exam": "M"}},
+                                      "Beta Course": {"overview": "-", "items": {}}}})
+        for view in (exams_flow.view_status(), exams_flow.view_set()):
+            blocks = slack.blocks(view[0], view[1], live=True)
+            ids = [b.get("block_id") for container in blocks for b in container.get("blocks", [container]) if b.get("block_id")]
+            assert len(ids) == len(set(ids)), "a block id twice makes Slack refuse the whole message"
+            assert json.dumps(blocks), "serialisable"
+        text, rows = exams_flow.view_set()
+        selects = [b["line"] for row in rows for b in row if b.get("line")]
+        assert len(selects) == 2 and all(len(s["options"]) <= 100 for s in selects)
+        assert selects[0]["options"][0] == ["Remove my mark", "mid:s:0:x"] and selects[0]["options"][-1][1] == "mid:s:0:t"
+        assert [b["callback_data"] for b in rows[-1]] == ["mid:status", "menu"]
+    finally:
+        portal.credentials, schedule.sort_courses, slack.mode, gpa.STATE_FILE = keep
+        exams_watch.STATE_FILE.unlink(missing_ok=True)

@@ -62,7 +62,7 @@ def parse_course(page_html: str) -> dict:
     """One course's grade report: {"items": [{"name", "grade", "max", "percent", "url"}], "total": {...} | None}.
     An item's grade is '-' until it is marked."""
     tree = lxml_html.fromstring(page_html or "<html></html>")
-    items, total = [], None
+    exam_rows, total = [], None
     for row in tree.xpath("//table[contains(@class,'user-grade')]//tr"):
         title = row.xpath(".//*[contains(@class,'rowtitle')]")
         grade_cell = row.xpath("./td[contains(@class,'column-grade')]")
@@ -78,8 +78,8 @@ def parse_course(page_html: str) -> dict:
             total = entry
         elif title:
             link = title[0].xpath(".//a/@href")
-            items.append({"name": _text(title[0]), "url": link[0] if link else "", **entry})
-    return {"items": items, "total": total}
+            exam_rows.append({"name": _text(title[0]), "url": link[0] if link else "", **entry})
+    return {"items": exam_rows, "total": total}
 
 
 def sign_in(session: requests.Session, username: str, password: str) -> None:
@@ -93,6 +93,32 @@ def sign_in(session: requests.Session, username: str, password: str) -> None:
         raise ExamsError(f"the exams site could not be reached ({type(e).__name__})") from e
     if "logout.php" not in reply.text:
         raise ExamsError("the exams site did not accept the sign-in")
+
+
+def screenshots(username: str, password: str, url: str) -> list[bytes]:
+    """The page as a picture (the grade table of a course): signed in in a headless browser, the main region of the page.
+    Best effort — [] when it could not be taken; a notification then goes without it."""
+    try:
+        from playwright.sync_api import sync_playwright
+        from uninotifier.monitor import config, items
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            try:
+                page = browser.new_context(viewport=config.VIEWPORT, device_scale_factor=config.SCALE).new_page()
+                page.goto(LOGIN_URL, wait_until="networkidle", timeout=45000)
+                page.locator("input[name=username]:visible").first.fill(username)
+                page.locator("input[name=password]:visible").first.fill(password)
+                page.locator("#loginbtn:visible, form:visible [type=submit]:visible").first.click()
+                page.wait_for_load_state("networkidle", timeout=45000)
+                if "/login/" in page.url:
+                    return []
+                shots, _ = items.capture_screens(page, url, "#region-main")
+                return shots[:3]
+            finally:
+                browser.close()
+    except Exception as e:                    # a picture is a bonus: never the reason a mark is not announced
+        log.warning("Exams: no picture (%s)", type(e).__name__)
+        return []
 
 
 def read(username: str, password: str, known: dict | None = None) -> list[dict]:

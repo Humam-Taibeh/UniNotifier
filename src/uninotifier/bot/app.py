@@ -126,10 +126,14 @@ def handle_command(text: str, message_id: int | None = None) -> None:
     if reminder_flow._reminder_wait and not command.startswith("/"):
         reminder_flow.handle_reminder_text(text)
         return
+    if exams_flow._wait and not command.startswith("/"):
+        exams_flow.handle_text(text)
+        return
     if gpa_flow._pending_prompt and not command.startswith("/"):
         gpa_flow.handle_gpa_answer(text)
         return
     gpa_flow._pending_prompt = reminder_flow._reminder_wait = None      # any command drops an open question
+    exams_flow.drop_pending()
     if command == "/remind":
         reminder_flow.start_reminder()
     elif command == "/guest":
@@ -138,6 +142,8 @@ def handle_command(text: str, message_id: int | None = None) -> None:
         attendance_flow.start()
     elif command == "/need":
         gpa_flow.handle_need(text.strip()[len(text.split()[0]):])
+    elif command == "/midterms":
+        chat.send_view(*exams_flow.view_status())
     elif command == "/finals":
         finals_flow.handle_finals(text.strip()[len(text.split()[0]):])
     elif command == "/grades":
@@ -233,7 +239,7 @@ def handle_done_toggle(cb: dict, action: str) -> None:
 
 
 # Buttons of a notification (Done, Snooze, Add to Reminders, a sign-in code): the notification stays where it is.
-NOTIFICATION_BUTTONS = ("done:", "rem:s:", "rem:z:", "rem:done:", "mfa")
+NOTIFICATION_BUTTONS = ("done:", "rem:s:", "rem:z:", "rem:done:", "mfa", "mid:status")
 
 
 def handle_callback(cb: dict) -> None:
@@ -263,6 +269,7 @@ def cancel_pending() -> None:
     what was pending is dropped, and nothing more is sent for it."""
     reminder_flow.drop_pending()
     gpa_flow._pending_prompt = None
+    exams_flow.drop_pending()
     guest_flow.drop_pending()
     portal_flow.request_cancel()
 
@@ -274,6 +281,7 @@ def route_callback(cb: dict, action: str, message_id: int | None) -> None:
     elif action == "menu":                         # Main Menu from anywhere also drops a question that was open
         reminder_flow.drop_pending()
         gpa_flow._pending_prompt = None
+        exams_flow.drop_pending()
     if action.startswith("done:"):
         handle_done_toggle(cb, action)
         return
@@ -286,6 +294,9 @@ def route_callback(cb: dict, action: str, message_id: int | None) -> None:
         return
     if action.startswith("att:"):
         attendance_flow.handle_callback(cb, action, message_id)
+        return
+    if action.startswith("mid:"):
+        exams_flow.handle_callback(cb, action, message_id)
         return
     if action.startswith("guest:"):
         guest_flow.handle_guest_callback(cb, action)

@@ -450,7 +450,7 @@ def test_gpa_screens_and_flow():
         # the GPA & Grade Hub: Grade Needed and Finals Watch only (Course Adjustments lives inside Grade Needed,
         # this term's grades inside Finals Watch)
         buttons = [b["callback_data"] for row in bot.view_academic()[1] for b in row if "callback_data" in b]
-        assert buttons == ["gpa:need", "finals:status", "menu", "menu"], buttons
+        assert buttons == ["gpa:need", "mid:status", "finals:status", "menu", "menu"], buttons
         from uninotifier import gpa_ui as _gpa_ui
         need_buttons = [b["callback_data"] for row in _gpa_ui.view_need_picker()[1] for b in row if "callback_data" in b]
         assert "gpa:home" in need_buttons, "Course Adjustments sits inside Grade Needed"

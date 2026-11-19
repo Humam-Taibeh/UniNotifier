@@ -22,6 +22,9 @@ grades). Each course record:
    "syllabus": [["Midterm", 30.0], ["Final", 40.0], ...] | None,
    "marks": {"Midterm": 24.0}, "portal_grade": 81.0 | None}
 
+"midterm": {"got": 24.0, "out_of": 30.0} (kept by exams_watch) lowers ceiling() — 94 at best — until a coursework
+total is entered, which then takes over (it includes the midterm).
+
 portal_grade is the official mark once the portal publishes it (/grades,
 Finals Watch): it is locked — it wins over anything typed — and plan()
 spreads the rest of a target over the courses still without a grade.
@@ -291,7 +294,8 @@ def ceiling(course: dict) -> float:
     parts that have a mark (coursework 30 of 50 leaves 80 at best). 100 without a syllabus."""
     syllabus = course.get("syllabus")
     if not syllabus:
-        return 100.0
+        mid = course.get("midterm")                  # the midterm alone (until the coursework total is known and takes over)
+        return float(max(0.0, 100.0 - max(mid["out_of"] - mid["got"], 0.0))) if mid else 100.0
     marks = course.get("marks") or {}
     return float(sum(min(marks.get(name, weight), weight) for name, weight in syllabus))
 

@@ -731,3 +731,7 @@ _reminder_flow.page_words = lambda url: ""
 # The midterm marks watch keeps its state in the temp folder too.
 from uninotifier import exams_watch as _exams_watch  # noqa: E402
 _exams_watch.STATE_FILE = _REMINDER_TMP / "exams_watch.json"
+
+# Midterm Watch never opens a browser or reaches the exams site from a test.
+from uninotifier import exams as _exams  # noqa: E402
+_exams.screenshots = lambda *a, **k: []

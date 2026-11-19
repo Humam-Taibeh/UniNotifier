@@ -69,9 +69,11 @@ def view_academic() -> tuple[str, list]:
     """📊 GPA & Grade Hub: what each course needs, and the grades as they are released."""
     lines = ["📊 *GPA & Grade Hub*", media.DIVIDER, base_line(), "",
              "🎯 *Grade Needed* — the mark each course needs for your target", "",
+             "📝 *Midterm Watch* — your midterm marks, as they appear", "",
              "🏁 *Finals Watch* — your grades, as they are released"]
     return "\n".join(lines), [
-        [{"text": "🎯 Grade Needed", "callback_data": "gpa:need"},
+        [{"text": "🎯 Grade Needed", "callback_data": "gpa:need"}],
+        [{"text": "📝 Midterm Watch", "callback_data": "mid:status"},
          {"text": "🏁 Finals Watch", "callback_data": "finals:status"}],
         chat.BACK_ROW,
     ]

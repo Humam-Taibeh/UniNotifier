@@ -141,6 +141,12 @@ def _coursework_lines(c: dict) -> list[str]:
     """Your marks before the final, the most the course can still end on, and what the final must
     bring to pass. Nothing is guessed: without a coursework total it says how to add one."""
     work = gpa.coursework(c)
+    if not work and c.get("midterm"):
+        mid = c["midterm"]
+        return [f"📝 *Midterm:* {fmt(mid['got'])} / {fmt(mid['out_of'])} ({fmt(mid['got'] / mid['out_of'] * 100)} / 100)",
+                f"🔝 *Best possible:* {fmt(gpa.ceiling(c))}",
+                "📝 *Coursework:* not entered",
+                "_Your total before the final (e.g. 42/60) replaces the midterm here and shows what the final needs._"]
     if not work:
         return ["📝 *Coursework:* not entered",
                 "_Your total before the final (e.g. 42/60) shows the best mark you can still reach "
