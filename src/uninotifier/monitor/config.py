@@ -9,7 +9,7 @@ import re
 
 from dotenv import load_dotenv
 
-from uninotifier import paths
+from uninotifier import envcheck, paths
 
 log = logging.getLogger("uninotifier")
 
@@ -25,10 +25,10 @@ USERNAME = os.getenv("ZUJ_USERNAME")
 PASSWORD = os.getenv("ZUJ_PASSWORD")
 
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or ("0:slack" if os.getenv("SLACK_BOT_TOKEN") else None)   # Slack alone: a stand-in, never contacted
+BOT_TOKEN = envcheck.value("TELEGRAM_BOT_TOKEN") or ("0:slack" if envcheck.value("SLACK_BOT_TOKEN") else None)   # Slack alone: a stand-in, never contacted
 
 
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID") or os.getenv("SLACK_USER")
+CHAT_ID = envcheck.value("TELEGRAM_CHAT_ID") or envcheck.value("SLACK_USER") or None
 
 
 STUDENT_ID = os.getenv("STUDENT_ID") or os.getenv("PORTAL_USERNAME") or ""   # for finding your marks in files

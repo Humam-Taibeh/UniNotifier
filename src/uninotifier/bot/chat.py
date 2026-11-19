@@ -7,13 +7,13 @@ state and the last check's summary (for the 🟢 status line).
 import functools
 import json
 import logging
-import os
 import queue
 import threading
 import time
 
 from dotenv import load_dotenv
 
+from uninotifier import envcheck
 from uninotifier import fileio
 from uninotifier import notifier
 from uninotifier import paths
@@ -26,10 +26,10 @@ log = logging.getLogger("uninotifier")
 load_dotenv(paths.ENV_FILE)
 
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or ("0:slack" if os.getenv("SLACK_BOT_TOKEN") else None)   # Slack alone: a stand-in, never contacted
+BOT_TOKEN = envcheck.value("TELEGRAM_BOT_TOKEN") or ("0:slack" if envcheck.value("SLACK_BOT_TOKEN") else None)   # Slack alone: a stand-in, never contacted
 
 
-CHAT_ID = str(os.getenv("TELEGRAM_CHAT_ID") or os.getenv("SLACK_USER") or "")
+CHAT_ID = str(envcheck.value("TELEGRAM_CHAT_ID") or envcheck.value("SLACK_USER") or "")
 
 
 DATA_FILE = paths.DATA / "saved_items.json"

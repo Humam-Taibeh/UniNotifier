@@ -690,3 +690,15 @@ def test_the_setup_begins_by_asking_where_the_messages_go_and_slack_is_the_defau
         (setup.restrict, paths.ENV_FILE, slack.who, slack.people, slack.conversation, slack.post,
          setup.copy_to_clipboard, slack.call) = keep
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_a_slack_only_install_gives_the_programs_plain_values_not_telegram_examples():
+    """With Slack set up and the Telegram settings empty (or still the .env.example texts), the bot and the monitor
+    get a stand-in token and the Slack user as the chat — never 'your_telegram_bot_token'."""
+    import subprocess
+    env = {**os.environ, "NOTIFY_VIA": "slack", "SLACK_BOT_TOKEN": "xoxb-good-token-1111", "SLACK_CHANNEL": "D0999ZZZZ",
+           "SLACK_USER": "U0999ZZZZ", "TELEGRAM_BOT_TOKEN": "your_telegram_bot_token", "TELEGRAM_CHAT_ID": "", "PYTHONUTF8": "1"}
+    code = ("from uninotifier.bot import chat; from uninotifier.monitor import config; "
+            "print(chat.BOT_TOKEN, chat.CHAT_ID, config.BOT_TOKEN, config.CHAT_ID)")
+    out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=60, cwd=str(paths.ROOT))
+    assert out.stdout.split() == ["0:slack", "U0999ZZZZ", "0:slack", "U0999ZZZZ"], (out.stdout, out.stderr[-300:])

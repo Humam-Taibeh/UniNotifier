@@ -10,7 +10,7 @@
                               while the PC was off or asleep runs right after it wakes; it
                               waits for a network connection; one run at a time; a run is
                               stopped after 15 minutes.
-    UniNotifier_BotListener   the Telegram bot: bot.py at every sign-in, kept running with no
+    UniNotifier_BotListener   the always-on bot (Slack or Telegram): bot.py at every sign-in, kept running with no
                               time limit, restarted every minute (up to 10 times) if it fails.
 
   Both run on battery too, without a console window (pythonw.exe), as you - no administrator
@@ -102,10 +102,10 @@ if (Get-ScheduledTask -TaskName $BotTaskName -ErrorAction SilentlyContinue) {
 
 Register-ScheduledTask -TaskName $MonitorTaskName -Action $monitorAction -Trigger $monitorTrigger `
     -Settings $monitorSettings -Principal $Principal -Force `
-    -Description "UniNotifier: checks Moodle every $IntervalMinutes minutes and sends Telegram alerts ($Root)" | Out-Null
+    -Description "UniNotifier: checks Moodle every $IntervalMinutes minutes and sends alerts to Slack or Telegram ($Root)" | Out-Null
 Register-ScheduledTask -TaskName $BotTaskName -Action $botAction -Trigger $botTrigger `
     -Settings $botSettings -Principal $Principal -Force `
-    -Description "UniNotifier: the always-on Telegram bot ($Root)" | Out-Null
+    -Description "UniNotifier: the always-on bot (Slack or Telegram) ($Root)" | Out-Null
 
 if (-not $NoStart) { Start-ScheduledTask -TaskName $BotTaskName }
 

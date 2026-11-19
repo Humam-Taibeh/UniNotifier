@@ -163,7 +163,7 @@ if ($healthy -and -not $NoEditor) {
         if ($LASTEXITCODE -ne 0) { Fail 'The scheduled tasks could not be registered' 'run it by hand: powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1' }
         Write-Host ''
         Write-Host '===================================================================================' -ForegroundColor Green
-        Write-Host 'UniNotifier is running. Open your bot in Telegram and send /start.' -ForegroundColor Green
+        Write-Host 'UniNotifier is running. Open the UniNotifier app in Slack (or your bot in Telegram) and type menu.' -ForegroundColor Green
         Write-Host 'Your timetable arrives by itself a few minutes from now, read from the portal.' -ForegroundColor Green
         Write-Host '===================================================================================' -ForegroundColor Green
         exit 0
