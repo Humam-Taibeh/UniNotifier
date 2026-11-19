@@ -33,7 +33,7 @@ from uninotifier import slack
 from uninotifier import slackbot
 from uninotifier import tasks
 from uninotifier import telegram
-from uninotifier.bot import (attendance_flow, balance_flow, chat, checks, finals_flow, gpa_flow, guest_flow, portal_flow, registration_flow,
+from uninotifier.bot import (attendance_flow, balance_flow, chat, exams_flow, checks, finals_flow, gpa_flow, guest_flow, portal_flow, registration_flow,
                              registration_watch_flow, reminder_flow, update_flow, views)
 
 log = logging.getLogger("uninotifier")
@@ -452,6 +452,7 @@ def main() -> None:
     heartbeat.beat("poll")
     threading.Thread(target=lecture_loop, name="lectures", daemon=True).start()
     threading.Thread(target=finals_flow.finals_loop, name="finals", daemon=True).start()
+    exams_flow.start()                                     # tells you when a midterm mark appears on the exams site
     balance_flow.start()                                   # tells you when your tuition balance changes
     threading.Thread(target=registration_watch_flow.watch_loop, name="registration-watch", daemon=True).start()   # ... and when registration opens
     threading.Thread(target=attendance_flow.loop, name="attendance", daemon=True).start()   # "did you go today?"

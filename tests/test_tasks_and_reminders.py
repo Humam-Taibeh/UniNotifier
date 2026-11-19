@@ -1148,3 +1148,144 @@ def test_a_pinned_announcement_takes_the_words_of_its_page():
         assert reminder_flow.with_words("Announcement", "https://x/f") == "Announcement"
     finally:
         reminder_flow.page_words = keep
+
+
+_EXAMS_OVERVIEW = """<table><tr><th>Course name</th><th>Grade</th></tr>
+<tr><td><a href="https://exams.example/course/user.php?mode=grade&id=1&user=9">Exams-20261-Big Data-AllSec-3</a></td><td>-</td></tr>
+<tr><td><a href="https://exams.example/course/user.php?mode=grade&id=2&user=9">Exams-20261-Zeta Studies-Sec12-3-E</a></td><td>24.00</td></tr>
+<tr><td></td><td></td></tr></table>"""
+
+
+def _exams_report(grade="24.00", top="0–30", pct="80.00 %", name="Midterm exam"):
+    return f"""<table class="generaltable user-grade"><tr><th class="header column-itemname">Grade item</th></tr>
+<tr class="cat_30 spacer"><td></td></tr>
+<tr class="cat_30"><th class="level2 item column-itemname"><div><span class="small">Quiz</span><div class="rowtitle">
+<a class="gradeitemheader" href="https://exams.example/mod/quiz/view.php?id=7">{name}</a></div></div></th>
+<td class="column-weight">100.00 %</td><td class="column-grade"><div><div>{grade}</div><div>Actions</div></div></td>
+<td class="column-range">{top}</td><td class="column-percentage">{pct}</td></tr>
+<tr class="cat_30 lastrow"><th class="column-itemname"><div class="rowtitle">Course total</div></th><td>-</td>
+<td class="column-grade"><div><div>{grade}</div></div></td><td class="column-range">{top}</td><td class="column-percentage">{pct}</td></tr></table>"""
+
+
+def test_the_exams_site_pages_are_read_into_courses_and_marks():
+    """exams.py: the grades overview is one line per course ('-' = no mark yet, the 'Exams-20261-' label and the section
+    dropped from the name); a course's report is its exams with the mark, the maximum and the percentage, the course
+    total kept apart (never an exam of its own)."""
+    from uninotifier import exams
+    courses = exams.parse_overview(_EXAMS_OVERVIEW)
+    assert [(c["course"], c["grade"]) for c in courses] == [("Big Data", "-"), ("Zeta Studies", "24.00")]
+    assert courses[1]["url"].endswith("id=2&user=9")
+    report = exams.parse_course(_exams_report())
+    assert report["items"] == [{"name": "Midterm exam", "url": "https://exams.example/mod/quiz/view.php?id=7",
+                                "grade": "24.00", "max": 30.0, "percent": "80.00 %"}]
+    assert report["total"]["grade"] == "24.00"
+    assert exams.parse_course(_exams_report(grade="-"))["items"][0]["grade"] == "-"
+    assert exams.number("24.00") == 24.0 and exams.number("-") is None and exams.number("") is None
+
+
+def test_the_exams_watch_tells_a_new_or_changed_mark_once_and_stays_quiet_otherwise():
+    """exams_watch.compare: the first look is no news (it only remembers); then a mark that appears is one message
+    ('24 / 30 (80%)'), a changed one says what it was, the same mark again says nothing, a course not read again
+    keeps what was known, and a course that shows up later already marked is news."""
+    from uninotifier import exams, exams_watch
+    over = exams.parse_overview(_EXAMS_OVERVIEW)
+
+    def look(grades, state):
+        courses = []
+        for course, grade in zip(over, grades):
+            course = dict(course, grade=grade)
+            course["report"] = exams.parse_course(_exams_report(grade=grade))
+            courses.append(course)
+        return exams_watch.compare(state, courses)
+
+    news, state = look(["-", "24.00"], {"courses": {}})
+    assert news == [] and state["started"], "the first look only remembers"
+    news, state = look(["-", "24.00"], state)
+    assert news == [], "the same marks: silence"
+    news, state = look(["18.00", "24.00"], state)
+    assert [(n["course"], n["mark"], n["was"]) for n in news] == [("Big Data", "18 / 30 (80%)", None)]
+    text = exams_watch.message(news[0])
+    assert text.startswith("🎉 *Midterm Mark Posted*") and "*Course:* Big Data" in text and "18 / 30" in text
+    news, state = look(["18.00", "26.00"], state)
+    assert [(n["course"], n["was"], n["now"]) for n in news] == [("Zeta Studies", "24.00", "26.00")]
+    changed = exams_watch.message(news[0])
+    assert changed.startswith("✏️ *Midterm Mark Changed*") and "*It was:* 24" in changed
+    unread = [dict(c, report=None) for c in over]                 # not read again: what was known is kept
+    news, state = exams_watch.compare(state, unread)
+    assert news == [] and state["courses"]["Big Data"]["items"] == {"Midterm exam": "18.00"}
+    later = dict(over[0], course="Databases", grade="12.00", report=exams.parse_course(_exams_report(grade="12.00")))
+    news, state = exams_watch.compare(state, [later])
+    assert [n["course"] for n in news] == ["Databases"], "a new course already marked is news"
+    intro = exams_watch.intro([dict(c, grade=g) for c, g in zip(over, ["-", "24.00"])])
+    assert "Already out (1)" in intro and "Waiting for (1)" in intro and "Big Data" in intro
+
+
+def test_the_exams_flow_tells_you_and_remembers_only_what_went_out():
+    """bot/exams_flow.check_once: the first look sends one 'watch is on' message; a new mark sends its message with the
+    exams-site button; a message that does not go out leaves the mark unremembered so the next look tells it; a site
+    that cannot be read says nothing and is tried again later."""
+    from uninotifier import exams, exams_watch, notifier, portal
+    from uninotifier.bot import exams_flow
+    over = exams.parse_overview(_EXAMS_OVERVIEW)
+    sent, ok = [], {"v": True}
+    keep = (exams.read, notifier.send_message, portal.credentials)
+    grades = {"v": ["-", "24.00"]}
+
+    def read(user, password, known=None):
+        return [dict(c, grade=g, report=exams.parse_course(_exams_report(grade=g))) for c, g in zip(over, grades["v"])]
+
+    def down(user, password, known=None):
+        raise exams.ExamsError("the exams site could not be reached")
+    exams.read = read
+    notifier.send_message = lambda token, chat_id, text, rows=None, **k: sent.append((text, rows)) or ok["v"]
+    portal.credentials = lambda: ("209900001", "pw")
+    exams_watch.STATE_FILE.unlink(missing_ok=True)
+    try:
+        assert exams_flow.check_once() == 0 and len(sent) == 1 and sent[0][0].startswith("👀 *Midterm Marks Watch is on*")
+        assert exams_flow.check_once() == 0 and len(sent) == 1, "nothing new: nothing sent"
+        grades["v"] = ["18.00", "24.00"]
+        ok["v"] = False
+        assert exams_flow.check_once() == 0 and len(sent) == 2, "the message did not go out"
+        ok["v"] = True
+        assert exams_flow.check_once() == 1 and len(sent) == 3, "told again at the next look"
+        assert sent[-1][0].startswith("🎉 *Midterm Mark Posted*") and sent[-1][1][0][0]["url"].startswith("https://exams.example/")
+        assert exams_flow.check_once() == 0 and len(sent) == 3, "now remembered"
+        exams.read = down
+        grades["v"] = ["19.00", "24.00"]
+        assert exams_flow.check_once() == 0 and len(sent) == 3
+        assert exams_watch.load()["courses"]["Big Data"]["overview"] == "18.00", "a failed look changes nothing"
+        portal.credentials = lambda: None
+        assert exams_flow.check_once() == 0, "no portal login: nothing is read"
+    finally:
+        exams.read, notifier.send_message, portal.credentials = keep
+        exams_watch.STATE_FILE.unlink(missing_ok=True)
+
+
+def test_the_exams_site_sign_in_is_refused_cleanly():
+    """exams.sign_in: a refused sign-in or an unreachable site is an ExamsError with words, never a traceback."""
+    import requests
+    from uninotifier import exams
+
+    class Reply:
+        def __init__(self, text):
+            self.text = text
+
+    class Session:
+        def __init__(self, post_text="<html>wrong password</html>", fail=False):
+            self.post_text, self.fail = post_text, fail
+
+        def get(self, url, timeout=None):
+            if self.fail:
+                raise requests.ConnectionError("down")
+            return Reply('<form><input name="logintoken" value="abc"></form>')
+
+        def post(self, url, data=None, timeout=None):
+            assert data["logintoken"] == "abc" and data["username"] == "209900001"
+            return Reply(self.post_text)
+    exams.sign_in(Session('<a href="/login/logout.php">Log out</a>'), "209900001", "pw")
+    for session, words in ((Session(), "did not accept"), (Session(fail=True), "could not be reached")):
+        try:
+            exams.sign_in(session, "209900001", "pw")
+            raise AssertionError("a refused sign-in must raise")
+        except exams.ExamsError as e:
+            assert words in str(e)

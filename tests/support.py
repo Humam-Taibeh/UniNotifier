@@ -727,3 +727,7 @@ def portal_sections():
 # A reminder reading its post's words must never reach the portal from a test: no words.
 from uninotifier.bot import reminder_flow as _reminder_flow  # noqa: E402
 _reminder_flow.page_words = lambda url: ""
+
+# The midterm marks watch keeps its state in the temp folder too.
+from uninotifier import exams_watch as _exams_watch  # noqa: E402
+_exams_watch.STATE_FILE = _REMINDER_TMP / "exams_watch.json"
