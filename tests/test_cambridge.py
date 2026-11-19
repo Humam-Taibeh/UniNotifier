@@ -68,7 +68,7 @@ def test_cambridge_one_assignments():
                          f"🗓️ *Opens:* {notifier.format_timestamp(a['start'])}",
                          f"🕐 *Due Date:* {notifier.format_timestamp(a['due'])}"], lines[:6]
     assert lines[6:8] == ["", "📋 *Activities (15):*"] and lines[8] == "• Vocabulary: Character adjectives 1"
-    assert lines[22] == "• Writing: An article" and lines[-1].startswith("🕒 *Detected:*")
+    assert lines[22] == "• Writing: An article" and not any("Detected" in line for line in lines)
     for raw in ("rule_id", "sub-type", "tags", "assigned_path_id", "__analytics", "•  "):
         assert raw not in text, raw
     assert len(text) <= notifier.CAPTION_LIMIT, "fits the screenshot's caption: one message"

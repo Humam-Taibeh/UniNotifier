@@ -735,3 +735,4 @@ _exams_watch.STATE_FILE = _REMINDER_TMP / "exams_watch.json"
 # Midterm Watch never opens a browser or reaches the exams site from a test.
 from uninotifier import exams as _exams  # noqa: E402
 _exams.screenshots = lambda *a, **k: []
+_exams_watch.FOUND_FILE = _REMINDER_TMP / "midterm_found.json"

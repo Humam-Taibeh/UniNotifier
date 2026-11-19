@@ -69,6 +69,25 @@ def shot_filename(item: dict) -> str:
     return archive.safe_name(title, "screenshot")[:120] + ".png"
 
 
+def midterm_note(course: str, titles: list[str], grade: dict | None) -> str:
+    """A mark found for you in something named like a midterm is kept as the course's midterm mark (Midterm Watch,
+    the grade calculator): the line that says so. Never fails a send."""
+    if not grade:
+        return ""
+    try:
+        from uninotifier import exams_watch
+        mark = exams_watch.midterm_mark_from_moodle(media.clean_course_name(course), titles, grade.get("summary", ""))
+    except Exception as e:
+        log.exception("Could not keep a midterm mark found on Moodle")
+        failsafe.bug("monitor:midterm", "A midterm mark found on Moodle could not be kept", e,
+                     "The message still went out; add the mark with Midterm Watch ✍️.")
+        return ""
+    if not mark:
+        return ""
+    return (f"📝 *Saved in Midterm Watch:* {mark['got']:g} / {mark['out_of']:g} "
+            f"({exams_watch.hundred(mark['got'], mark['out_of']):.1f} / 100)").replace(".0 /", " /")
+
+
 def screenshot_note(artifact: dict) -> str:
     if artifact.get("truncated"):
         return (f"📸 The screenshot covers the first {config.MAX_SHOT_PARTS} parts of a very long page; "
@@ -84,7 +103,8 @@ def notify_file_update(item: dict, artifact: dict) -> bool:
                                       old_name=old, new_name=path.name, where=archive.destination(path),
                                       retired_to=archive.retired_to(Path(retired)) if retired else None,
                                       grade=artifact.get("grade"))
-    note = marks_note(path, item, artifact.get("grade"))
+    note = "\n".join(n for n in (marks_note(path, item, artifact.get("grade")),
+                                  midterm_note(item.get("course", ""), [path.name, item.get("name", "")], artifact.get("grade"))) if n)
     return deliver(f"{text}\n{note}" if note else text, url=item["url"], rows=reminder_rows(item, "u"),
                    document=path if items.uploadable(path) else None)
 
@@ -153,6 +173,7 @@ def notify_new_item(item: dict, deadline: dict | None, artifact: dict,
              "💾 Saved locally (file is large or a folder)." if saved_path and not document else "",
              f"📂 *Saved to:* {where}" if where else "",
              marks_note(saved_path, item, grade) if kind == "file" else "",
+             midterm_note(item.get("course", ""), [saved_path.name if saved_path else "", item.get("name", "")], grade) if kind == "file" else "",
              screenshot_note(artifact)]
     header = media.build_item_message(item, deadline, "\n".join(n for n in notes if n), grade, status)
     return deliver(header, body_text(item, shown=bool(shots or document)), url, rows, shots, shot_name, document)
@@ -189,8 +210,9 @@ def notify_forum_post(forum: dict, post: dict) -> bool:
             caption = f"📎 {escape_md(filename)}"
             marks = grades.extract_grade(tmp, config.STUDENT_ID) if config.STUDENT_ID else None
             if marks:
+                kept = midterm_note(forum["course"], [filename, post["subject"] or ""], marks)
                 caption = "\n".join([f'🎉 *Marks Detected:* *{escape_md(marks["summary"])}*', caption,
-                                     *media.grade_details(marks)])
+                                     *media.grade_details(marks), *([kept] if kept else [])])
             elif config.STUDENT_ID:
                 unread = grades.unread_note(tmp, f'{filename} {post["subject"]}', None)
                 if unread:

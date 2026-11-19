@@ -41,7 +41,7 @@ def test_media():
     assert (media.elapsed(30), media.elapsed(60), media.elapsed(7500), media.elapsed(86400)) == (
         "under a minute", "1 minute", "2 hours 5 minutes", "1 day")
     rem = media.build_reminder_message({"type": "quiz", "course": "c", "name": "q", "timestamp": 2e9}, "1h")
-    assert "Quiz / Exam" in rem and "Detected" in rem
+    assert "Quiz / Exam" in rem and "Detected" not in rem and "Status" not in rem, "no time of detection, no status: it comes the moment it is seen"
     msg = media.build_item_message(item, None, grade={"summary": "36/40", "details": []})
     assert "Marks Detected" in msg and "36/40" in msg
 
@@ -62,9 +62,10 @@ def test_ui():
     assert notifier.PORTAL_BUTTON_TEXT == "🌐 Open in ZUJ Portal ↗️"
 
     due = {"timestamp": 2e9}
-    assert "Status:* ⏳ Pending" in media.build_item_message({**base, "type": "assign"}, due)
-    assert "Status:* ✅ Submitted" in media.build_item_message({**base, "type": "assign"}, {**due, "submitted": True})
-    assert "Status:* ✅ Submitted" in media.build_item_message({**base, "type": "assign"}, None, status=media.STATUS_SUBMITTED)
+    for message in (media.build_item_message({**base, "type": "assign"}, due),
+                    media.build_item_message({**base, "type": "assign"}, {**due, "submitted": True}),
+                    media.build_item_message({**base, "type": "assign"}, None, status=media.STATUS_SUBMITTED)):
+        assert "Status" not in message and "Detected" not in message and "*Course:*" in message
 
 
 def test_bot_views():

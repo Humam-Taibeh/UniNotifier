@@ -1484,3 +1484,60 @@ def test_the_midterm_screens_build_valid_slack_blocks():
     finally:
         portal.credentials, schedule.sort_courses, slack.mode, gpa.STATE_FILE = keep
         exams_watch.STATE_FILE.unlink(missing_ok=True)
+
+
+def test_a_midterm_mark_found_in_a_moodle_file_is_kept_and_used_below_the_sites_mark():
+    """A doctor's marks file (Word / PDF / Excel / a post) with your row, named like a midterm, is kept as the course's
+    midterm mark: the monitor's message says so; a file not named like a midterm, or without a mark out of a maximum,
+    is not kept; what you enter wins over the exams site's mark, which wins over the one found on Moodle."""
+    from uninotifier import exams_watch
+    from uninotifier.monitor import notify
+    exams_watch.FOUND_FILE.unlink(missing_ok=True)
+    exams_watch.STATE_FILE.unlink(missing_ok=True)
+    try:
+        note = notify.midterm_note("20261-Zeta Studies-AllSec-3", ["Midterm results.xlsx", "Results"], {"summary": "24/30", "details": []})
+        assert note == "📝 *Saved in Midterm Watch:* 24 / 30 (80 / 100)", note
+        state = {"courses": {}}
+        assert exams_watch.effective(state, "Zeta Studies") == {"got": 24.0, "out_of": 30.0, "source": "moodle", "exam": "Midterm results.xlsx / Results"}
+        assert notify.midterm_note("20261-Zeta Studies-AllSec-3", ["نتائج الامتحان النصفي.pdf"], {"summary": "٢٦ من ٣٠"}).endswith("26 / 30 (86.7 / 100)")
+        for titles, summary in ((["Assignment 1 marks.xlsx"], "9/10"), (["Midterm.pdf"], "Present"), (["Midterm.pdf"], "40/30"), (["Midterm.pdf"], "")):
+            assert notify.midterm_note("20261-Other Course-AllSec-3", titles, {"summary": summary}) == "", (titles, summary)
+        assert exams_watch.effective(state, "Other Course") is None and notify.midterm_note("x", ["Midterm"], None) == ""
+        site = {"courses": {"Zeta Studies": {"mark": {"got": 22.0, "out_of": 30.0, "exam": "M"}}}}
+        assert exams_watch.effective(site, "Zeta Studies")["source"] == "site", "the site's own mark wins over a file's"
+        assert exams_watch.effective({**site, "manual": {"Zeta Studies": {"got": 25.0, "out_of": 30.0}}}, "Zeta Studies")["source"] == "you"
+    finally:
+        exams_watch.FOUND_FILE.unlink(missing_ok=True)
+        exams_watch.STATE_FILE.unlink(missing_ok=True)
+
+
+def test_notifications_do_not_say_when_they_were_detected_or_their_status():
+    """It is told the moment it is seen: no 'Detected' time on any notification, and no 'Status: Pending' (a submitted
+    one is never announced at all)."""
+    from uninotifier import media
+    item = {"type": "quiz", "course": "20261-Zeta Studies-AllSec-3", "name": "Quiz (2)", "url": "https://x/q", "section": "General"}
+    deadline = {"type": "quiz", "timestamp": 2e9, "opens": 2e9, "closes": 2.1e9, "name": "Quiz (2)", "course": item["course"]}
+    for text in (media.build_item_message(item, deadline), media.build_reminder_message(deadline, "24h"),
+                 media.build_item_message(item, None), media.build_content_update_message(item),
+                 media.build_unclassified_message(item), media.build_grade_message(item, "9/10")):
+        assert "Detected" not in text and "Status" not in text and not text.endswith("\n"), text
+    assert "*Course:*" in media.build_item_message(item, deadline) and "Opens" in media.build_item_message(item, deadline)
+
+
+def test_finals_watch_has_the_look_of_midterm_watch_and_no_edit_button():
+    """The Finals Watch screen: a numbered list like Midterm Watch (a published grade ✅/❌ with its figure out of 100, a
+    waiting one ⏳), the switch, Check Grades Now — and nothing to edit a grade by hand (they come from the portal)."""
+    from uninotifier import finals
+    from uninotifier.bot import finals_flow
+    state = {"term": "T", "published": 1, "total": 3, "complete": False, "courses": [
+        {"code": "2", "name": "Mike", "hours": 3, "mark": None}, {"code": "1", "name": "Zulu", "hours": 3, "mark": 45},
+        {"code": "3", "name": "Alpha", "hours": 3, "mark": 80}]}
+    lines = finals.grades_lines(state)
+    assert lines[2:] == ["❌ *1. Zulu*", "45 / 100 · below the 50 pass mark", "", "✅ *2. Alpha*", "80 / 100 · passed", "",
+                         "⏳ *3. Mike*", "not published yet"], lines      # published first, each in the timetable's order
+    text = finals.status_text({**state, "enabled": False, "last_check": 0, "failure_notice": 0, "seen": {}})
+    assert text.startswith("🏁 *Finals Watch*") and "⏸️ *Off*" in text
+    rows = finals_flow.finals_status_view()[1]
+    labels = [b["text"] for row in rows for b in row]
+    assert not any("Edit" in label or "Change" in label for label in labels), labels
+    assert [b["callback_data"] for b in rows[-1]] == ["academic", "menu"]

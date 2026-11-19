@@ -57,6 +57,8 @@ def course_lines(number: int, course: str, state: dict) -> list[str]:
         bits.append(f"best possible {g(best)}")
     if mark["source"] == "you":
         bits.append("added by you")
+    elif mark["source"] == "moodle":
+        bits.append("found on Moodle")
     return [f"✅ *{number}. {escape_md(course)}*", slack.small(" · ".join(bits))]
 
 

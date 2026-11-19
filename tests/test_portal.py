@@ -285,7 +285,7 @@ def test_finals_check_ends_on_the_grades_screen():
             assert len(announced) == 1 and "Finals Watch" in announced[0]
             kind, mid, text, rows = shown[-1]
             assert kind == "send" and len(shown) == 1, "announcements landed first: the screen returns under them"
-            assert "0 of 3 published" in text and "Published" not in text.replace("published", "") and "Not published yet*" in text and "Linear Algebra (1)" in text and "Term:" not in text and "While it's on" not in text
+            assert "0 of 3 published" in text and "not published yet" in text and "⏳ *1. Linear Algebra (1)*" in text and "Linear Algebra (1)" in text and "Term:" not in text and "While it's on" not in text
             assert rows[0][0]["callback_data"] == "finals:check"
 
             # a grade appears: announced, then the screen shows the mark
@@ -293,7 +293,7 @@ def test_finals_check_ends_on_the_grades_screen():
             check()
             assert announced and announced[0].startswith("🎓 *Grade Released*")
             text = shown[-1][2]
-            assert "1 of 3 published" in text and "✅ *70* · Linear Algebra (1)" in text and "⏳ *Not published yet*" in text and "• Numerical Analysis (1)" in text
+            assert "1 of 3 published" in text and "✅ *1. Linear Algebra (1)*" in text and "70 / 100 · passed" in text and "⏳ *2. Numerical Analysis (1)*" in text
 
             # nothing new: no announcement, the screen is updated WHERE IT IS (the pressed message), nothing else is sent
             check()

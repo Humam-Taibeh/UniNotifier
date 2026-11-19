@@ -34,7 +34,8 @@ from datetime import date, datetime
 from uninotifier import fileio
 from uninotifier import gpa
 from uninotifier import gradebook
-from uninotifier import notifier, paths
+from uninotifier import paths
+from uninotifier import slack
 from uninotifier import portal
 from uninotifier import schedule
 from uninotifier.gpa import fmt
@@ -131,8 +132,7 @@ def _released(course: dict, report: dict, previous: float | None) -> str:
         lines.append(f"ℹ️ Recorded as {fmt(gradebook.FLOOR)}, the university's minimum.")
     if course.get("replaces") is not None:
         lines.append(f"🔁 *Retake:* replaces your earlier {fmt(course['replaces'])}")
-    lines += [f"📊 *Progress:* {report['published']} of {report['total']} grades published",
-              f"🕒 *Detected:* {notifier.audit_timestamp()}"]
+    lines += [f"📊 *Progress:* {report['published']} of {report['total']} grades published"]
     return "\n".join(lines)
 
 
@@ -269,24 +269,24 @@ def grades_lines(state: dict) -> list[str]:
     lines = [f"📊 *This term's grades* — {state['published']} of {state['total']} published", ""]
     released = [c for c in courses if c["mark"] is not None]          # the courses are saved in the timetable's order
     waiting = [c for c in courses if c["mark"] is None]
-    if released:                                                       # (none yet: the line above already says so)
-        lines.append("✅ *Published*")
-        lines += [f"• {'✅' if c['mark'] >= gpa.PASS_MARK else '❌'} *{fmt(c['mark'])}* · "
-                  f"{escape_md(display_name(c['code'], c['name']))}" for c in released]
-        lines.append("")
-    if waiting:
-        lines.append("⏳ *Not published yet*")
-        lines += [f"• {escape_md(display_name(c['code'], c['name']))}" for c in waiting]
-    return lines
+    for number, c in enumerate(released + waiting, 1):                # published ones first, then the ones still waited for
+        name = escape_md(display_name(c["code"], c["name"]))
+        if c["mark"] is None:
+            lines += [f"⏳ *{number}. {name}*", slack.small("not published yet"), ""]
+        else:
+            passed = c["mark"] >= gpa.PASS_MARK
+            lines += [f"{'✅' if passed else '❌'} *{number}. {name}*",
+                      slack.small(f"{fmt(c['mark'])} / 100 · " + ("passed" if passed else f"below the {fmt(gpa.PASS_MARK)} pass mark")), ""]
+    return lines[:-1] if lines and lines[-1] == "" else lines
 
 
 def status_text(state: dict | None = None, sch: dict | None = None) -> str:
     state = state or load()
     on = active(state=state, sch=sch)
     lines = ["🏁 *Finals Watch*", DIVIDER,
-             f"{'✅ *On*' if on else '⏸️ *Off*'} — " + (
-                 f"checks the portal every {interval_seconds(sch) // 60} min" if on else
-                 "the portal is only contacted when you ask")]
+             f"{'🟢 *On*' if on else '⏸️ *Off*'} — " + (
+                 f"I check the portal every {interval_seconds(sch) // 60} min and tell you the moment a grade is published" if on else
+                 "I am not looking. The portal is only contacted when you ask")]
     if not on and state["complete"] and state["term"]:
         lines.append("✅ Every grade of the term is published — paused automatically")
     w = window(sch)

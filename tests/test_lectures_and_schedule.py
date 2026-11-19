@@ -1358,7 +1358,8 @@ def test_course_order_is_the_timetables_everywhere():
             {"code": "2", "name": "m", "hours": 3, "mark": None}, {"code": "1", "name": "z", "hours": 3, "mark": None},
             {"code": "3", "name": "a", "hours": 3, "mark": 80}]}
         shown = finals.grades_lines(finals_state)
-        assert shown[2:] == ["✅ *Published*", "• ✅ *80* · Alpha", "", "⏳ *Not published yet*", "• Mike", "• Zulu"], shown
+        assert shown[2:] == ["✅ *1. Alpha*", "80 / 100 · passed", "", "⏳ *2. Mike*", "not published yet", "",
+                             "⏳ *3. Zulu*", "not published yet"], shown
         released = finals.in_timetable_order(finals_state["courses"])
         assert [c["code"] for c in released] == ["2", "1", "3"]
     finally:

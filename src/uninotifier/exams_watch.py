@@ -18,6 +18,8 @@ from uninotifier import exams, fileio, media, paths
 from uninotifier.notifier import escape_md
 
 STATE_FILE = paths.DATA / "exams_watch.json"
+FOUND_FILE = paths.DATA / "midterm_found.json"      # marks the monitor found on Moodle (written only by the monitor)
+MIDTERM_WORDS = ("midterm", "mid-term", "mid term", "first exam", "1st exam", "ميد", "منتصف", "نصفي", "الامتحان الاول", "الامتحان الأول", "امتحان اول", "امتحان أول")
 INTERVAL_SECONDS = 15 * 60
 
 
@@ -109,14 +111,45 @@ def clear_manual(course: str) -> bool:
     return bool(found)
 
 
+def _found() -> dict:
+    try:
+        found = json.loads(FOUND_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        found = {}
+    return found if isinstance(found, dict) else {}
+
+
+def midterm_mark_from_moodle(course: str, titles: list[str], summary: str) -> dict | None:
+    """A mark found in a file or post on Moodle (grades.extract_grade's summary, e.g. '24/30'): when what it was found in
+    is named like a midterm, it is kept as that course's midterm mark. Returns {"got", "out_of"} or None."""
+    import re
+    named = " ".join(titles).lower()
+    if not any(word in named for word in MIDTERM_WORDS):
+        return None
+    found = re.search(r"(\d+(?:\.\d+)?)\s*(?:/|من|of)\s*(\d+(?:\.\d+)?)", (summary or "").translate(
+        str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")))
+    if not found:
+        return None
+    got, out_of = float(found.group(1)), float(found.group(2))
+    if not 0 < out_of <= 100 or got > out_of:
+        return None
+    marks = _found()
+    marks[course] = {"got": got, "out_of": out_of, "item": " / ".join(t for t in titles if t)[:120], "at": time.time()}
+    fileio.write_json_atomic(FOUND_FILE, marks)
+    return {"got": got, "out_of": out_of}
+
+
 def effective(state: dict, course: str) -> dict | None:
-    """The mark in use for a course: {"got", "out_of", "source": "you" | "site", "exam"} — what you entered wins
-    over the site's — or None while there is none."""
+    """The mark in use for a course: {"got", "out_of", "source": "you" | "site" | "moodle", "exam"} — what you entered
+    wins, then the exams site's, then a mark found in a file or post on Moodle — or None while there is none."""
     mine = (state.get("manual") or {}).get(course)
     if mine:
         return {"got": mine["got"], "out_of": mine["out_of"], "source": "you", "exam": None}
     site = (state["courses"].get(course) or {}).get("mark")
-    return {**site, "source": "site"} if site else None
+    if site:
+        return {**site, "source": "site"}
+    moodle = _found().get(course)
+    return {"got": moodle["got"], "out_of": moodle["out_of"], "source": "moodle", "exam": moodle.get("item")} if moodle else None
 
 
 def apply_to_gpa(state: dict | None = None) -> list[str]:
@@ -191,7 +224,6 @@ def message(item: dict, detected_at: float | None = None) -> str:
         lines.append(f"🔝 *Best possible in the course:* *{item['best']:g}*")
     if item.get("yours"):
         lines.append(f"✍️ _You entered {item['yours']} yourself — that one stays in use until you remove it._")
-    lines.append(media._audit(detected_at))
     return "\n".join(lines)
 
 

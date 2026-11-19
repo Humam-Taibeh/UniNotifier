@@ -372,19 +372,14 @@ def _progress(a: dict) -> str:
     return f"{done} of {len(acts)} activities done — {len(acts) - done} left" if acts else "not submitted yet"
 
 
-def _stamp(now: float) -> str:
-    return f"🕒 *Detected:* {notifier.audit_timestamp(now)}"
-
-
 def new_message(a: dict, klass: str, now: float) -> str:
-    return "\n".join(["🚨 *New Assignment — Cambridge One*", *_lines(a, klass), *_activity_lines(a),
-                      "", _stamp(now)])
+    return "\n".join(["🚨 *New Assignment — Cambridge One*", *_lines(a, klass), *_activity_lines(a)])
 
 
 def moved_message(a: dict, old_due: float | None, klass: str, now: float) -> str:
     before = format_timestamp(old_due) if old_due else "not given"
     return "\n".join(["🗓️ *Due Date Changed — Cambridge One*", *_lines(a, klass),
-                      f"↩️ *Was:* {before}", "", _stamp(now)])
+                      f"↩️ *Was:* {before}"])
 
 
 def gone_message(seen: dict, klass: str, now: float) -> str:
@@ -392,14 +387,14 @@ def gone_message(seen: dict, klass: str, now: float) -> str:
     if klass:
         lines.append(f"🏫 *Class:* {escape_md(klass)}")
     lines += [f"📌 *Title:* {escape_md(seen.get('title') or 'Untitled assignment')}", "",
-              "It is no longer in your assignments list.", _stamp(now)]
+              "It is no longer in your assignments list."]
     return "\n".join(lines)
 
 
 def reminder_message(a: dict, klass: str, now: float) -> str:
     hours = max(1, round((a["due"] - now) / 3600))
     return "\n".join(["🚨 *Reminder — Cambridge One*", *_lines(a, klass), "",
-                      f"⏳ Due in {hours} hour{'s' if hours != 1 else ''} — {_progress(a)}.", "", _stamp(now)])
+                      f"⏳ Due in {hours} hour{'s' if hours != 1 else ''} — {_progress(a)}."])
 
 
 def _rows(page_url: str) -> list[list[dict]]:
@@ -733,7 +728,7 @@ def closed_message(since: float, now: float) -> str:
         "still signs in: the course is over, or the class was closed. English assignments are no longer "
         "watched, and the bot no longer signs in to Cambridge One.", "",
         "If the class is still running, sign in once on the PC: python -m uninotifier.cambridge --login "
-        "— the watch starts again by itself.", "", _stamp(now)])
+        "— the watch starts again by itself."])
 
 
 def class_unavailable(now: float, page_url: str, reason: str) -> bool:

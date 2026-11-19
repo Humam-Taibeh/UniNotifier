@@ -198,8 +198,6 @@ def _fields(item: dict, type_label: str, emoji: str, deadline: dict | None,
     if deadline:
         lines += deadline_lines(deadline)
         status = status or (STATUS_SUBMITTED if deadline.get("submitted") else STATUS_PENDING)
-    if status:
-        lines.append(f"📊 *Status:* {status}")
     if item.get("manual") and item["type"] not in NEVER_DONE_TYPES:
         lines.append(f'☑️ *Progress:* {"✅ Marked as done" if item.get("done") else "⬜ Not done yet"}')
     return lines
@@ -212,7 +210,7 @@ def build_assignment_notice(deadline: dict, kind: str) -> str:
         "removed": ("🗑️ *Assignment Removed*", "The instructor removed it from the course — there is nothing to hand in."),
     }[kind]
     return "\n".join([head, "", f"📘 *Course:* {escape_md(clean_course_name(deadline.get('course', '')))}",
-                      f"📌 *Title:* {escape_md(deadline.get('name', '?'))}", tail, _audit()])
+                      f"📌 *Title:* {escape_md(deadline.get('name', '?'))}", tail])
 
 
 def deadline_lines(deadline: dict) -> list[str]:
@@ -222,10 +220,6 @@ def deadline_lines(deadline: dict) -> list[str]:
         return [f'🕐 *Due Date:* {format_timestamp(deadline["timestamp"])}{passed}']
     opens, closes = quiz_times(deadline)
     return [f"🕐 *{field}:* {format_timestamp(ts)}" for field, ts in (("Opens", opens), ("Closes", closes)) if ts]
-
-
-def _audit(detected_at: float | None = None) -> str:
-    return f"🕒 *Detected:* {audit_timestamp(detected_at)}"
 
 
 def compose(header: str, body: str) -> str:
@@ -250,7 +244,6 @@ def build_item_message(item: dict, deadline: dict | None, note: str = "",
     lines = [head, "", *_fields(item, label, emoji, deadline, status), *grade_details(grade)]
     if note:
         lines += ["", note]
-    lines.append(_audit(detected_at))
     return "\n".join(lines)
 
 
@@ -290,8 +283,7 @@ def build_content_update_message(item: dict, detected_at: float | None = None) -
     """An instructor edited a label, a page or a description; what changed follows as the body
     and the picture shows the current version."""
     emoji, label = _label(item)
-    return "\n".join(["✏️ *Content Updated*", "", *_fields(item, label, emoji, None, None),
-                      _audit(detected_at)])
+    return "\n".join(["✏️ *Content Updated*", "", *_fields(item, label, emoji, None, None)])
 
 
 def build_grade_message(item: dict, grade: str, detected_at: float | None = None) -> str:
@@ -304,7 +296,7 @@ def build_grade_message(item: dict, grade: str, detected_at: float | None = None
         percent = ""
     return "\n".join(["🎉 *Grade Posted*", "", course_line(item["course"]), f"{emoji} *Type:* {label}",
                       f'📌 *Title:* {escape_md(item["name"])}',
-                      f"🏆 *Grade:* *{escape_md(grade)}*{percent}", _audit(detected_at)])
+                      f"🏆 *Grade:* *{escape_md(grade)}*{percent}"])
 
 
 def build_forum_post_message(forum: dict, post: dict, detected_at: float | None = None) -> str:
@@ -327,7 +319,6 @@ def build_forum_post_message(forum: dict, post: dict, detected_at: float | None 
         lines.append(f'🕐 *Posted:* {format_timestamp(post["time"])}')
     if post.get("attachments"):
         lines.append(f'📎 *Attachments:* {len(post["attachments"])}')
-    lines.append(_audit(detected_at))
     return "\n".join(lines)
 
 
@@ -374,7 +365,6 @@ def build_update_message(item: dict, old_modified: float | None, new_modified: f
                   "file was moved, unchanged, into `_Old_Versions`." if retired_to else
                   "The instructor uploaded a new version. The previous file was no longer in the folder, "
                   "so nothing was moved."]
-    lines.append(_audit(detected_at))
     return "\n".join(lines)
 
 
@@ -388,7 +378,6 @@ def build_link_message(item: dict, target: str, deadline: dict | None = None,
     lines = [head, "", *_fields(item, label, emoji, deadline, None)]
     lines.append(f"{'▶️ *Watch:*' if video else '🌐 *URL:*'} "
                  f"[{escape_md(urlparse(target).netloc or 'open')}]({target})")
-    lines.append(_audit(detected_at))
     return "\n".join(lines)
 
 
@@ -403,7 +392,6 @@ def build_meeting_message(item: dict, meeting: dict | None, detected_at: float |
         lines += [f"{activities.meeting_icon(k)} *{escape_md(k)}:* {escape_md(v)}" for k, v in meeting["details"]]
     lines += ["", f"Tap *{JOIN_TEAMS_BUTTON[2:]}* below to open the meeting in Teams."
               if meeting.get("url") else "The join link opens from the meeting's portal page (button below)."]
-    lines.append(_audit(detected_at))
     return "\n".join(lines)
 
 
@@ -426,7 +414,6 @@ def build_attendance_message(item: dict, sessions: list[dict] | None, now: datet
     if sessions:
         lines.append(f"📋 *Sessions listed:* {len(sessions)}")
     lines += ["", "Check-in opens on the portal during each session — tap *Check In* below then."]
-    lines.append(_audit(detected_at))
     return "\n".join(lines)
 
 
@@ -452,10 +439,8 @@ def build_reminder_message(deadline: dict, flag: str, detected_at: float | None 
         f"{emoji} *Type:* {label}",
         f'📌 *Title:* {escape_md(deadline.get("name", ""))}',
         *deadline_lines(deadline),
-        f"📊 *Status:* {STATUS_PENDING}",
         "",
         f"{action} in {hours}.",
-        _audit(detected_at),
     ])
 
 
@@ -466,5 +451,4 @@ def build_unclassified_message(item: dict) -> str:
         f'📌 *Title:* {escape_md(item["name"])}',
         f'🏷️ *Type:* `{item["type"]}`',
         item["url"],
-        _audit(),
     ])
