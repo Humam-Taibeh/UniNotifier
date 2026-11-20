@@ -1231,6 +1231,25 @@ def test_state_backup_lives_in_its_own_repository():
         assert log_lines[0] == gitsync.COMMIT_MESSAGE and "reminders.json" in tracked() and "auth_state.json" not in tracked()
         status = subprocess.run(["git", "status", "--porcelain"], cwd=repo, capture_output=True, text=True).stdout
         assert status == "", status
+        # data/.gitignore edited away, a session file even staged by hand: the backup still uploads only the tracker files
+        (repo / ".gitignore").unlink()
+        (repo / "portal_session.json").write_text('{"JSESSIONID": "secret"}', encoding="utf-8")
+        (repo / "slack_messages.json").write_text('{"messages": {}}', encoding="utf-8")
+        subprocess.run(["git", "add", "-f", "auth_state.json"], cwd=repo, capture_output=True)
+        (repo / "gpa.json").write_text('{"base": 1}', encoding="utf-8")
+        reported = []
+        keep_report = failsafe.report
+        failsafe.report = lambda kind, headline, detail="", **k: reported.append((kind, detail)) or True
+        try:
+            gitsync.sync_state()
+        finally:
+            failsafe.report = keep_report
+        committed = subprocess.run(["git", "show", "--name-only", "--format=", "HEAD"], cwd=repo, capture_output=True,
+                                   text=True).stdout.split()
+        assert committed == ["gpa.json"], committed
+        assert (repo / ".gitignore").read_text(encoding="utf-8") == gitsync.STATE_GITIGNORE, "put back as --init wrote it"
+        assert not {"auth_state.json", "portal_session.json", "slack_messages.json"} & set(tracked()), tracked()
+        assert reported and reported[0][0] == "gitsync:stray" and "auth_state.json" in reported[0][1], reported
     finally:
         gitsync.STATE_REPO = keep
         shutil.rmtree(repo, ignore_errors=True)

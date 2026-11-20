@@ -6,9 +6,10 @@ off-PC copy, make data/ a git repository of its own (once):
 
     python -m uninotifier.gitsync --init https://github.com/<you>/<private-repo>.git
 
-From then on, when one of the backed-up files (data/.gitignore lists them:
-saved_items.json, gpa.json, reminders.json — never sessions or secrets) has
-changed, each check commits and pushes it. Never raises and never blocks long:
+From then on, when one of the backed-up files (saved_items.json, gpa.json,
+reminders.json — never sessions or secrets) has changed, each check commits and
+pushes it. They are added by name, so an edited or deleted data/.gitignore can
+never let a session in (the .gitignore itself is put back). Never raises and never blocks long:
 with no network (or no remote yet) the commit simply stays local and is pushed
 by the first run that has a connection. Without data/.git, nothing happens.
 
@@ -39,6 +40,7 @@ BACKED_UP = ("saved_items.json", "gpa.json", "reminders.json")
 STATE_GITIGNORE = ("# UniNotifier state backup: only the files listed with ! are committed;\n"
                    "# sessions, cookies, caches and logs never leave this PC.\n*\n!.gitignore\n"
                    + "".join(f"!{name}\n" for name in BACKED_UP))
+ALLOWED = (".gitignore", *BACKED_UP)   # the only names a backup commit may ever hold — whatever data/.gitignore says
 COMMIT_MESSAGE = "sync: update tracker state"
 GIT_TIMEOUT = 45
 # abort a transfer slower than 1 KB/s for 20 s, instead of waiting on a dead connection
@@ -90,13 +92,36 @@ def enabled() -> bool:
     return (STATE_REPO / ".git").is_dir()
 
 
+def _stage() -> list[str]:
+    """Stage the backed-up files BY NAME — never `add -A` on the folder: data/ also holds the Microsoft sign-in
+    cookies, the portal session and the Slack message map, and a .gitignore that was edited or deleted must not
+    be able to send them to GitHub. Anything else found staged (an old index, a hand-made `git add`) is taken out
+    again and you are told. The staged backed-up names."""
+    present = [name for name in ALLOWED if (STATE_REPO / name).exists()]
+    if present:
+        _git("add", "-A", "--", *present)
+    staged = [n for n in _git("diff", "--cached", "--name-only").stdout.splitlines() if n.strip()]
+    stray = [n for n in staged if n not in ALLOWED]
+    if stray:
+        _git("rm", "--cached", "-q", "--ignore-unmatch", "--", *stray)
+        failsafe.report("gitsync:stray", "The cloud backup kept files out that must never leave this PC",
+                        detail="Not uploaded: " + ", ".join(stray[:10]) + ". Only " + ", ".join(BACKED_UP)
+                               + " are ever backed up.", wait=False)
+    return [n for n in staged if n in ALLOWED]
+
+
 def sync_state() -> None:
     try:
         if not enabled():
             return
+        ignore = STATE_REPO / ".gitignore"
+        if not ignore.is_file() or ignore.read_text(encoding="utf-8", errors="replace") != STATE_GITIGNORE:
+            ignore.write_text(STATE_GITIGNORE, encoding="utf-8")       # deleted or edited: put back as --init wrote it
 
-        if _git("status", "--porcelain").stdout.strip():
-            _git("add", "-A")                          # data/.gitignore keeps it to the BACKED_UP files
+        if _git("status", "--porcelain", "--", *ALLOWED).stdout.strip() or \
+                _git("diff", "--cached", "--name-only").stdout.strip():
+            if not _stage():
+                return
             res = _git("commit", "-m", COMMIT_MESSAGE)
             if res.returncode != 0:
                 log.warning("git commit failed: %s", (res.stderr or res.stdout).strip()[:200])
@@ -152,8 +177,7 @@ def init(remote: str | None = None) -> int:
     for key, fallback in (("user.name", "UniNotifier"), ("user.email", "uninotifier@localhost")):
         if not _git("config", "--get", key).stdout.strip():      # a PC where git was never given a name
             _git("config", "--local", key, fallback)
-    _git("add", "-A")
-    if _git("status", "--porcelain").stdout.strip() and not ok(_git("commit", "-m", "backup: first state snapshot"), "git commit"):
+    if _stage() and not ok(_git("commit", "-m", "backup: first state snapshot"), "git commit"):
         return 1
     if remote:
         has_origin = _git("remote", "get-url", "origin").returncode == 0
