@@ -997,3 +997,27 @@ def test_an_address_from_a_moodle_page_cannot_change_a_slack_message():
         "<https://elearning.example/mod/forum/view.php?id=5&f=1|Open>", "an ordinary address still opens the same page"
     lines = slack.link_lines({"inline_keyboard": [[{"text": "Open", "url": "https://x.example/a|b>c"}]]})
     assert lines == ["<https://x.example/a%7Cb%3Ec|Open>"], lines
+
+
+def test_slack_calls_share_one_kept_open_connection():
+    """Every timetable press runs on a thread of its own. With a session per thread each press paid a fresh TLS
+    handshake to slack.com and to the upload host (about a second each). One session — its pool of connections
+    kept open — serves every thread."""
+    import threading
+    from uninotifier import slack
+    keep = slack._shared["session"]
+    slack._shared["session"] = None
+    try:
+        seen = []
+        workers = [threading.Thread(target=lambda: seen.append(slack._session())) for _ in range(4)]
+        for worker in workers:
+            worker.start()
+        for worker in workers:
+            worker.join()
+        assert len(seen) == 4 and all(s is seen[0] for s in seen), "one session for every thread"
+        adapter = seen[0].get_adapter("https://slack.com/api/chat.postMessage")
+        assert adapter._pool_maxsize == slack.POOL_SIZE >= 4, "room for the bot's threads at once"
+    finally:
+        if slack._shared["session"] is not None:
+            slack._shared["session"].close()
+        slack._shared["session"] = keep

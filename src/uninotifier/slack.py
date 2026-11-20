@@ -29,6 +29,7 @@ import time
 from pathlib import Path
 
 import requests
+from requests.adapters import HTTPAdapter
 
 from uninotifier import envcheck
 
@@ -46,7 +47,8 @@ MODES = ("telegram", "slack")
 
 _pace = threading.Lock()
 _last_sent = 0.0
-_local = threading.local()
+_session_lock = threading.Lock()
+_shared: dict = {"session": None}
 _LINK_OR_URL = re.compile(r"(?<!\\)\[((?:[^\]\\]|\\.)*)\]\(([^)\s]+)\)|https?://\S+")
 
 
@@ -707,13 +709,25 @@ def _wait_turn() -> None:
         _last_sent = time.monotonic()
 
 
+POOL_SIZE = 8                      # connections kept open to slack.com (and to its upload host), shared by all threads
+
+
+def _session() -> requests.Session:
+    """ONE session for the whole process, its connections kept open and shared by every thread. (It was one per
+    thread: every timetable press runs on a new thread, so each paid a fresh TLS handshake to slack.com and to
+    the upload host — about a second each, measured — before the call even started.)"""
+    with _session_lock:
+        if _shared["session"] is None:
+            session = requests.Session()
+            adapter = HTTPAdapter(pool_connections=4, pool_maxsize=POOL_SIZE)
+            session.mount("https://", adapter)
+            _shared["session"] = session
+        return _shared["session"]
+
+
 def _post(url: str, **kwargs) -> requests.Response:
-    """One HTTP POST over a connection kept open (one per thread): a fresh connection to Slack costs
-    about a second before the call even starts — kept open, a press is answered in about half."""
-    session = getattr(_local, "session", None)
-    if session is None:
-        session = _local.session = requests.Session()
-    return session.post(url, **kwargs)
+    """One HTTP POST over a connection kept open: kept open, a press is answered in about half a second."""
+    return _session().post(url, **kwargs)
 
 
 def call(token: str, method: str, data: dict | None = None, timeout=TIMEOUT) -> dict:
