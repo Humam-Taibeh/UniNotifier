@@ -213,9 +213,26 @@ def send(text: str, markup=None, files: list[tuple[str, bytes]] | None = None) -
             except (slack.SlackError, requests.RequestException):
                 pass
         raise
-    if files:
-        _retire_old_copies(token, [name for name, _ in files], file_ids)
-    return remember(answer["ts"], text, markup, file_ids, [name for name, _ in files] if files else None)
+    living = [name for name, _ in files or [] if replaces(name)]
+    if living:                                # before the new card is remembered: it is not one of the old copies
+        _retire_old_copies(token, living, file_ids)
+    try:
+        return remember(answer["ts"], text, markup, file_ids, [name for name, _ in files] if files else None)
+    except OSError as e:                      # (TimeoutError too) the message IS in Slack: never report it unsent —
+        log.warning("Slack: a message was sent but not numbered (%s) — its buttons will not answer", e)
+        return 0                              # ... that would send it a second time
+
+
+# Files that are ONE living copy — the newest answer replaces the older ones: a portal answer (transcript, balance,
+# registration), the weekly timetable, the Cambridge overview. Anything else that happens to share a name — this
+# week's attendance proof and last week's, two courses' "Syllabus.pdf", two forum posts with the same subject — is
+# a different message and is never taken away.
+LIVING_PREFIXES = ("ZUJ Portal - ", "Cambridge One - ")
+LIVING_NAMES = (paths.SCHEDULE_PDF.name, paths.SCHEDULE_IMAGE.name)
+
+
+def replaces(name: str) -> bool:
+    return name.startswith(LIVING_PREFIXES) or name in LIVING_NAMES
 
 
 def channel_of(token: str) -> str:
@@ -225,24 +242,32 @@ def channel_of(token: str) -> str:
 def _retire_old_copies(token: str, names: list[str], keep: list[str]) -> None:
     """A file sent again (a transcript, a balance, the timetable) replaces what held its older copies: the files
     leave Slack's Files tab (they only fill the free plan's storage) and so do the cards they were under — the chat
-    keeps one transcript, the newest, never a pile of old ones with their buttons. Best effort — never raises."""
+    keeps one transcript, the newest, never a pile of old ones with their buttons. Best effort — never raises.
+    The message file is locked only to read and to write it, never while Slack is asked: a slow Slack call must not
+    hold the lock past fileio's staleness limit (the other process would then take it, and one save would undo the
+    other's)."""
     try:
+        old = [(key, found.get("ts"), [f for f in found.get("files") or [] if f not in keep])
+               for key, found in _load()["messages"].items() if set(found.get("names") or []) & set(names)]
+        gone, tidied = [], []
+        for key, ts, file_ids in old:
+            for file_id in file_ids:
+                try:
+                    slack.call(token, "files.delete", {"file": file_id})
+                except (slack.SlackError, requests.RequestException):
+                    pass
+            if ts and ts != HOME_TS and slack.delete(token, channel_of(token), ts):
+                gone.append(key)
+            tidied.append(key)
+        if not tidied:
+            return
         with fileio.write_lock(STORE):
             data = _load()
-            gone = []
-            for key, found in data["messages"].items():
-                if not set(found.get("names") or []) & set(names):
-                    continue
-                for file_id in [f for f in found.get("files") or [] if f not in keep]:
-                    try:
-                        slack.call(token, "files.delete", {"file": file_id})
-                    except (slack.SlackError, requests.RequestException):
-                        pass
-                if found.get("ts") and found["ts"] != HOME_TS and slack.delete(token, channel_of(token), found["ts"]):
-                    gone.append(key)
-                found["files"], found["names"] = [], []
-            for key in gone:
-                data["messages"].pop(key, None)
+            for key in tidied:
+                if key in gone:
+                    data["messages"].pop(key, None)
+                elif key in data["messages"]:
+                    data["messages"][key]["files"], data["messages"][key]["names"] = [], []
             _save(data)
     except Exception as e:                                    # a tidy-up must never fail a send
         log.warning("Slack: old copies of a file were not removed: %s", e)

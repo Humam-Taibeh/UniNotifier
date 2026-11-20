@@ -876,6 +876,8 @@ def test_the_bot_lives_in_slack():
     def fake_post(url, data=None, timeout=None, headers=None):
         method = url.rsplit("/", 1)[-1]
         calls.append((method, data))
+        if method in ("chat.delete", "files.delete"):            # Slack is never asked while the message file is locked
+            assert not slackbot.STORE.with_name(slackbot.STORE.name + ".lock").exists(), method
         if method == "chat.postMessage":
             return Answer({"ok": True, "ts": next(stamps)})
         if method == "files.getUploadURLExternal":
@@ -1047,6 +1049,30 @@ def test_the_bot_lives_in_slack():
                 assert reply["body"]["result"]["message_id"] == slackbot.number_of("1700000003.0001")
                 button = sent_rows(calls[-1][1])[0]["elements"][0]
                 assert button["value"] == "done:5" and button["style"] == "primary"
+
+                # a file sent again retires older copies only when it IS one living copy (a portal answer, the
+                # timetable). This week's attendance proof has last week's name, two courses each have a
+                # "Syllabus.pdf": different messages, all kept.
+                for name, retired in (("Big Data - attendance.png", False), ("Syllabus.pdf", False),
+                                      ("ZUJ Portal - Transcript.png", True), ("Weekly_Schedule.png", True)):
+                    first = notifier.upload("T", "sendDocument", {"chat_id": OWNER, "caption": "a"}, "document", name, b"x")
+                    calls.clear()
+                    notifier.upload("T", "sendDocument", {"chat_id": OWNER, "caption": "b"}, "document", name, b"y")
+                    assert ("chat.delete" in [m for m, _ in calls]) is retired, (name, calls)
+                    assert (slackbot.entry(first["message_id"]) is None) is retired, name
+
+                # a message Slack took is never reported unsent (and so never sent twice) when numbering it fails
+                keep_remember = slackbot.remember
+
+                def busy(*a, **k):
+                    raise TimeoutError("slack_messages.json.lock is held by another process")
+                slackbot.remember = busy
+                try:
+                    calls.clear()
+                    assert notifier.send_message("T", OWNER, "📢 *Sent once*")
+                    assert [m for m, _ in calls].count("chat.postMessage") == 1, calls
+                finally:
+                    slackbot.remember = keep_remember
 
             _with_env(on, scenario)
             # without the live connection's token, the bot stays on Telegram (messages may still go to Slack)
