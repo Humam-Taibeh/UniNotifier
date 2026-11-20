@@ -558,10 +558,23 @@ def test_the_repository_is_ready_for_students():
     assert 'nogit "$py" tests/test_architecture.py' in hook, "or a test would write into this repository"
     for step in ("-m pyflakes src tests monitor.py bot.py", "tests/test_architecture.py", "gitleaks git --pre-commit --staged"):
         assert step in hook and (step.startswith("gitleaks") or step.split()[-1] in ci), f"the pre-commit hook lost: {step}"
+    message_hook = (project / ".githooks" / "commit-msg").read_text(encoding="utf-8")
+    assert "co-authored-by:" in message_hook.lower() and "exit 1" in message_hook, \
+        "a commit names only the person who commits it"
     if (project / ".git").exists():
-        checked = subprocess.run(["git", "check-attr", "eol", ".githooks/pre-commit"], cwd=project,
-                                 capture_output=True, text=True).stdout
-        assert "eol: lf" in checked, "a CRLF checkout would break the hook's #!/bin/sh line"
+        for name in ("pre-commit", "commit-msg"):
+            checked = subprocess.run(["git", "check-attr", "eol", f".githooks/{name}"], cwd=project,
+                                     capture_output=True, text=True).stdout
+            assert "eol: lf" in checked, f"a CRLF checkout would break {name}'s #!/bin/sh line"
+        shell = shutil.which("sh")
+        if shell:
+            for text, verdict in (("fix: a thing\n\nCo-authored-by: Someone <a@b.c>\n", 1), ("fix: a thing\n", 0)):
+                with tempfile.TemporaryDirectory() as folder:
+                    msg = Path(folder) / "MSG"
+                    msg.write_text(text, encoding="utf-8")
+                    ran = subprocess.run([shell, str(project / ".githooks" / "commit-msg"), str(msg)],
+                                         capture_output=True, text=True)
+                    assert ran.returncode == verdict, (text, ran.stdout)
 
     promise = "I have verified that no passwords, student IDs, or private tokens are included."
     for form in ("bug_report.yml", "feature_request.yml"):

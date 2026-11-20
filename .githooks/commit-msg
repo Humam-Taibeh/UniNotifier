@@ -1,0 +1,8 @@
+#!/bin/sh
+# Keeps the history's authorship plain: every commit is written by the person who commits it,
+# so a commit message carries no co-author trailer (see CONTRIBUTING.md, "contributors stay human").
+# Turned on with the other hooks:   git config core.hooksPath .githooks
+if grep -qiE '^[[:space:]]*co-authored-by:' "$1"; then
+    echo "commit-msg: remove the Co-authored-by line - commits here name only the person who commits them"
+    exit 1
+fi

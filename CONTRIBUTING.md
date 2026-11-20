@@ -23,7 +23,9 @@ Where the project stands and what is planned next: [docs/ROADMAP.md](docs/ROADMA
 
 Both must pass — CI runs them on Windows with Python 3.11, 3.13, 3.14 and 3.15, and runs the student installer.
 To run them (and [gitleaks](https://github.com/gitleaks/gitleaks), if it is installed) before every commit,
-turn on the project's hook once: `git config core.hooksPath .githooks`.
+turn on the project's hooks once: `git config core.hooksPath .githooks`. The same setting also
+turns on a message check: a commit names only the person who commits it, so a `Co-authored-by:`
+line is refused.
 
 To see which lines the tests reach (branch coverage, per module):
 
