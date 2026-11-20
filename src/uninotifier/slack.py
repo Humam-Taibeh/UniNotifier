@@ -903,30 +903,34 @@ def upload(token: str, channel: str, files: list[tuple[str, bytes]], comment: st
         data["initial_comment"] = comment
     answer = call(token, "files.completeUploadExternal", data, timeout=UPLOAD_TIMEOUT)
     answer["file_ids"] = [f["id"] for f in shared]
-    _await_share(token, channel, answer["file_ids"])
+    answer["shared"] = _await_share(token, channel, answer["file_ids"])
     return answer
 
 
 SHARE_WAIT = 12.0          # seconds a shared file may take to appear in the conversation
 
 
-def _await_share(token: str, channel: str, file_ids: list[str]) -> None:
+def _await_share(token: str, channel: str, file_ids: list[str]) -> dict:
     """Slack shares an uploaded file a moment AFTER confirming it: a message sent at once would land
     above the file (a menu above the timetable it belongs under). Wait until the file shows in the
-    conversation — read with im:history; without it, a short pause does the same."""
+    conversation — read with im:history; without it, a short pause does the same.
+    What was seen: {"ts": the message holding the files, "links": {file id: its permalink}} — empty when the
+    conversation could not be read."""
     deadline = time.monotonic() + SHARE_WAIT
     while time.monotonic() < deadline:
         try:
             recent = call(token, "conversations.history", {"channel": channel, "limit": "5"})
         except SlackError:                             # no im:history (an app made before the buttons)
             time.sleep(2.5)
-            return
+            return {}
         except requests.RequestException:
-            return
-        shown = {f.get("id") for m in recent.get("messages") or [] for f in m.get("files") or []}
-        if set(file_ids) <= shown:
-            return
+            return {}
+        for message in recent.get("messages") or []:
+            files = {f.get("id"): f.get("permalink") or "" for f in message.get("files") or []}
+            if set(file_ids) <= set(files):
+                return {"ts": message.get("ts", ""), "links": {k: v for k, v in files.items() if k in file_ids}}
         time.sleep(0.6)
+    return {}
 
 
 # ------------------------------------------------------------------ Telegram's calls, said in Slack

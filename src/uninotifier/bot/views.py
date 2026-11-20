@@ -17,6 +17,7 @@ from uninotifier import paths
 from uninotifier import reminders
 from uninotifier import schedule
 from uninotifier import slack
+from uninotifier import slackbot
 from uninotifier import tasks
 from uninotifier import timetable
 from uninotifier.bot import chat
@@ -259,6 +260,13 @@ def send_schedule_files() -> None:
             items = [(drawn[1], "📎 High-Resolution PDF"), (drawn[0], "🖼️ Quick PNG Preview")]
     if items and slack.mode() == "slack":
         items = [(path, "") for path, _ in items]       # in Slack the files speak for themselves: no caption text
+    if len(items) == 2 and slack.active() and slackbot.interactive():
+        from uninotifier import slackfiles              # uploaded once, then shown from Slack's own copy
+        how = slackfiles.send_timetable(items[0][0], items[1][0])
+        if how:
+            log.info("Timetable sent in %.1f s (%s)", time.monotonic() - started, how)
+            chat.reanchor()
+            return
     if items:
         if len(items) == 1 or not notifier.send_document_group(chat.BOT_TOKEN, chat.CHAT_ID, items):
             for path, caption in items:  # album failed: fall back to single sends

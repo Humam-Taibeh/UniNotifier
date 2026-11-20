@@ -1186,6 +1186,110 @@ def test_a_guest_login_in_slack_is_typed_in_a_private_form():
                 guest_flow.portal_flow._portal_lock.release()
 
 
+def test_the_timetable_is_uploaded_once_then_shown_from_slacks_own_copy():
+    """Every 📅 Weekly Timetable press once uploaded both files again (about 1.5 MB), waited for Slack to share them and
+    then sent the menu: seconds per press. Now the first press uploads and remembers Slack's file ids; every later press
+    is ONE message — the picture from Slack's copy and a link to the PDF — and the previous quick copy goes. A changed
+    timetable is uploaded again (the old files go); a copy Slack refuses to show (deleted by hand) is uploaded afresh."""
+    from support import OWNER_ID as OWNER, _with_env
+    from uninotifier import slack, slackbot, slackfiles
+    views = importlib.import_module("uninotifier.bot.views")
+    bot = _package("uninotifier.bot")
+    calls, stamps, ids = [], iter(f"17200000{n:02d}.0001" for n in range(1, 99)), iter(f"F{n:03d}" for n in range(1, 99))
+    refuse = []
+
+    class Answer:
+        status_code, ok, headers = 200, True, {}
+
+        def __init__(self, body):
+            self._body = body
+
+        def json(self):
+            return self._body
+
+    uploaded = {}
+
+    def fake_post(url, data=None, timeout=None, headers=None):
+        method = url.rsplit("/", 1)[-1]
+        calls.append((method, data))
+        if method == "files.getUploadURLExternal":
+            file_id = next(ids)
+            uploaded[file_id] = data["filename"]
+            return Answer({"ok": True, "upload_url": f"https://files.slack.com/upload/v1/{file_id}", "file_id": file_id})
+        if method == "completeUploadExternal" or method == "files.completeUploadExternal":
+            shared = json.loads(data["files"])
+            fake_post.last = [f["id"] for f in shared]
+            return Answer({"ok": True, "files": shared})
+        if method == "conversations.history":
+            return Answer({"ok": True, "messages": [{"ts": "1720000099.0001", "files": [
+                {"id": i, "permalink": f"https://myuni.slack.com/files/UBOT/{i}/{uploaded[i]}"} for i in fake_post.last]}]})
+        if method == "chat.postMessage":
+            if refuse and "slack_file" in (data.get("blocks") or ""):
+                return Answer({"ok": False, "error": refuse.pop(0)})
+            return Answer({"ok": True, "ts": next(stamps)})
+        return Answer({"ok": True})
+    fake_post.last = []
+
+    def no_telegram(*a, **k):
+        raise AssertionError("Telegram must not be used while the bot lives in Slack")
+
+    keep = (slack._post, telegram.request, slack.MIN_INTERVAL, slack.SHARE_WAIT, slackbot.STORE, slackbot._connect,
+            slackfiles.STATE_FILE, views.SCHEDULE_PDF, views.SCHEDULE_IMAGE)
+    owner = _as_owner(bot)
+    on = {"NOTIFY_VIA": "slack", "SLACK_BOT_TOKEN": "-".join(("xoxb", "1", "2", "made-up")), "SLACK_CHANNEL": "D0123ABCD",
+          "SLACK_APP_TOKEN": "-".join(("xapp", "1", "made-up")), "SLACK_USER": "U0OWNER1", "TELEGRAM_CHAT_ID": OWNER}
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        pdf, png = tmp / "Weekly_Academic_Schedule.pdf", tmp / "Weekly_Schedule.png"
+        pdf.write_bytes(b"%PDF-1.7 timetable")
+        png.write_bytes(b"\x89PNG timetable")
+        try:
+            slack._post, telegram.request, slack.MIN_INTERVAL, slack.SHARE_WAIT = fake_post, no_telegram, 0, 1
+            slackbot.STORE, slackbot._connect = tmp / "slack_messages.json", lambda: None
+            slackfiles.STATE_FILE, views.SCHEDULE_PDF, views.SCHEDULE_IMAGE = tmp / "slack_files.json", pdf, png
+
+            def press():
+                calls.clear()
+                views.send_schedule_files()
+                return [m for m, _ in calls]
+
+            def scenario():
+                first = press()
+                assert first.count("files.getUploadURLExternal") == 2 and "files.completeUploadExternal" in first, first
+                saved = json.loads(slackfiles.STATE_FILE.read_text(encoding="utf-8"))["timetable"]
+                assert (saved["pdf_id"], saved["png_id"], saved["upload_ts"]) == ("F001", "F002", "1720000099.0001")
+                assert saved["pdf_link"].endswith("/F001/Weekly_Academic_Schedule.pdf")
+                # the second press: no upload, no share wait — one message from Slack's copy (then the menu)
+                second = press()
+                assert "files.getUploadURLExternal" not in second and "conversations.history" not in second, second
+                quick = next(d for m, d in calls if m == "chat.postMessage" and "slack_file" in (d.get("blocks") or ""))
+                blocks = json.loads(quick["blocks"])
+                assert blocks[0] == {"type": "image", "slack_file": {"id": "F002"}, "alt_text": "Weekly timetable"}
+                assert saved["pdf_link"] in blocks[1]["elements"][0]["text"]
+                quick_ts = json.loads(slackfiles.STATE_FILE.read_text(encoding="utf-8"))["timetable"]["quick_ts"]
+                # the third: the previous quick copy goes, the upload stays
+                press()
+                deleted = [d["ts"] for m, d in calls if m == "chat.delete"]
+                assert quick_ts in deleted and "1720000099.0001" not in deleted, deleted
+                # a new timetable: uploaded again, the old files and their message removed
+                png.write_bytes(b"\x89PNG a new timetable")
+                fourth = press()
+                assert fourth.count("files.getUploadURLExternal") == 2, fourth
+                assert {d["file"] for m, d in calls if m == "files.delete"} == {"F001", "F002"}
+                assert "1720000099.0001" in [d["ts"] for m, d in calls if m == "chat.delete"]
+                # a copy Slack will not show again (a file deleted by hand): uploaded afresh, never lost
+                refuse.append("invalid_blocks")
+                fifth = press()
+                assert fifth.count("files.getUploadURLExternal") == 2, fifth
+                assert json.loads(slackfiles.STATE_FILE.read_text(encoding="utf-8"))["timetable"]["png_id"] == "F006"
+
+            _with_env(on, scenario)
+        finally:
+            (slack._post, telegram.request, slack.MIN_INTERVAL, slack.SHARE_WAIT, slackbot.STORE, slackbot._connect,
+             slackfiles.STATE_FILE, views.SCHEDULE_PDF, views.SCHEDULE_IMAGE) = keep
+            bot.CHAT_ID, access.ADMIN_USER_ID = owner
+
+
 def test_the_slack_home_page_is_a_dashboard():
     """The main menu on Slack's Home page shows today, what is due soon and the next reminders, then
     the buttons — read from the bot's own files, every button with an id of its own (Slack refuses a
