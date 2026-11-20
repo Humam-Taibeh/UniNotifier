@@ -1052,6 +1052,14 @@ def test_a_pinned_announcement_keeps_its_picture_and_wording():
     reminders.remove(item["id"])
     assert reminders.shots_of(item["id"]) == [], "deleted with the reminder"
     reminders.remove(plain["id"])
+    # an announcement that drops out of the remembered list (the oldest beyond KEEP_SOURCES) takes its pictures along
+    keep = reminders.KEEP_SOURCES
+    reminders.KEEP_SOURCES = 1
+    try:
+        reminders.remember_source("i44", "Newer", "English", None, [png])
+        assert not (reminders.SHOTS_DIR / "src-i42").exists() and (reminders.SHOTS_DIR / "src-i44").is_dir()
+    finally:
+        reminders.KEEP_SOURCES = keep
 
 
 def test_show_original_pictures_an_old_reminder_again_and_keeps_it():

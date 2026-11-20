@@ -219,8 +219,10 @@ def remember_source(key: str, note: str, course: str | None, url: str | None, sh
         sources = {}
     sources[key] = {"note": note.strip()[:NOTE_LIMIT], "course": course, "url": url, "at": time.time()}
     if len(sources) > KEEP_SOURCES:
+        import shutil
         for old in sorted(sources, key=lambda k: sources[k]["at"])[:len(sources) - KEEP_SOURCES]:
             del sources[old]
+            shutil.rmtree(SHOTS_DIR / f"src-{_safe_key(old)}", ignore_errors=True)    # its pictures go with it
     fileio.write_json_atomic(SOURCES_FILE, sources)
 
 
