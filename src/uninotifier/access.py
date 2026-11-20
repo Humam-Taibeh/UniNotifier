@@ -20,6 +20,10 @@ id per day and at most MAX_ALERTS_PER_DAY in all, so a flood cannot become a flo
 Fails closed: with no valid ADMIN_USER_ID nobody is served and the bot refuses to start (problems()).
 Without ADMIN_USER_ID in .env the owner's TELEGRAM_CHAT_ID is used (in a private chat the two are the
 same number) and that is logged.
+
+On Slack (NOTIFY_VIA=slack with SLACK_USER set) and no Telegram id at all, the owner is SLACK_OWNER_ID:
+the number slackbot.py gives SLACK_USER's messages and presses. Nobody else in the workspace can get
+that number — slackbot gives every other person "slack:<their id>", which is never digits.
 """
 
 import logging
@@ -42,7 +46,13 @@ MAX_TRACKED = 1000                  # unknown ids remembered in memory (the olde
 PRUNE_EVERY = 600                   # seconds between clean-ups of what is remembered
 _ID = re.compile(r"[1-9][0-9]{0,15}")
 
+SLACK_OWNER_ID = "1"                # the owner's number when the bot lives in Slack and no Telegram id is set
 from_chat_id = False                # True when ADMIN_USER_ID came from TELEGRAM_CHAT_ID
+
+
+def _slack_owner_set() -> bool:
+    return ((os.getenv("NOTIFY_VIA") or "").strip().lower() == "slack"
+            and bool((os.getenv("SLACK_USER") or "").strip()))
 
 
 def _admin_from_env() -> str:
@@ -50,6 +60,9 @@ def _admin_from_env() -> str:
     raw = (os.getenv("ADMIN_USER_ID") or "").strip()
     from_chat_id = not raw
     raw = raw or (os.getenv("TELEGRAM_CHAT_ID") or "").strip()
+    if not _ID.fullmatch(raw) and _slack_owner_set():     # no Telegram id (empty, or still the example text)
+        from_chat_id = False
+        return SLACK_OWNER_ID
     return raw if _ID.fullmatch(raw) else ""
 
 

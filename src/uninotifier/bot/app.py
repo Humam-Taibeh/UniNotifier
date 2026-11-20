@@ -454,7 +454,11 @@ def main() -> None:
     failsafe.install_excepthooks("bot")
     envcheck.require("bot")
     if access.problems(chat.CHAT_ID):
-        sys.exit("; ".join(access.problems(chat.CHAT_ID)))
+        found = "; ".join(access.problems(chat.CHAT_ID))
+        log.error("The bot cannot start: %s", found)
+        failsafe.report("config:bot-owner", "The bot cannot start: it does not know who you are",
+                        detail=f"{found}\n\nRun .venv\\Scripts\\python -m uninotifier.setup on the PC.")
+        sys.exit(found)
     if access.from_chat_id:
         log.warning("ADMIN_USER_ID is not set in .env - using TELEGRAM_CHAT_ID as the owner's id")
     schedule.load_schedule()          # a broken schedule.json is reported now, not at the first lecture

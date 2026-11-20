@@ -13,6 +13,7 @@ import time
 
 from dotenv import load_dotenv
 
+from uninotifier import access
 from uninotifier import envcheck
 from uninotifier import fileio
 from uninotifier import notifier
@@ -29,7 +30,9 @@ load_dotenv(paths.ENV_FILE)
 BOT_TOKEN = envcheck.value("TELEGRAM_BOT_TOKEN") or ("0:slack" if envcheck.value("SLACK_BOT_TOKEN") else None)   # Slack alone: a stand-in, never contacted
 
 
-CHAT_ID = str(envcheck.value("TELEGRAM_CHAT_ID") or envcheck.value("SLACK_USER") or "")
+# The owner's chat: on Telegram its id; on a Slack-only setup the number access.py gives the owner there
+# (slackbot.py uses the same one), so the start-up check and "is this the owner's chat?" agree.
+CHAT_ID = str(envcheck.value("TELEGRAM_CHAT_ID") or access.ADMIN_USER_ID or envcheck.value("SLACK_USER") or "")
 
 
 DATA_FILE = paths.DATA / "saved_items.json"

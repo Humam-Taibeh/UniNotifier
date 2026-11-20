@@ -710,8 +710,26 @@ def test_a_slack_only_install_gives_the_programs_plain_values_not_telegram_examp
     get a stand-in token and the Slack user as the chat — never 'your_telegram_bot_token'."""
     import subprocess
     env = {**os.environ, "NOTIFY_VIA": "slack", "SLACK_BOT_TOKEN": "xoxb-good-token-1111", "SLACK_CHANNEL": "D0999ZZZZ",
-           "SLACK_USER": "U0999ZZZZ", "TELEGRAM_BOT_TOKEN": "your_telegram_bot_token", "TELEGRAM_CHAT_ID": "", "PYTHONUTF8": "1"}
+           "SLACK_USER": "U0999ZZZZ", "TELEGRAM_BOT_TOKEN": "your_telegram_bot_token", "TELEGRAM_CHAT_ID": "",
+           "ADMIN_USER_ID": "", "PYTHONUTF8": "1"}                    # as the setup writes them for Slack
     code = ("from uninotifier.bot import chat; from uninotifier.monitor import config; "
             "print(chat.BOT_TOKEN, chat.CHAT_ID, config.BOT_TOKEN, config.CHAT_ID)")
     out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=60, cwd=str(paths.ROOT))
-    assert out.stdout.split() == ["0:slack", "U0999ZZZZ", "0:slack", "U0999ZZZZ"], (out.stdout, out.stderr[-300:])
+    assert out.stdout.split() == ["0:slack", "1", "0:slack", "U0999ZZZZ"], (out.stdout, out.stderr[-300:])
+    # ... and the bot starts there and serves its owner (the start-up check once stopped a Slack-only bot for good:
+    # no Telegram id meant no owner, and nobody was told). Anyone else in the workspace is still nobody.
+    check = ("import json; from uninotifier import access, slackbot; from uninotifier.bot import chat\n"
+             "me, mine = slackbot._person('U0999ZZZZ'); other, theirs = slackbot._person('U0123OTHER')\n"
+             "print(json.dumps([access.problems(chat.CHAT_ID), access.from_chat_id,\n"
+             "  access.is_owner({'message': {'from': me, 'chat': mine, 'text': 'menu'}}),\n"
+             "  access.is_owner({'message': {'from': other, 'chat': theirs, 'text': 'menu'}}),\n"
+             "  str(mine['id']) == chat.CHAT_ID]))")
+    for telegram_id in ("", "your_telegram_chat_id"):
+        out = subprocess.run([sys.executable, "-c", check], capture_output=True, text=True, timeout=60, cwd=str(paths.ROOT),
+                             env={**env, "TELEGRAM_CHAT_ID": telegram_id, "ADMIN_USER_ID": telegram_id})
+        assert out.stdout.strip() and json.loads(out.stdout) == [[], False, True, False, True], (telegram_id, out.stdout,
+                                                                                               out.stderr[-400:])
+    # a Telegram id that is set keeps its meaning, also with Slack chosen (an install that moved to Slack)
+    out = subprocess.run([sys.executable, "-c", check], capture_output=True, text=True, timeout=60, cwd=str(paths.ROOT),
+                         env={**env, "TELEGRAM_CHAT_ID": "209900001", "ADMIN_USER_ID": "209900001"})
+    assert json.loads(out.stdout)[0] == [] and json.loads(out.stdout)[2] is True, out.stdout

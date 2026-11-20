@@ -12,14 +12,14 @@ never overlap a scheduled one). The only portal call it makes itself is the
   /items    everything tracked on the portal, per course
   /gpa      semester / cumulative GPA calculator (hours, retakes, grades)
   /need     the final-exam mark needed to reach a target:  /need 60
-  /grades /transcript /balance   official data from portal.zuj.edu.jo, on request only
+  /grades /transcript /balance   official data from portal.zuj.edu.jo, on request
   /finals   finals-season watcher: announces each released grade, then the semester
-            average and new cumulative GPA (the portal's only automatic use)
+            average and new cumulative GPA
   /check    run a monitor pass now and report what it found
   /schedule the weekly timetable, as a PDF and an image
   /courses  courses with section, instructor and weekly lecture times
 
-Only the configured TELEGRAM_CHAT_ID is answered; every other chat is ignored.
+Only the owner is answered (access.py: the Telegram id, or SLACK_USER on Slack); everyone else is ignored.
 
 Run:  .venv\\Scripts\\pythonw.exe bot.py        (no console window)
 """

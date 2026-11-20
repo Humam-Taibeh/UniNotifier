@@ -280,7 +280,9 @@ def _delete(message_id) -> bool:
 
 
 def _chat_id() -> int:
-    raw = envcheck.value("TELEGRAM_CHAT_ID") or envcheck.value("ADMIN_USER_ID") or "0"
+    """The owner's number, as access.py knows it (a Telegram id, or SLACK_OWNER_ID on a Slack-only setup)."""
+    from uninotifier import access
+    raw = envcheck.value("TELEGRAM_CHAT_ID") or access.ADMIN_USER_ID or "0"
     return int(raw) if raw.lstrip("-").isdigit() else 0
 
 
