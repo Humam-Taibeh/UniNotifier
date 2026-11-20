@@ -1760,6 +1760,59 @@ def test_the_registration_page_is_read_said_and_watched():
         registration_watch.STATE_FILE, portal.fetch_many, notifier.send_png_file, notifier.send_message = keep
 
 
+def test_the_portal_menu_fallback_never_presses_an_action():
+    """When a section's address stops landing, the bot finds the page through the portal's menu — by the words of its links.
+    During the registration period those words include "تأكيد التسجيل" (confirm) and "إلغاء التسجيل" (cancel): the shortest
+    match, and an action. The bot only reads: such a link is never clicked, in any section; the plain entry is."""
+    from uninotifier import portal
+
+    class Entries:
+        def __init__(self, page, texts):
+            self.page, self.texts = page, texts
+
+        def filter(self, has_text):
+            return Entries(self.page, [t for t in self.texts if has_text.search(t)])
+
+        def all_inner_texts(self):
+            return list(self.texts)
+
+        def nth(self, n):
+            page, text = self.page, self.texts[n]
+
+            class One:
+                def click(self, timeout=None):
+                    page.clicked.append(text)
+            return One()
+
+    class Page:
+        def __init__(self, texts):
+            self.texts, self.clicked = texts, []
+
+        def locator(self, selector):
+            return Entries(self, [t for t in self.texts if t not in self.clicked])
+
+        def wait_for_load_state(self, *a, **k):
+            pass
+
+        def wait_for_timeout(self, ms):
+            pass
+
+        def evaluate(self, script):
+            return []
+
+    menu = ["تأكيد التسجيل", "إلغاء التسجيل", "Confirm registration", "التسجيل الالكتروني", "الرئيسية"]
+    page = Page(menu)
+    portal._open_section(page, portal.SECTIONS["registration"])
+    assert page.clicked and page.clicked[0] == "التسجيل الالكتروني", page.clicked
+    assert not any(portal.ACTION_WORDS.search(t) for t in page.clicked), page.clicked
+    only_actions = Page(["تأكيد التسجيل", "حذف التسجيل", "سحب وإضافة التسجيل"])
+    assert portal._open_section(only_actions, portal.SECTIONS["registration"]) is False and only_actions.clicked == []
+    for section in portal.SECTIONS.values():                  # no section's own menu words are mistaken for an action
+        for words in ("نتائج المواد", "السجل الأكاديمي", "السجل المالي", "التسجيل الالكتروني"):
+            if re.search(section["match"], words):
+                assert not portal.ACTION_WORDS.search(words), words
+
+
 def test_exempt_courses_count_as_passed_whichever_way_the_portal_totals_them():
     """A placement exam above 80% exempts you from the COURSE itself. Its hours count as PASSED: the portal does so in its own totals
     (the remedial category: 9 required, 9 passed, all exempt); if a category's passed total leaves them out, they are added and the hours

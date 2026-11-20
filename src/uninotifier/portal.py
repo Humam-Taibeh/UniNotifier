@@ -108,6 +108,13 @@ SECTIONS = {
 }
 
 
+# The bot only READS the portal. The menu fallback below clicks links by their words, so a link whose words say it
+# DOES something is never clicked, whatever section is wanted: during the registration period a page may carry
+# "تأكيد التسجيل" (confirm registration) or "إلغاء التسجيل" (cancel it) beside the menu entry that only opens it.
+ACTION_WORDS = re.compile(
+    r"تأكيد|تاكيد|إلغاء|الغاء|حذف|سحب|إضافة|اضافة|حفظ|دفع|اعتماد|إرسال|ارسال|تثبيت|موافق"
+    r"|\b(?:confirm|cancel|delete|remove|drop|withdraw|add|save|pay|submit|approve|register\s+now)\b", re.I)
+
 TIMETABLE_PAGES = 6                  # pages followed when the rows-per-page choice does not take
 
 
@@ -288,13 +295,15 @@ def login(page, username: str, password: str, ask_code) -> None:
 
 def _open_section(page, spec: dict) -> bool:
     """Click through the menu to the section: the shortest visible entry that
-    matches, then again for a sub-entry, up to three levels."""
+    matches, then again for a sub-entry, up to three levels. Never an entry whose
+    words say it does something (ACTION_WORDS) — the bot only opens pages."""
     match, skip = re.compile(spec["match"], re.I), re.compile(spec["skip"], re.I)
     clicked: set[str] = set()
     for _ in range(3):
         entries = page.locator("a:visible, .ui-menuitem-link:visible, [role=menuitem]:visible").filter(has_text=match)
         texts = [re.sub(r"\s+", " ", t).strip() for t in entries.all_inner_texts()]
-        options = [(len(t), n) for n, t in enumerate(texts) if t and t not in clicked and not skip.search(t)]
+        options = [(len(t), n) for n, t in enumerate(texts)
+                   if t and t not in clicked and not skip.search(t) and not ACTION_WORDS.search(t)]
         if not options:
             break
         _, pick = min(options)
