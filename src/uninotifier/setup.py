@@ -11,15 +11,18 @@ The first-time setup as a short conversation in the console — no file to edit.
                                                played by the setup itself, nothing contacted, nothing
                                                written — at the end it shows what WOULD be in .env
 
-install.bat runs it for a new student. It asks for five things:
+install.bat runs it for a new student. It first asks where the messages go — 1 = Slack (Enter, the
+default: it works on every network) or 2 = Telegram — then:
 
   1. the university e-mail            (the Moodle sign-in)
   2. its password                     (typed without being shown)
-  3. the Telegram bot's token         (checked with Telegram at once: the bot's name is shown)
-  4. who you are on Telegram          (found by itself: you press Start in your bot — no Id to
+  3. Slack: the app (its settings copied for you to paste), its two tokens (checked with Slack at once),
+     and you, found in the workspace — or, on Telegram, the bot's token (checked, its name shown)
+  4. on Telegram only: who you are   (found by itself: you press Start in your bot — no Id to
                                        look up; typed by hand only when that cannot be done)
   5. the registration portal login    (optional: your timetable, transcript and balance — and
-                                       whether to check you in to online lectures)
+                                       whether to check you in to online lectures, with whose
+                                       responsibility that is)
 
 What it does with the answers: writes them into .env — made from .env.example, so every
 explanation stays in the file, and an .env that already exists keeps everything else it holds —
@@ -27,8 +30,8 @@ then reads the file back with the same reader the program uses, to prove that ev
 survived (a password with # or a quote in it), and limits the file to your Windows account.
 Run it again at any time: Enter keeps what is saved.
 
-Nothing typed here is logged or shown again, and nothing is sent anywhere — except the bot's
-token to Telegram itself, which is the only way to check it.
+Nothing typed here is logged or shown again, and nothing is sent anywhere — except the tokens to
+Slack or Telegram themselves, which is the only way to check them.
 """
 
 import getpass

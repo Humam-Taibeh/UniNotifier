@@ -53,7 +53,7 @@ VARIABLES = (
         r"(?i)true|false", "true or false"),
     Var("AUTO_MARK_DONE", (), "true = a lecture file the bot saved is ticked \"Mark as done\" on Moodle for you",
         r"(?i)true|false", "true or false"),
-    Var("NOTIFY_VIA", (), "where your messages go: telegram (the default) or slack",
+    Var("NOTIFY_VIA", (), "where your messages go: slack (what the setup chooses by default) or telegram (also when empty)",
         r"(?i)telegram|slack", "telegram or slack"),
     Var("SLACK_BOT_TOKEN", (), "your Slack app's Bot User OAuth Token (OAuth & Permissions)",
         r"xoxb-[\w-]+", "a token that starts with xoxb-"),

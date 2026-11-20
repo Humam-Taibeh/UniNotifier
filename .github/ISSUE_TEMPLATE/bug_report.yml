@@ -8,7 +8,7 @@ body:
       value: |
         Thanks for taking the time to report this.
 
-        **This page is public.** Never paste your `.env`, a password, your student ID, your Telegram bot
+        **This page is public.** Never paste your `.env`, a password, your student ID, your Slack tokens (xoxb-, xapp-), a Telegram bot
         token, a healthchecks.io URL or cookies. Your Windows user name appears in file paths — replace it
         with `you` if you prefer.
 

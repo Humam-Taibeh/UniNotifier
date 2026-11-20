@@ -25,12 +25,12 @@ which can include:
    Authenticator push notification or an SMS code). **No script can
    complete this on your behalf** — it requires your phone.
 
-### Second factor from Telegram
+### Second factor from your chat
 
 When the saved session expires and Microsoft asks for verification,
-`monitor.py` relays it to Telegram (`mfa.py`) instead of failing:
+`monitor.py` relays it to your chat — Slack or Telegram (`mfa.py`) — instead of failing:
 
-| Microsoft shows | You get on Telegram |
+| Microsoft shows | You get in your chat |
 |---|---|
 | Authenticator number matching | `🔐 Microsoft Sign-in Approval` with the number (e.g. 4️⃣7️⃣) and a screenshot of the sign-in box. Enter it in Authenticator; the check carries on by itself |
 | A plain "approve" push | The same message, asking you to tap **Approve** |
@@ -317,7 +317,7 @@ there: switch it off (`false`) for a lecture you will miss.
 
 | Item | Behaviour |
 |---|---|
-| Files, folders, links, pages, labels | Ticked **automatically** once delivered; the message has a `↩️ Undo Done` button |
+| Files, folders, links (saved or resolved) | Ticked **automatically** once delivered — only with `AUTO_MARK_DONE=true` in `.env` (off by default: the tick shows in the instructor's completion report); the message has a `↩️ Undo Done` button. Without it, a `✅ Mark as Done` button |
 | Forums and other activities | Never automatic; the message has a `✅ Mark as Done` button |
 | Assignments and quizzes | **Never touched** — Moodle completes them on submission/attempt |
 
@@ -402,11 +402,14 @@ command for links — the lecture reminder is where the link is used. Links are 
 
 ### Guest look-up (`/guest`)
 
-To let someone else see what the bot does with *their* record — once, from Telegram:
+To let someone else see what the bot does with *their* record — once, from the chat:
 
-1. `/guest` (or 👤 Guest Look-up under 📜 Academic Record & Balance), then their student ID.
-2. Their portal password — the bot **deletes that message at once** and keeps the password
-   in memory only for the sign-in.
+1. `/guest` (or 👤 Guest Look-up under 📜 Academic Record & Balance).
+2. Their login. **In Slack** an app can never delete a message you typed, so the bot never asks for it
+   in the chat: 🔑 Enter Their Login opens a private Slack form (a modal) for the student ID and the
+   password — what is typed there never becomes a message, is never written to disk, and is kept in
+   memory only for the sign-in. **In Telegram** they are two messages; the bot **deletes the password
+   message at once** (and asks you to delete it by hand if Telegram does not confirm).
 3. If the portal sends them a verification code, read it from their phone and reply with it.
 4. Their record arrives in the layout of your own transcript: the screenshot with an executive
    summary — 📘 major, 🎓 cumulative GPA, 📌 status and the degree progress from **their own study
@@ -536,9 +539,8 @@ signs in again. A guest look-up never uses or replaces your session.
 
 ### Finals Watch (`/finals`)
 
-The portal is on-demand everywhere except here (and the one look at your timetable
-for automatic check-in, which you switch on yourself): while **finals mode** is on, the
-bot signs in every 30 minutes (`finals.py`) and tells you:
+While **finals mode** is on, the bot signs in every 30 minutes (`finals.py`) and tells you
+(the portal's other unattended looks are listed under *Official portal data* below):
 
 * `🎓 Grade Released` — one message per course the moment its mark appears
   (`✏️ Grade Updated` if the portal changes it), marking a retake and what it replaces;
@@ -619,9 +621,15 @@ locked into the planner as they are published (`portal_grade`), are never counte
 [portal.zuj.edu.jo](https://portal.zuj.edu.jo/faces/ui/login.xhtml) and read the page. The answer is
 **one message** — the page's screenshot with its summary (and, for a balance, every figure) in the
 caption; only a transcript's semesters follow as a single text — and the hub you came from returns
-under it as the menu. While it works the chat shows "typing…", not a status message. **Nothing is
-polled** — the portal is contacted only when you ask, except Finals Watch and the one timetable
-look of automatic check-in (again on `/check`), both of which you switch on yourself.
+under it as the menu. While it works the chat shows "typing…", not a status message.
+
+With the portal login set, the bot also looks by itself — each look one ordinary sign-in, reading only:
+the timetable once a semester (again on `/check`); Midterm Watch on `exams.zuj.edu.jo` every 15 minutes
+while it is on (`/midterms`, `exams_watch.py`); the tuition balance every 6 hours (`balance_watch.py`, told
+only when it changes); whether registration has opened every 2 hours (`registration_watch.py`, told once);
+and Finals Watch every 30 minutes while you have it on. Never while another portal request runs, and a look
+that would need a verification code is skipped. The menu fallback that finds a moved page never clicks a
+link whose words say it does something (`portal.ACTION_WORDS`: confirm, cancel, delete, add, drop, pay …).
 
 Put the login in `.env` (never in chat; it is re-read on every request, so no
 restart is needed):
@@ -692,7 +700,12 @@ grace time. Pings never raise and never delay a run by more than a few seconds.
 
 ### Who can use the bot (`access.py`)
 
-Only you. `ADMIN_USER_ID` in `.env` is your Telegram user id; an update is served only when it comes
+Only you. On Slack you are `SLACK_USER` (the setup finds it); anyone else in the workspace reaches the
+bot as `slack:<their id>` — never the owner's number — and is dropped like any stranger. With no Telegram
+id set, the Slack owner is given the number `access.SLACK_OWNER_ID`, so a Slack-only install starts (a bot
+that cannot tell who you are says so through `failsafe` before it stops).
+
+On Telegram, `ADMIN_USER_ID` in `.env` is your Telegram user id; an update is served only when it comes
 from that user (`from.id`), the sender is not a bot, and the conversation is your private chat with
 that same id. Everyone else — a stranger who found the bot, a group it was added to, a forwarded or
 channel post — is **dropped silently**: no reply, no button answer, nothing that shows the bot exists.
@@ -911,15 +924,16 @@ UniNotifier/
 ├── monitor.py, bot.py        launchers — the two scheduled tasks start these (they never change)
 ├── src/uninotifier/          the code
 │   ├── monitor/              the scheduled check: config · state · alerts · timed · items · notify · scan · run
-│   ├── bot/                  the Telegram bot: chat · views · gpa_flow · reminder_flow · portal_flow ·
-│   │                         guest_flow · finals_flow · registration_flow · update_flow · checks · app
+│   ├── bot/                  the bot (Slack or Telegram): chat · views · gpa_flow · reminder_flow · portal_flow ·
+│   │                         guest_flow · finals_flow · registration_flow · registration_watch_flow ·
+│   │                         exams_flow · balance_flow · attendance_flow · update_flow · checks · app
 │   ├── moodle.py, httpctx.py, richtext.py, media.py, activities.py, probe.py   reading Moodle, wording messages
 │   ├── archive.py, grades.py                                           the archive and marks in files
 │   ├── lectures.py, lecturelinks.py, schedule.py, reminders.py, daily.py   time-based messages (daily.py: the once-only claims)
 │   ├── tasks.py              every open task: the Upcoming Tasks list and the noon digest
 │   ├── checkin.py            automatic attendance check-in for the online lectures
 │   ├── classtable.py         your weekly timetable, read from the portal (which days are online)
-│   ├── setup.py              the first-time setup: five questions in the console, .env written and proved
+│   ├── setup.py              the first-time setup: Slack or Telegram, then a few questions; .env written and proved
 │   ├── autoschedule.py       the schedule built from it and Moodle's course list, when there is no schedule.json
 │   ├── timetable_image.py    the weekly timetable drawn as a picture and a PDF
 │   ├── gpa.py, gpa_ui.py, gradebook.py, transcript.py, portal.py, portal_pages.py, finals.py, guest.py   grades, GPA, the portal (portal_pages: its pages read, no browser)
@@ -929,8 +943,14 @@ UniNotifier/
 │   ├── watchdog.py, maintenance.py, healthcheck.py, gitsync.py          keeping itself honest; state backup
 │   ├── failsafe.py, heartbeat.py, selfheal.py, fileio.py   fail-loud alerts, the bot's pulse, its self-restart, crash-safe writes
 │   ├── telegram.py, access.py, fileids.py                 the one door to Telegram; who may use the bot; uploaded-once files
+│   ├── slack.py, slackbot.py, slackhome.py, slackfiles.py   Slack: messages and cards; the live bot (Socket Mode),
+│   │                         its Home page; the timetable uploaded once and shown from Slack's copy
+│   ├── exams.py, exams_watch.py                           Midterm Watch: the exams site, a mark the moment it appears
+│   ├── attendance.py                                      your absences per course (asked after the day's last lecture)
+│   ├── balance_watch.py, registration_watch.py            the tuition balance and the registration period, watched
+│   ├── coursenames.py                                     a course known by its Moodle id when Moodle renames it
 │   ├── envcheck.py, doctor.py                             the settings checked before a run; the setup check
-│   ├── zuj_auth.py, mfa.py, notifier.py, paths.py                      sign-in, Telegram, where files live
+│   ├── zuj_auth.py, mfa.py, notifier.py, paths.py                      sign-in, sending (Slack or Telegram), where files live
 │   └── tools/                login_refresh · send_test_message · showcase · record_pages ·
 │                             migrate_archive · tidy_archive · upload_benchmark   (python -m uninotifier.tools.<name>)
 ├── install.bat               the double-click installer (runs scripts/install.ps1)
@@ -939,12 +959,13 @@ UniNotifier/
 ├── tests/                    test_architecture.py (the runner) · support.py (the isolated home, guards,
 │                             helpers) · test_<topic>.py, one per topic; fixtures/ (a fixed tracker and timetable);
 │                             recorded/ (your real pages, kept out of Git)
-├── docs/REFERENCE.md         this file
+├── docs/REFERENCE.md         this file (docs/ROADMAP.md: what is planned; docs/slack-app-manifest.json: the Slack app)
 ├── .github/                  CI (the suite + pyflakes on Python 3.11, 3.13, 3.14 and 3.15, and the installer, on Windows),
 │                             CodeQL, dependency review on pull requests (actions pinned to commits),
 │                             Dependabot (weekly), issue forms with a privacy promise, a pull request template
 ├── requirements.txt          exact package versions (requirements-dev.txt adds pyflakes and pylint)
 ├── SECURITY.md, CONTRIBUTING.md   reporting a vulnerability privately; the rules the tests enforce
+├── DISCLAIMER.md             not official; it assists and never decides; the student's own responsibility
 ├── CODE_OF_CONDUCT.md, CHANGELOG.md   how people treat each other here; what changed in each version
 ├── .env.example, schedule.example.json   the templates — copied to .env and schedule.json (git-ignored)
 ├── assets/                   your timetable PDF / PNG (git-ignored, optional)
@@ -970,8 +991,10 @@ Telegram settings themselves are fine, sent to you (once per 6 hours, through `f
 reads the timetable itself (see *Class schedule*).
 
 **The setup** (`setup.py`, `python -m uninotifier.setup`; `install.bat` runs it for a new student) fills
-`.env` in as a conversation, so nobody edits a file: the university e-mail and its password, the bot's
-token — checked with Telegram at once, the bot's name shown — then *who you are on Telegram*, found by
+`.env` in as a conversation, so nobody edits a file. It first asks where the messages go — **Slack** (Enter,
+the default: the e-mail and password, then the Slack app made from the manifest with you, its two tokens
+checked, you found in the workspace, the optional portal login and check-in) or **Telegram**: the university
+e-mail and its password, the bot's token — checked with Telegram at once, the bot's name shown — then *who you are on Telegram*, found by
 itself from the Start you press in your bot (`getUpdates`; typed by hand only when Telegram cannot be
 reached or the bot already runs), the optional portal login, and whether to check you in to online
 lectures. Each answer is asked again until it has the shape `envcheck` expects; a password is never
@@ -1014,7 +1037,7 @@ above for update restarts.
 
 ## Moving to a new PC
 
-1. Follow the README's setup steps 1–5 (`.env` and `schedule.json` are yours to copy over by hand).
+1. Follow the README's *Install in 3 steps* (`.env` and `schedule.json` are yours to copy over by hand).
 2. With a state backup repository: `git clone <your private backup repo> data` **before** the first run,
    so the tracker, GPA plan and reminders come back (then `python -m uninotifier.gitsync --init` to keep
    backing up). Without one, the first run simply records a fresh, silent baseline.
@@ -1165,7 +1188,7 @@ old one in the weighted sum and its hours count once. A retake set by hand is le
 Commands: `/start`, `/help`, `/courses`, `/tasks`, `/remind`, `/schedule`, `/need`
 (Grade Needed), `/gpa` (GPA & Grade Hub), `/record`
 (Academic Record & Balance), `/grades`, `/transcript`, `/balance` (portal, on demand), `/register` (Registration Plan), `/update` (a new version),
-`/finals`. Only `TELEGRAM_CHAT_ID` is answered. `/check` launches `monitor.py`, which holds `monitor.lock`, so a
+`/finals`, `/midterms`, `/attendance`, `/guest`. Only you are answered (*Who can use the bot*). `/check` launches `monitor.py`, which holds `monitor.lock`, so a
 manual check and the scheduled task never overlap.
 
 Start it without a console window:

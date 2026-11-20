@@ -4,6 +4,19 @@ What is new, in plain words, for the people who use UniNotifier. The bot shows t
 does not have yet when it tells its owner that a new version is ready (newest first; one entry is
 `## YYYY-MM-DD — Title`, then the text). The full list of changes is in [CHANGELOG.md](CHANGELOG.md).
 
+## 2026-11-21 — A faster timetable, midterm marks, absences — and more privacy
+- 📅 **The weekly timetable opens at once on Slack**: it is uploaded the first time only, then shown from
+  Slack's own copy — about a third of a second instead of several seconds.
+- 📝 **Midterm Watch** (`midterms`): each midterm mark the moment it appears on the exams site, with a picture.
+- 🎒 **Absences** (`attendance`): after your last lecture the bot asks whether you went, and warns you before a
+  course's absence limit. It also tells you when your balance changes and when registration opens.
+- 🔒 **More private**: a friend's login for `guest` is typed into a private Slack form — never a chat message, never
+  saved. What you type to the bot is no longer kept on your PC.
+- ✅ **Your choice**: ticking *Mark as done* on Moodle by itself is now off unless you set `AUTO_MARK_DONE=true` in
+  `.env` — your instructor sees those ticks. Automatic check-in marks you Present whether or not you attend: switch
+  it off for a lecture you will miss. Read [DISCLAIMER.md](DISCLAIMER.md).
+- The portal is read less often by itself (your balance every 6 hours, registration every 2 hours).
+
 ## 2026-11-16 — Your messages on Slack, when Telegram is blocked
 - Telegram is blocked on some networks in Jordan. Your messages can now come on Slack instead —
   free, on your phone, the moment anything changes: run `.venv\Scripts\python -m uninotifier.setup --slack`

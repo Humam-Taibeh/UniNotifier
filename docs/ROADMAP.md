@@ -126,7 +126,7 @@ Found in the last audit and judged not worth the risk of changing without a real
   (`git config core.hooksPath .githooks`).
 - Measure before assuming: reproduce a bug against the recorded real pages or a local fake before
   changing code, and say which level a change reached: tested by the suite, run for real, or seen by
-  the owner in Telegram.
+  the owner in the chat.
 - After changing bot code, restart the scheduled task `UniNotifier_BotListener` and check it runs.
 - Docs stay true in the same change: README.md and README.ar.md together, REFERENCE.md,
   CHANGELOG.md, and NEWS.md only for what users would notice.

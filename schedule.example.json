@@ -14,7 +14,7 @@
     "  portal's own timetable by itself (needs PORTAL_USERNAME and PORTAL_PASSWORD in .env), else from ZUJ's codes in",
     "  the attendance's name, then from this file, then from the ك at the end of the Moodle course name.",
     "  It sends the proof (a screenshot); false or left out = off.",
-    "The bot checks this file whenever it changes and tells you on Telegram if something is wrong."
+    "The bot checks this file whenever it changes and tells you in your chat if something is wrong."
   ],
   "semester": "First Semester 2026/2027",
   "degree_hours": null,

@@ -7,6 +7,22 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Slack is the way in**: the setup asks where the messages go (Enter = Slack: it works on every network) and a
+  Slack-only install needs no Telegram at all. The README (English and Arabic) is written around Slack.
+- **Midterm Watch** (`/midterms`): with the portal login, the exams site (`exams.zuj.edu.jo`, the same sign-in) is
+  read every 15 minutes and each midterm mark is told as it appears or changes — with a picture, out of 100 and the
+  best mark the course can still reach; marks can be typed by hand; a summary screen; on and off.
+- **Absences, counted** (`/attendance`): after the day's last lecture the bot asks whether you went (again at 10 PM),
+  counts per course (5 allowed; blended and once-a-week courses 2; limits settable per course) and warns before a
+  course's limit; earlier absences can be entered.
+- **Balance and registration watches**: told when the tuition balance changes, and once when course registration
+  opens on the portal; a Register button reads the registration page.
+- A pinned announcement keeps its whole wording and its picture; 🖼️ Show Original brings it back.
+- `tools.resend_post` sends a forum discussion's notification again.
+- `AUTO_MARK_DONE` in `.env`: ticking *Mark as done* on Moodle by itself for saved files is now a choice.
+- `DISCLAIMER.md` (and a Disclaimer section in both READMEs): unofficial; it assists and never decides; your
+  attendance is your instructor's; your account, your responsibility.
+- A `commit-msg` hook (`core.hooksPath .githooks`): a commit names only the person who makes it.
 - Messages on Slack instead of Telegram (`NOTIFY_VIA=slack`), for a network that blocks Telegram:
   `python -m uninotifier.setup --slack` makes the Slack app with you (its settings in
   `docs/slack-app-manifest.json`, copied for pasting), checks its token, finds you and greets you there.
@@ -19,12 +35,76 @@ All notable changes to this project are documented here. The format follows
   longer, and every screen, sits in a box (Slack's container) — nothing folds under "Show more". A Slack
   that refuses a layout gets the next one down (box, coloured frame, plain text): no message is lost to
   its look. Files the bot sends land above the menu that follows them.
+- **No `schedule.json` is needed any more.** With the portal login in `.env`, the bot reads the weekly
+  timetable from the registration portal for every student (not only with automatic check-in on) and
+  builds its own schedule from it and Moodle's course list, joined by the course code
+  (`autoschedule.py`, `data/schedule.auto.json`): the course names, sections, rooms, modes, the
+  semester and the credit hours. A `schedule.json` written by hand still wins.
+- **The weekly timetable is drawn by the bot** (`timetable_image.py`): a picture and a one-page PDF
+  made from the schedule in force — a column per day, a row per time, a card per class, breaks, the
+  courses and credit hours in the header. 📅 Weekly Timetable sends them when `assets\` holds no
+  timetable of your own, and the *Timetable read from the portal* message carries the picture. A
+  `logo.png` of your own in `assets\` appears in its header; the project ships no logo.
+- **A setup that asks instead of a file to edit** (`python -m uninotifier.setup`, run by `install.bat`):
+  five short questions in the console — the university e-mail and password, the bot's token (checked
+  with Telegram at once), who you are on Telegram (found from the Start you press in your bot: no Id to
+  look up), the optional portal login and automatic check-in. It writes `.env` itself, keeps every
+  explanation and everything an existing `.env` holds, proves that every value reads back exactly, and
+  limits the file to your Windows account. The installer no longer opens Notepad or writes a
+  `schedule.json`, and after the doctor it offers to finish: the Moodle sign-in, the first check and
+  the scheduled tasks.
+- 🤖 Auto Check-In — Your Online Courses: one message, once the attendance pages are read, with every
+  online course and whether the check-in can work for it (✅, or ⚠️/⏳ with the reason: no attendance
+  activity, no online session, no session listed yet) and a button to each attendance page. Sent
+  again only when a course's state changes.
+- `python -m uninotifier.setup --demo`: the setup tried with made-up answers — nothing contacted,
+  nothing written; it shows what `.env` would hold.
+- `AUTO_CHECK_IN=true` in `.env` switches automatic attendance check-in on — the place for it when
+  there is no `schedule.json`. A `schedule.json` that sets `auto_check_in` is still obeyed.
+- The portal's timetable keeps every day it lists: a Saturday lab is shown in the timetable (the
+  check-in still counts Sunday to Wednesday only).
+- Manage Reminders: a reminder opens to its full text with Edit Text, Change Date, Change Time and Delete
+  (Delete asks first). The day picker has ✏️ Type a Date, because the buttons reach only the coming week.
+- 🔒 Assignment Closed — Not Submitted and 🗑️ Assignment Removed: told once when an assignment you
+  have not handed in stops accepting work, or is taken out of the course.
+- 🎓 Class Ended — Cambridge One: when the class has not opened for two days while the account still
+  signs in (or Cambridge answers that there is no such class), the watch stops by itself and says so
+  once — no more sign-ins or *sign in again* alerts after the course is over. `--login` turns it back on.
 
 ### Changed
-- Slack answers a press in about half the time: one connection kept open per thread (a fresh one cost
-  over a second per call), and the one-message-a-second pace applies to new messages only, not edits.
+- **The weekly timetable on Slack is uploaded once, then shown from Slack's own copy**: one message — the picture
+  and a link to the PDF — with no upload and no waiting (measured on a real workspace: 9.5 s → 0.3 s a press). A new
+  timetable is uploaded again and the old files go (`slackfiles.py`, `data/slack_files.json`).
+- One connection pool to Slack, kept open and shared by every thread (it was one per thread, so each timetable
+  press paid fresh TLS handshakes).
+- The unattended portal looks are rarer: the balance every 6 hours (was hourly), registration every 2 hours (was
+  30 minutes) — each look is a full sign-in.
+- Automatic *Mark as done* is off unless `AUTO_MARK_DONE=true` (an existing install that wants it sets it).
+- Slack screens follow one layout: title, line, the whole content, line, controls, line, Back + Main Menu; a screen
+  you leave is removed; a screen too big for one box continues in the next.
+- Finals Watch looks like Midterm Watch; notifications no longer carry a Detected time or Status line.
+- The cumulative average the bot computes is checked against the portal on every record: it is shown,
+  and feeds Grade Needed, only when the same rule gives the newest finished semester the figure the
+  portal itself prints. A record it does not reproduce gets the portal's own figure and a ⚠️ line, and
+  the Grade Needed base is left alone — never a figure that is wrong for that student.
+- A study-plan course whose status is a word the bot does not know is shown with the portal's own word
+  (❔) and is never offered in the Registration Plan; it used to be listed as a course still to take.
+- An old transcript row without a result (withdrawn, never graded) is no longer counted as *in progress*.
+- The test suite is one file per topic instead of a single 9,000-line file; it runs the same way.
 
 ### Security
+- On Slack a guest's login (`/guest`) is typed into a private Slack form — never a chat message (Slack does not let
+  an app delete one), never on disk, in memory only for the sign-in. What you type to the app is no longer written to
+  `data/slack_messages.json`.
+- The data backup adds its three files **by name**: an edited or deleted `data/.gitignore` can no longer let the
+  Microsoft sign-in cookies, the portal session or the Slack message map reach GitHub (anything else staged is taken
+  out and you are told; the `.gitignore` is put back).
+- ⬇️ Update Now installs exactly the version it was offered for — never a commit pushed after the message — and a
+  refused update puts the old packages back too.
+- The portal's menu fallback never clicks a link whose words say it does something (confirm, cancel, delete, add,
+  drop, pay …): the bot only opens pages.
+- The Cambridge One sign-in recorder hides logins, passwords and tokens in what it saves.
+- A link address taken from a Moodle page can no longer end a Slack link early, relabel it or add a `<!here>`.
 - ⬇️ Update Now refuses to install code from an address without encryption (`http://`, `git://`):
   anyone on the same network could have changed it on its way. https, ssh and a folder on the PC are
   accepted, so a student who keeps a copy of their own can still update from it.
@@ -34,6 +114,15 @@ All notable changes to this project are documented here. The format follows
 - `SECURITY.md` says what is kept, where, and who can see it.
 
 ### Fixed
+- A Slack-only install now starts: with no Telegram id the Slack owner gets the owner's number; a bot that cannot
+  tell who you are says so before it stops (it used to exit silently).
+- Slack removes older copies only of the answers that are one living copy (portal answers, the timetable) — never
+  last week's attendance proof or another course's file with the same name; the message file is no longer locked
+  while Slack is asked (another process could take the lock and undo a save); a message Slack took is never
+  reported unsent, so never sent twice.
+- An announcement's kept pictures go when it leaves the remembered list.
+- Slack: a student ID typed is read as typed (Slack had made it a link); Show Original sends its picture with its
+  words and the post's whole page.
 - A message whose sender was stopped half-way (the bot restarted, an update, a power cut) is no longer
   held back for up to a week: a claim taken before a send records its process and is confirmed once the
   message is out; one left by a process that is gone is taken over and the message goes out on the next
@@ -82,53 +171,6 @@ All notable changes to this project are documented here. The format follows
 - A long file name is never cut so that it ends in a space or a dot (Windows drops those).
 - A nameless Moodle item or deadline is called "Untitled" (it was the Arabic "بدون اسم").
 - The portal-setup and verification-code messages say when the portal is really contacted, in full sentences.
-
-### Added
-- **No `schedule.json` is needed any more.** With the portal login in `.env`, the bot reads the weekly
-  timetable from the registration portal for every student (not only with automatic check-in on) and
-  builds its own schedule from it and Moodle's course list, joined by the course code
-  (`autoschedule.py`, `data/schedule.auto.json`): the course names, sections, rooms, modes, the
-  semester and the credit hours. A `schedule.json` written by hand still wins.
-- **The weekly timetable is drawn by the bot** (`timetable_image.py`): a picture and a one-page PDF
-  made from the schedule in force — a column per day, a row per time, a card per class, breaks, the
-  courses and credit hours in the header. 📅 Weekly Timetable sends them when `assets\` holds no
-  timetable of your own, and the *Timetable read from the portal* message carries the picture. A
-  `logo.png` of your own in `assets\` appears in its header; the project ships no logo.
-- **A setup that asks instead of a file to edit** (`python -m uninotifier.setup`, run by `install.bat`):
-  five short questions in the console — the university e-mail and password, the bot's token (checked
-  with Telegram at once), who you are on Telegram (found from the Start you press in your bot: no Id to
-  look up), the optional portal login and automatic check-in. It writes `.env` itself, keeps every
-  explanation and everything an existing `.env` holds, proves that every value reads back exactly, and
-  limits the file to your Windows account. The installer no longer opens Notepad or writes a
-  `schedule.json`, and after the doctor it offers to finish: the Moodle sign-in, the first check and
-  the scheduled tasks.
-- 🤖 Auto Check-In — Your Online Courses: one message, once the attendance pages are read, with every
-  online course and whether the check-in can work for it (✅, or ⚠️/⏳ with the reason: no attendance
-  activity, no online session, no session listed yet) and a button to each attendance page. Sent
-  again only when a course's state changes.
-- `python -m uninotifier.setup --demo`: the setup tried with made-up answers — nothing contacted,
-  nothing written; it shows what `.env` would hold.
-- `AUTO_CHECK_IN=true` in `.env` switches automatic attendance check-in on — the place for it when
-  there is no `schedule.json`. A `schedule.json` that sets `auto_check_in` is still obeyed.
-- The portal's timetable keeps every day it lists: a Saturday lab is shown in the timetable (the
-  check-in still counts Sunday to Wednesday only).
-- Manage Reminders: a reminder opens to its full text with Edit Text, Change Date, Change Time and Delete
-  (Delete asks first). The day picker has ✏️ Type a Date, because the buttons reach only the coming week.
-- 🔒 Assignment Closed — Not Submitted and 🗑️ Assignment Removed: told once when an assignment you
-  have not handed in stops accepting work, or is taken out of the course.
-- 🎓 Class Ended — Cambridge One: when the class has not opened for two days while the account still
-  signs in (or Cambridge answers that there is no such class), the watch stops by itself and says so
-  once — no more sign-ins or *sign in again* alerts after the course is over. `--login` turns it back on.
-
-### Changed
-- The cumulative average the bot computes is checked against the portal on every record: it is shown,
-  and feeds Grade Needed, only when the same rule gives the newest finished semester the figure the
-  portal itself prints. A record it does not reproduce gets the portal's own figure and a ⚠️ line, and
-  the Grade Needed base is left alone — never a figure that is wrong for that student.
-- A study-plan course whose status is a word the bot does not know is shown with the portal's own word
-  (❔) and is never offered in the Registration Plan; it used to be listed as a course still to take.
-- An old transcript row without a result (withdrawn, never graded) is no longer counted as *in progress*.
-- The test suite is one file per topic instead of a single 9,000-line file; it runs the same way.
 
 ## [1.1.0] - 2026-11-11
 
@@ -205,6 +247,8 @@ All notable changes to this project are documented here. The format follows
 - The optional morning overview (`morning_summary_hour` in `schedule.json`): it was off by default,
   listed online lectures only and duplicated the reminder an hour before each one. A `schedule.json`
   that still has the line is told so on Telegram — delete the line.
+- The Lecture Links screen and `/setlink`: a meeting link only matters on the lecture alert, which finds
+  it in the course by itself.
 
 ### Fixed
 - An assignment whose due date had already passed when it appeared (a date left over from last year's

@@ -1,5 +1,5 @@
 """
-UniNotifier — the always-on Telegram bot.
+UniNotifier — the always-on bot (in Slack or Telegram).
 
 Windows Task Scheduler (task "UniNotifier_BotListener") starts this file at logon. The code lives in src/uninotifier/bot; this file only
 puts src/ on the import path and starts it, so the scheduled task never needs
