@@ -841,8 +841,32 @@ def _signed_in(url: str, target: str) -> bool:
     return urlsplit(url).path.startswith(urlsplit(target).path.rsplit("/", 1)[0])
 
 
+SECRET_KEY = re.compile(r"pass|token|secret|session|cookie|ticket|jwt|auth|login_?id|e-?mail|uid|signature", re.I)
+
+
+def scrub(text: str) -> str:
+    """A recorded request or answer with every secret hidden: the sign-in form's login and password, the tokens
+    the answer hands back (JSON, or a form body "a=1&password=..."), then notifier.redact for anything left."""
+    def hide(value):
+        if isinstance(value, dict):
+            return {k: ("<hidden>" if SECRET_KEY.search(str(k)) and not isinstance(v, (dict, list)) else hide(v))
+                    for k, v in value.items()}
+        if isinstance(value, list):
+            return [hide(v) for v in value]
+        return value
+    try:
+        return json.dumps(hide(json.loads(text)), ensure_ascii=False, indent=1)
+    except ValueError:
+        pass
+    from urllib.parse import parse_qsl, urlencode
+    pairs = parse_qsl(text, keep_blank_values=True)
+    if pairs and "=" in text and "\n" not in text.strip():
+        text = urlencode([(k, "<hidden>" if SECRET_KEY.search(k) else v) for k, v in pairs], safe="<>")
+    return notifier.redact(text)
+
+
 class _Recorder:
-    """Keeps every JSON answer the page receives, with how it was asked (header names only)."""
+    """Keeps every JSON answer the page receives, with how it was asked (header names only) — secrets hidden."""
 
     def __init__(self, folder: Path):
         self.folder = folder
@@ -886,10 +910,10 @@ class _Recorder:
         entry["bytes"] = len(body)
         if body and "json" in kind and len(body) <= MAX_BODY_BYTES:
             name = f"{entry['n']:03d}.json"
-            (self.folder / name).write_bytes(body)
+            (self.folder / name).write_text(scrub(body.decode("utf-8", "replace")), encoding="utf-8")
             entry["file"] = name
             if request.post_data and len(request.post_data) <= MAX_BODY_BYTES:
-                (self.folder / f"{entry['n']:03d}.request.txt").write_text(request.post_data, encoding="utf-8")
+                (self.folder / f"{entry['n']:03d}.request.txt").write_text(scrub(request.post_data), encoding="utf-8")
         self.index.append(entry)
 
     def save(self) -> None:

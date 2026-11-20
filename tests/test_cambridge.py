@@ -572,3 +572,18 @@ def test_cambridge_stops_by_itself_when_the_class_ends():
                     os.environ.pop(key, None)
                 else:
                     os.environ[key] = value
+
+
+def test_the_sign_in_recorder_keeps_no_secret():
+    """--login records what the page asks and gets (to learn the feed). The sign-in form's login and password and the
+    tokens Cambridge hands back must never land in data/cambridge_recon/ — only the shape and the ordinary fields."""
+    from uninotifier import cambridge
+    form = "loginID=student%40example.com&password=Very-Secret-1&apiKey=k1&include=profile"
+    kept = cambridge.scrub(form)
+    assert "Very-Secret-1" not in kept and "student" not in kept and "include=profile" in kept, kept
+    answer = json.dumps({"sessionInfo": {"cookieName": "glt_1", "cookieValue": "st2.secret-value"},
+                         "UID": "abc123", "profile": {"email": "student@example.com", "firstName": "Sam"},
+                         "assignmentsData": {"entities": [{"title": "Unit 1", "duedate": 1}]}})
+    kept = cambridge.scrub(answer)
+    assert "st2.secret-value" not in kept and "abc123" not in kept and "student@example.com" not in kept, kept
+    assert json.loads(kept)["assignmentsData"]["entities"][0]["title"] == "Unit 1" and "Sam" in kept
