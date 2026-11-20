@@ -1,9 +1,13 @@
 """
-Guest look-up: another student's record, once — their ID, their password
-(deleted from the chat at once), their verification code, then their record
-in the same layout as your own transcript (with their major); 🎯 Target GPA shows
-the average they need for a goal; 🚪 Sign Out clears the session. Nothing is stored
-or synced.
+Guest look-up: another student's record, once — their ID, their password, their
+verification code, then their record in the same layout as your own transcript
+(with their major); 🎯 Target GPA shows the average they need for a goal; 🚪 Sign Out
+clears the session. Nothing is stored or synced.
+
+Where the login is typed: on Telegram as two messages (the password one deleted at once).
+On Slack an app can never delete your message, so the login is typed into a private
+Slack form instead (slackbot opens it): it never becomes a chat message, is never written
+to disk, and lives in memory only for the sign-in.
 """
 
 import json
@@ -23,6 +27,7 @@ from uninotifier import portal_pages
 from uninotifier import registration
 from uninotifier import schedule
 from uninotifier import slack
+from uninotifier import slackbot
 from uninotifier import transcript
 from uninotifier.bot import chat, portal_flow
 from uninotifier.notifier import escape_md
@@ -95,7 +100,7 @@ def delete_password_message(message_id: int | None) -> bool:
 def drop_pending() -> None:
     """A guest look-up still asking for the ID or the password is dropped, what was typed taken out of the chat
     (a finished look-up stays until Sign Out)."""
-    if _guest.get("step") in ("user", "password", "target"):
+    if _guest.get("step") in ("user", "password", "target", "form"):
         for message_id in _guest.get("messages", []):
             chat.api("deleteMessage", chat_id=chat.CHAT_ID, message_id=message_id)
         _guest.clear()
@@ -115,15 +120,44 @@ def handle_expired_prompt(text: str, message_id: int | None) -> bool:
     return True
 
 
+FORM_ACTION = "guest:form"                # Slack: the button that opens the private login form
+FORM_ROW = [{"text": "🔑 Enter Their Login", "callback_data": FORM_ACTION}]
+
+
 def start_guest() -> None:
     if _guest.get("step") == "running":
         chat.send_view("⏳ *A guest look-up is already running.*", [chat.BACK_ROW])
         return
     _guest.clear()
+    if slackbot.interactive():                # Slack cannot delete a typed password: a private form instead
+        _guest.update(step="form", at=time.time(), messages=[])
+        guest_send("👤 *Guest Look-up*\n\nAnother student's record from the registration portal — once, "
+                   "nothing stored, no alerts, nothing of yours touched.\n\nPress *🔑 Enter Their Login*: "
+                   "a private form opens. What is typed there never becomes a chat message and is never "
+                   "saved.", [FORM_ROW, GUEST_CANCEL_ROW])
+        return
     _guest.update(step="user", at=time.time(), messages=[])
     guest_send("👤 *Guest Look-up*\n\nAnother student's record from the registration portal — once, "
                "nothing stored, no alerts, nothing of yours touched.\n\nSend their *student ID* "
                "(portal username).", [GUEST_CANCEL_ROW])
+
+
+def login_from_form(user: str, password: str) -> None:
+    """Slack: the login typed in the private form (slackbot hands it over; it is never stored)."""
+    if _guest.get("step") != "form" or time.time() - _guest.get("at", 0) > GUEST_TIMEOUT:
+        _guest.clear()
+        chat.send_view("⌛ *That guest look-up had ended* — start again with /guest.", [chat.BACK_ROW])
+        return
+    user = (user or "").strip()
+    if not re.fullmatch(r"\w{4,20}", user) or not password:
+        guest_send("⚠️ That doesn't look like a student ID and password — press the button and try again.",
+                   [FORM_ROW, GUEST_CANCEL_ROW])
+        return
+    if not portal_flow._portal_lock.acquire(blocking=False):
+        guest_send("⏳ A portal request is already running — try again in a minute.", [FORM_ROW, GUEST_CANCEL_ROW])
+        return
+    _guest.update(step="running", user=user)
+    threading.Thread(target=run_guest, args=(user, password), daemon=True).start()
 
 
 def handle_guest_text(text: str, message_id: int | None) -> None:
@@ -333,6 +367,8 @@ def handle_guest_callback(cb: dict, action: str) -> None:
     if kind == "start":
         start_guest()
         return
+    if kind == "form":
+        return                                              # Slack opens the form itself, at the press (slackbot)
     if _guest.get("step") == "running":
         return                                              # finishes by itself, then offers 🚪
     if kind in ("target", "t", "tcustom", "back"):

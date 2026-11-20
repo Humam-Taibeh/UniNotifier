@@ -482,10 +482,69 @@ def from_event(event: dict) -> list[dict]:
         return []                                         # the app's own messages, edits, joins
     text = unlink(event.get("text") or "")
     sender, chat = _person(event.get("user", ""))
-    number = remember(event.get("ts", ""), text) if sender["id"] == _chat_id() else 0
+    # what you type is numbered (to take it away later) but its words are never written to disk: a verification
+    # code or anything else private you send must not sit in data/slack_messages.json
+    number = remember(event.get("ts", "")) if sender["id"] == _chat_id() else 0
     return [{"update_id": _update_id(),
              "message": {"message_id": number, "from": sender, "chat": chat,
                          "date": int(float(event.get("ts") or time.time())), "text": command(text)}}]
+
+
+# ------------------------------------------------------------------ the guest's private login form
+
+GUEST_FORM = "guest:form"            # the button's value (guest_flow.FORM_ACTION)
+GUEST_VIEW = "guest_login"           # the form's callback_id
+
+
+def guest_form() -> dict:
+    """The private form a guest's portal login is typed into: a Slack modal — what is typed there is sent to the
+    app once and never becomes a message in the chat (an app cannot delete a message you typed)."""
+    def field(block_id: str, label: str, hint: str) -> dict:
+        return {"type": "input", "block_id": block_id, "label": {"type": "plain_text", "text": label},
+                "element": {"type": "plain_text_input", "action_id": block_id,
+                            "placeholder": {"type": "plain_text", "text": hint}}}
+    return {"type": "modal", "callback_id": GUEST_VIEW,
+            "title": {"type": "plain_text", "text": "Guest Look-up"},
+            "submit": {"type": "plain_text", "text": "Sign In"},
+            "close": {"type": "plain_text", "text": "Cancel"},
+            "blocks": [{"type": "section", "text": {"type": "mrkdwn", "text":
+                        "Their registration portal login. It is used once for this look-up, kept in memory "
+                        "only, and never saved or shown in the chat."}},
+                       field("user", "Student ID", "their portal username"),
+                       field("password", "Password", "their portal password")]}
+
+
+def _opens_guest_form(payload: dict) -> bool:
+    """A press of 🔑 Enter Their Login: the form opens at once (Slack's trigger lasts 3 seconds — too short to wait
+    for the bot's queue). True when the press was that (and was handled here)."""
+    if payload.get("type") != "block_actions" or not any(
+            (a.get("value") == GUEST_FORM) for a in payload.get("actions") or []):
+        return False
+    if (payload.get("user") or {}).get("id") != owner():
+        return False                                      # someone else: from_press turns it away as any stranger's press
+    token, _ = _settings()
+    slack.call(token, "views.open", {"trigger_id": payload.get("trigger_id", ""),
+                                     "view": json.dumps(guest_form(), ensure_ascii=False)})
+    return True
+
+
+def _form_submitted(payload: dict) -> None:
+    """The guest form sent: the login goes straight to the guest look-up, in memory — never remembered, logged or
+    queued with the chat's updates. A stranger's form (one could not even open it) is turned away."""
+    view = payload.get("view") or {}
+    if view.get("callback_id") != GUEST_VIEW:
+        return
+    user = (payload.get("user") or {}).get("id", "")
+    if user != owner():
+        from uninotifier import access
+        sender, chat = _person(user)
+        access.deny({"message": {"from": sender, "chat": chat}})
+        return
+    values = (view.get("state") or {}).get("values") or {}
+    login = ((values.get("user") or {}).get("user") or {}).get("value") or ""
+    secret = ((values.get("password") or {}).get("password") or {}).get("value") or ""
+    from uninotifier.bot import guest_flow
+    threading.Thread(target=guest_flow.login_from_form, args=(login, secret), name="guest-form", daemon=True).start()
 
 
 def take(kind: str, payload: dict) -> None:
@@ -496,6 +555,11 @@ def take(kind: str, payload: dict) -> None:
             if event.get("tab") == "home" and event.get("user") == owner() and _home_stale():
                 threading.Thread(target=_home_menu_quietly, name="slack-home", daemon=True).start()
             return
+        if kind == "interactive" and payload.get("type") == "view_submission":
+            _form_submitted(payload)
+            return
+        if kind == "interactive" and _opens_guest_form(payload):
+            return
         if kind == "interactive":
             updates = from_press(payload)
         elif kind == "events_api":
@@ -504,8 +568,11 @@ def take(kind: str, payload: dict) -> None:
             updates = []
         for update in updates:
             _events.put(update)
-    except Exception:
-        log.exception("Slack: could not read what Slack sent")
+    except Exception as e:                       # never the traceback's text: a form's payload holds a password
+        log.error("Slack: could not read what Slack sent (%s)", type(e).__name__)
+        from uninotifier import failsafe
+        failsafe.report(f"bot:slack-take:{type(e).__name__}", "A press or message from Slack could not be read",
+                        detail=f"{type(e).__name__} — the bot keeps running; press the button again.", wait=False)
 
 
 def _connect() -> None:

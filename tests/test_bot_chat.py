@@ -1081,6 +1081,111 @@ def test_the_bot_lives_in_slack():
             slack._post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, slack.SHARE_WAIT = keep
             bot.CHAT_ID, access.ADMIN_USER_ID = owner
 
+def test_a_guest_login_in_slack_is_typed_in_a_private_form():
+    """Slack never lets an app delete a message you typed, so on Slack a guest's portal login is never typed into
+    the chat: /guest shows 🔑 Enter Their Login, the press opens a private form (a Slack modal) at once, and what is
+    sent from it goes straight to the sign-in, in memory — never into data/slack_messages.json, a log, or the chat.
+    Only the owner can use it; what anyone types to the app is numbered without its words."""
+    from support import OWNER_ID as OWNER, _with_env
+    from uninotifier import slack, slackbot
+    guest_flow = importlib.import_module("uninotifier.bot.guest_flow")
+    bot = _package("uninotifier.bot")
+    calls, stamps, started = [], iter(f"17100000{n:02d}.0001" for n in range(1, 99)), []
+
+    class Answer:
+        status_code, ok, headers = 200, True, {}
+
+        def __init__(self, body):
+            self._body = body
+
+        def json(self):
+            return self._body
+
+    def fake_post(url, data=None, timeout=None, headers=None):
+        method = url.rsplit("/", 1)[-1]
+        calls.append((method, data))
+        return Answer({"ok": True, "ts": next(stamps)} if method == "chat.postMessage" else {"ok": True})
+
+    def no_telegram(*a, **k):
+        raise AssertionError("Telegram must not be used while the bot lives in Slack")
+
+    keep = (slack._post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, guest_flow.run_guest,
+            guest_flow.threading.Thread)
+    owner = _as_owner(bot)
+    on = {"NOTIFY_VIA": "slack", "SLACK_BOT_TOKEN": "-".join(("xoxb", "1", "2", "made-up")), "SLACK_CHANNEL": "D0123ABCD",
+          "SLACK_APP_TOKEN": "-".join(("xapp", "1", "made-up")), "SLACK_USER": "U0OWNER1", "TELEGRAM_CHAT_ID": OWNER}
+
+    class Inline:                                           # the sign-in thread, run at once (and recorded)
+        def __init__(self, target=None, args=(), **k):
+            self.target, self.args = target, args
+
+        def start(self):
+            self.target(*self.args)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            slack._post, telegram.request, slack.MIN_INTERVAL = fake_post, no_telegram, 0
+            slackbot.STORE, slackbot._connect = Path(tmp) / "slack_messages.json", lambda: None
+            guest_flow.run_guest = lambda user, password: started.append((user, password))
+            guest_flow.threading.Thread = Inline
+
+            def scenario():
+                secret = "Gu3st-S3cret!"
+                guest_flow._guest.clear()
+                guest_flow.start_guest()
+                card = next(d for m, d in calls if m == "chat.postMessage")
+                assert "Enter Their Login" in card["blocks"] and "Send their *student ID*" not in card["text"]
+                assert guest_flow._guest["step"] == "form"
+                # a typed message never asks for the password, and its words are not kept
+                slackbot.take("events_api", {"event": {"type": "message", "channel_type": "im", "user": "U0OWNER1",
+                                                       "text": "123456", "ts": "1710000099.1"}})
+                typed = slackbot.get_updates(None, 0)[0]["message"]
+                assert typed["text"] == "123456" and slackbot.entry(typed["message_id"])["text"] == "", \
+                    "numbered, but the words are not written to disk"
+                # the press opens the form at once (not through the bot's queue: Slack's trigger lasts 3 s)
+                calls.clear()
+                slackbot.take("interactive", {"type": "block_actions", "user": {"id": "U0OWNER1"}, "trigger_id": "T-1",
+                                              "container": {"message_ts": "1710000001.0001"},
+                                              "actions": [{"action_id": "b0_0", "value": "guest:form", "action_ts": "2.1"}]})
+                opened = [d for m, d in calls if m == "views.open"]
+                assert opened and opened[0]["trigger_id"] == "T-1" and slackbot.get_updates(None, 0) == []
+                form = json.loads(opened[0]["view"])
+                assert form["type"] == "modal" and form["callback_id"] == slackbot.GUEST_VIEW
+                assert [b["block_id"] for b in form["blocks"] if b["type"] == "input"] == ["user", "password"]
+                # someone else in the workspace: no form, and their press is a stranger's
+                calls.clear()
+                slackbot.take("interactive", {"type": "block_actions", "user": {"id": "U0STRANGER"}, "trigger_id": "T-2",
+                                              "container": {"message_ts": "1710000001.0001"},
+                                              "actions": [{"action_id": "b0_0", "value": "guest:form", "action_ts": "2.2"}]})
+                assert not [m for m, _ in calls if m == "views.open"]
+                assert not access.is_owner(slackbot.get_updates(None, 0)[0])
+                # a stranger's form is turned away; the owner's goes straight to the sign-in
+                submitted = {"type": "view_submission", "view": {"callback_id": slackbot.GUEST_VIEW, "state": {"values": {
+                    "user": {"user": {"value": " 209900002 "}}, "password": {"password": {"value": secret}}}}}}
+                slackbot.take("interactive", {**submitted, "user": {"id": "U0STRANGER"}})
+                assert started == []
+                slackbot.take("interactive", {**submitted, "user": {"id": "U0OWNER1"}})
+                assert started == [("209900002", secret)] and guest_flow._guest["step"] == "running"
+                assert slackbot.get_updates(None, 0) == [], "the login never joins the chat's updates"
+                stored = slackbot.STORE.read_text(encoding="utf-8")
+                assert secret not in stored and "209900002" not in stored, "nothing of the login on disk"
+                assert not any(secret in json.dumps(d, ensure_ascii=False) for _, d in calls), "... nor sent to the chat"
+                # a form sent after the look-up ended is not used
+                guest_flow._guest.clear()
+                started.clear()
+                slackbot.take("interactive", {**submitted, "user": {"id": "U0OWNER1"}})
+                assert started == []
+
+            _with_env(on, scenario)
+        finally:
+            (slack._post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, guest_flow.run_guest,
+             guest_flow.threading.Thread) = keep
+            bot.CHAT_ID, access.ADMIN_USER_ID = owner
+            guest_flow._guest.clear()
+            if guest_flow.portal_flow._portal_lock.locked():
+                guest_flow.portal_flow._portal_lock.release()
+
+
 def test_the_slack_home_page_is_a_dashboard():
     """The main menu on Slack's Home page shows today, what is due soon and the next reminders, then
     the buttons — read from the bot's own files, every button with an id of its own (Slack refuses a
