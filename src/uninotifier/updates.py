@@ -164,13 +164,30 @@ def check(send, now: float | None = None, root: Path | None = None) -> dict | No
     state["checked"] = now
     if found and found["behind"] and state.get("told") != found["sha"]:
         if send(message(found), ROWS):
-            state["told"] = found["sha"]
+            state["told"] = state["offered"] = found["sha"]
             log.info("Update: told about %s (%d commits behind)", found["sha"][:7], found["behind"])
+    _save(state)
+    return found
+
+
+def _save(state: dict) -> None:
     try:
         fileio.write_json_atomic(STATE_FILE, state)
     except OSError:
         log.warning("Update: could not save the check's state")
-    return found
+
+
+def offer(sha: str) -> None:
+    """The version an ⬇️ Update Now button stands for (the daily message, or /update): that one — the version
+    whose news you read — is what the press installs, never something pushed after it."""
+    state = load()
+    state["offered"] = sha
+    _save(state)
+
+
+def offered() -> str | None:
+    sha = load().get("offered")
+    return sha if isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{40}", sha) else None
 
 
 # ---------------------------------------------------------------- the update
@@ -186,11 +203,13 @@ def source(root: Path | None = None) -> str | None:
     return _out("remote", "get-url", upstream.split("/", 1)[0], root=root)
 
 
-def apply(root: Path | None = None, python: str | None = None) -> str:
+def apply(root: Path | None = None, python: str | None = None, expected: str | None = None) -> str:
     """Bring this copy to the remote version. Returns one line about what was done; raises
     UpdateError with the reason when nothing was changed (the copy is as it was).
     Code is installed only from an address that is protected on its way here (https, ssh, or a
-    folder on this PC): one over plain http:// or git:// is refused before anything is fetched."""
+    folder on this PC): one over plain http:// or git:// is refused before anything is fetched.
+    `expected` (the version the button was offered for): exactly that commit is installed — never one
+    pushed after the message was read — and only while it is still part of the remote branch."""
     root = root or paths.ROOT
     if not is_clone(root):
         raise UpdateError("this copy was not cloned with git — download the new ZIP as the README's *Updating* says")
@@ -206,25 +225,40 @@ def apply(root: Path | None = None, python: str | None = None) -> str:
     old = _out("rev-parse", "HEAD", root=root)
     if not old or _out("fetch", "--quiet", root=root) is None:
         raise UpdateError("GitHub could not be reached — try again later")
-    if _out("rev-list", "--count", "HEAD..@{u}", root=root) == "0":
+    target = "@{u}"
+    if expected:
+        if _out("merge-base", "--is-ancestor", expected, "@{u}", root=root) is None:
+            raise UpdateError("the version I offered is no longer the one on GitHub — send /update to see the new one")
+        target = expected
+    if _out("rev-list", "--count", f"HEAD..{target}", root=root) == "0":
         return "Already on the newest version."
-    if _out("merge", "--ff-only", "--quiet", "@{u}", root=root) is None:
+    if _out("merge", "--ff-only", "--quiet", target, root=root) is None:
         raise UpdateError("this copy has commits of its own — update by hand with `git pull`")
+    requirements_changed = bool(_out("diff", "--name-only", old, "HEAD", "--", "requirements.txt", root=root))
+
+    def pip_install() -> subprocess.CompletedProcess:
+        return gitsync.run_bounded([python or sys.executable, "-m", "pip", "install", "--quiet",
+                                    "--disable-pip-version-check", "-r", "requirements.txt"], INSTALL_TIMEOUT, cwd=root)
 
     def back(reason: str) -> UpdateError:
         _out("reset", "--hard", "--quiet", old, root=root)          # the copy was clean: nothing of yours is lost
+        if requirements_changed:                                    # ... and its own packages again, not the new ones
+            try:
+                pip_install()
+            except (OSError, subprocess.TimeoutExpired):
+                log.warning("Update: the old requirements could not be put back — run `pip install -r requirements.txt`")
         return UpdateError(reason + " — the copy is back on the version it had")
 
-    if _out("diff", "--name-only", old, "HEAD", "--", "requirements.txt", root=root):
+    if requirements_changed:
         try:
-            installed = gitsync.run_bounded([python or sys.executable, "-m", "pip", "install", "--quiet",
-                                             "--disable-pip-version-check", "-r", "requirements.txt"],
-                                            INSTALL_TIMEOUT, cwd=root)
+            installed = pip_install()
         except (OSError, subprocess.TimeoutExpired):
             raise back("the new requirements could not be installed") from None
         if installed.returncode != 0:
             log.error("Update: pip failed: %s", installed.stderr.strip()[-400:])
             raise back("the new requirements could not be installed")
+    if expected and _out("rev-parse", "HEAD", root=root) != expected:
+        raise back("the copy did not land on the version I offered")
         try:                                # a new Playwright needs its own Chromium; nothing to do when it is there
             gitsync.run_bounded([python or sys.executable, "-m", "playwright", "install", "chromium"],
                                 INSTALL_TIMEOUT, cwd=root)

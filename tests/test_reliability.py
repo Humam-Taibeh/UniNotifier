@@ -162,8 +162,19 @@ def test_new_versions_and_news():
             except updates.UpdateError as e:
                 assert "`bot.py`" in str(e) and "git pull" in str(e)
             git(copy, "checkout", "--quiet", "--", "bot.py")
-            assert updates.apply(copy).startswith("Updated to `")
+            # Update Now installs the version it was offered for — never a commit pushed after the message was read
+            assert updates.offered() == found["sha"], "the daily message records the version its button stands for"
+            (origin / "later.py").write_text("print('pushed after the message')\n", encoding="utf-8")
+            git(origin, "add", "-A"); git(origin, "commit", "--quiet", "-m", "feat: pushed after the message")
+            assert updates.apply(copy, expected=updates.offered()).startswith("Updated to `")
+            assert git(copy, "rev-parse", "HEAD") == found["sha"] and not (copy / "later.py").exists()
             assert (copy / "bot.py").read_text(encoding="utf-8") == "print('two')\n"
+            try:                                                  # an offered version GitHub no longer has: refused
+                updates.apply(copy, expected="f" * 40)
+                raise AssertionError("a version that is not on the remote branch must be refused")
+            except updates.UpdateError as e:
+                assert "no longer the one on GitHub" in str(e)
+            assert updates.apply(copy).startswith("Updated to `") and (copy / "later.py").exists()
             assert updates.apply(copy) == "Already on the newest version."
 
             # a version that would not start is taken back

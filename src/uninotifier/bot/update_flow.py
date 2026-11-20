@@ -46,6 +46,7 @@ def view_status() -> tuple[str, list]:
         return text, [chat.BACK_ROW]
     if not found["behind"]:
         return "✅ *You are on the newest version.*", [chat.BACK_ROW]
+    updates.offer(found["sha"])                     # the button installs the version this screen describes
     return updates.message(found), updates.ROWS + [chat.BACK_ROW]
 
 
@@ -65,7 +66,7 @@ def restart() -> None:
 
 def run_update(message_id: int | None) -> None:
     try:
-        done = updates.apply()
+        done = updates.apply(expected=updates.offered())
     except updates.UpdateError as e:
         chat.send_view(f"⚠️ *Not updated* — {e}.", [chat.BACK_ROW])
         return

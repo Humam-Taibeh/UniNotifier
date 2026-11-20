@@ -660,7 +660,7 @@ def test_update_now_in_the_chat():
         assert "OK" in answers[-1] and edits[-1].startswith("⏰ *Update postponed*")
 
         # ⬇️ Update Now, refused: the reason, the lock given back
-        def refuse(root=None):
+        def refuse(root=None, expected=None):
             raise updates.UpdateError("you changed project files yourself (`bot.py`)")
         updates.apply = refuse
         update_flow.handle_callback({"id": "b"}, "update:now", 6)
@@ -668,7 +668,7 @@ def test_update_now_in_the_chat():
         assert not update_flow._busy.locked(), "a refused update frees the button"
 
         # ... a bug: told, logged, the bot keeps running
-        updates.apply = lambda root=None: 1 / 0
+        updates.apply = lambda root=None, expected=None: 1 / 0
         bugs, keep_bug = [], update_flow.failsafe.bug
         update_flow.failsafe.bug = lambda area, headline, exc, detail="": bugs.append(area) or True
         try:
@@ -679,12 +679,12 @@ def test_update_now_in_the_chat():
 
         # ... already up to date: no restart
         update_flow.restart = lambda: restarts.append(1)
-        updates.apply = lambda root=None: "Already on the newest version."
+        updates.apply = lambda root=None, expected=None: "Already on the newest version."
         update_flow.handle_callback({"id": "d"}, "update:now", 6)
         assert screens[-1][0] == "✅ Already on the newest version." and restarts == []
 
         # ... installed: said, then the restart
-        updates.apply = lambda root=None: "Updated to `abc1234`."
+        updates.apply = lambda root=None, expected=None: "Updated to `abc1234`."
         update_flow.handle_callback({"id": "e"}, "update:now", 6)
         assert "restarts now" in screens[-1][0] and restarts == [1]
 
