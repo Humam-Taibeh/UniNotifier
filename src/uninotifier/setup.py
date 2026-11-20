@@ -260,6 +260,8 @@ def _ask_portal(console: Console, values: dict[str, str], saved) -> None:
                                      saved("PORTAL_USERNAME"), optional=True)
     if values["PORTAL_USERNAME"]:
         values["PORTAL_PASSWORD"] = _ask(console, "PORTAL_PASSWORD", "Portal password", saved("PORTAL_PASSWORD"), secret=True)
+        console.say("     Automatic check-in marks you Present whether or not you attend - your responsibility;")
+        console.say("     your attendance is always what your instructor decides (see DISCLAIMER.md).")
         on = _yes(console, "Check you in to your ONLINE lectures automatically (with a screenshot as proof)?",
                   saved("AUTO_CHECK_IN").lower() == "true")
         values["AUTO_CHECK_IN"] = "true" if on else "false"
