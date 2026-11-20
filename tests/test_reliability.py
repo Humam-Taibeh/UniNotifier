@@ -177,6 +177,25 @@ def test_new_versions_and_news():
             assert updates.apply(copy).startswith("Updated to `") and (copy / "later.py").exists()
             assert updates.apply(copy) == "Already on the newest version."
 
+            # new requirements: installed, then Playwright's own browser refreshed (pip and playwright faked here)
+            from uninotifier import gitsync
+            import subprocess as sp
+            installs, real_run = [], gitsync.run_bounded
+
+            def run(cmd, timeout, env=None, cwd=None):
+                if cmd[0] == "git":
+                    return real_run(cmd, timeout, env, cwd)
+                installs.append(cmd[2])
+                return sp.CompletedProcess(cmd, 0, "", "")
+            (origin / "requirements.txt").write_text("requests==2.32.5\n", encoding="utf-8")
+            git(origin, "add", "-A"); git(origin, "commit", "--quiet", "-m", "chore: a new requirement")
+            gitsync.run_bounded = run
+            try:
+                assert updates.apply(copy, python="py").startswith("Updated to `")
+            finally:
+                gitsync.run_bounded = real_run
+            assert installs == ["pip", "playwright"], installs
+
             # a version that would not start is taken back
             before = git(copy, "rev-parse", "HEAD")
             (origin / "bot.py").write_text("def broken(:\n", encoding="utf-8")

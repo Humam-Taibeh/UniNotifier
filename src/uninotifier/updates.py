@@ -257,13 +257,13 @@ def apply(root: Path | None = None, python: str | None = None, expected: str | N
         if installed.returncode != 0:
             log.error("Update: pip failed: %s", installed.stderr.strip()[-400:])
             raise back("the new requirements could not be installed")
-    if expected and _out("rev-parse", "HEAD", root=root) != expected:
-        raise back("the copy did not land on the version I offered")
         try:                                # a new Playwright needs its own Chromium; nothing to do when it is there
             gitsync.run_bounded([python or sys.executable, "-m", "playwright", "install", "chromium"],
                                 INSTALL_TIMEOUT, cwd=root)
         except (OSError, subprocess.TimeoutExpired):
             log.warning("Update: the browser could not be refreshed — run `python -m playwright install chromium`")
+    if expected and _out("rev-parse", "HEAD", root=root) != expected:
+        raise back("the copy did not land on the version I offered")
     broken = selfheal.code_problem(root)
     if broken:
         raise back(f"the new version does not start ({broken})")
