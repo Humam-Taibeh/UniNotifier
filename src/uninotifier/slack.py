@@ -78,6 +78,13 @@ def _escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _address(url: str) -> str:
+    """A link's address as Slack must receive it inside <address|label>: the characters that would end it or start
+    another link (< > |) are written as the web writes them (%3C %3E %7C), so an address taken from a Moodle page
+    can never relabel a link or slip in a <!here>. (A plain & stays: Slack opens such addresses as they are.)"""
+    return url.replace("<", "%3C").replace(">", "%3E").replace("|", "%7C")
+
+
 def _unescape_markers(text: str) -> str:
     """Telegram's escaped markers (\\_ \\* \\` \\[) as the characters themselves: Slack has no escapes."""
     return re.sub(r"\\([_*`\[\]])", r"\1", text)
@@ -91,9 +98,9 @@ def mrkdwn(text: str) -> str:
         out.append(_escape(_unescape_markers(text[last:match.start()])))
         if match.group(2):
             label = _escape(_unescape_markers(match.group(1))).replace("|", "¦")
-            out.append(f"<{match.group(2)}|{label}>")
+            out.append(f"<{_address(match.group(2))}|{label}>")
         else:
-            out.append(f"<{match.group(0)}>")
+            out.append(f"<{_address(match.group(0))}>")
         last = match.end()
     out.append(_escape(_unescape_markers((text or "")[last:])))
     return "".join(out)
@@ -121,7 +128,7 @@ def link_lines(reply_markup) -> list[str]:
     for row in (markup.get("inline_keyboard") or []) if isinstance(markup, dict) else []:
         for button in row or []:
             if isinstance(button, dict) and button.get("url"):
-                lines.append(f"<{button['url']}|{_escape(str(button.get('text') or 'Open')).replace('|', '¦')}>")
+                lines.append(f"<{_address(str(button['url']))}|{_escape(str(button.get('text') or 'Open')).replace('|', '¦')}>")
     return lines
 
 

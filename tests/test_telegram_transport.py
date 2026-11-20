@@ -983,3 +983,17 @@ def test_messages_go_to_slack_when_chosen():
         assert "SECRET" not in notifier.redact("https://files.slack.com/upload/v1/SECRET")
     finally:
         slack._post, telegram.request, slack.MIN_INTERVAL, slack.BACKOFF_SECONDS, slack.SHARE_WAIT = keep
+
+def test_an_address_from_a_moodle_page_cannot_change_a_slack_message():
+    """A link's address comes from Moodle (an instructor's post). Inside Slack's <address|label> a ">" or "|" in it would
+    end the link early — relabel it, or start a <!here> of its own. Such characters are written the web's way instead."""
+    from uninotifier import slack
+    sly = "[Lecture 5](https://x.example/a>b|<!here>)"
+    out = slack.mrkdwn(sly)
+    assert "<!here>" not in out and out.count("<") == 1 and out.count(">") == 1, out
+    bare = slack.mrkdwn("see https://x.example/p?q=1&r=<!channel> now")
+    assert "<!channel>" not in bare, bare
+    assert slack.mrkdwn("[Open](https://elearning.example/mod/forum/view.php?id=5&f=1)") == \
+        "<https://elearning.example/mod/forum/view.php?id=5&f=1|Open>", "an ordinary address still opens the same page"
+    lines = slack.link_lines({"inline_keyboard": [[{"text": "Open", "url": "https://x.example/a|b>c"}]]})
+    assert lines == ["<https://x.example/a%7Cb%3Ec|Open>"], lines
