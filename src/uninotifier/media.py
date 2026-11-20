@@ -234,8 +234,7 @@ def grade_details(grade: dict | None) -> list[str]:
 
 
 def build_item_message(item: dict, deadline: dict | None, note: str = "",
-                       grade: dict | None = None, status: str | None = None,
-                       detected_at: float | None = None) -> str:
+                       grade: dict | None = None, status: str | None = None) -> str:
     emoji, label = _label(item)
     if grade:
         head = f'🎉 *Marks Detected:* *{escape_md(grade["summary"])}*'
@@ -279,14 +278,14 @@ def change_lines(old: str | None, new: str | None) -> str:
     return "\n".join(parts)
 
 
-def build_content_update_message(item: dict, detected_at: float | None = None) -> str:
+def build_content_update_message(item: dict) -> str:
     """An instructor edited a label, a page or a description; what changed follows as the body
     and the picture shows the current version."""
     emoji, label = _label(item)
     return "\n".join(["✏️ *Content Updated*", "", *_fields(item, label, emoji, None, None)])
 
 
-def build_grade_message(item: dict, grade: str, detected_at: float | None = None) -> str:
+def build_grade_message(item: dict, grade: str) -> str:
     """Your mark appeared on an assignment's or a quiz's own page."""
     emoji, label = _label(item)
     got, _, top = grade.partition("/")
@@ -299,7 +298,7 @@ def build_grade_message(item: dict, grade: str, detected_at: float | None = None
                       f"🏆 *Grade:* *{escape_md(grade)}*{percent}"])
 
 
-def build_forum_post_message(forum: dict, post: dict, detected_at: float | None = None) -> str:
+def build_forum_post_message(forum: dict, post: dict) -> str:
     """A new topic or reply in a course forum. Topics in the Announcements
     forum are the instructor's announcements."""
     is_news = forum["name"].strip().lower() in ("announcements", "news forum", "الإعلانات", "أخبار")
@@ -340,7 +339,7 @@ def _file_name(name: str) -> str:
 
 def build_update_message(item: dict, old_modified: float | None, new_modified: float | None,
                          old_name: str | None = None, new_name: str | None = None,
-                         where: str | None = None, detected_at: float | None = None,
+                         where: str | None = None,
                          retired_to: str | None = None, grade: dict | None = None) -> str:
     """A re-uploaded document: the previous file, the new file and where it was
     saved, where the previous one went (retired_to: its _Old_Versions folder),
@@ -368,8 +367,7 @@ def build_update_message(item: dict, old_modified: float | None, new_modified: f
     return "\n".join(lines)
 
 
-def build_link_message(item: dict, target: str, deadline: dict | None = None,
-                       detected_at: float | None = None) -> str:
+def build_link_message(item: dict, target: str, deadline: dict | None = None) -> str:
     video = is_video_url(target)
     if video:
         head, emoji, label = "🎥 *New Video*", "🎥", "Video / Lecture Recording"
@@ -381,7 +379,7 @@ def build_link_message(item: dict, target: str, deadline: dict | None = None,
     return "\n".join(lines)
 
 
-def build_meeting_message(item: dict, meeting: dict | None, detected_at: float | None = None) -> str:
+def build_meeting_message(item: dict, meeting: dict | None) -> str:
     """A Teams meeting activity: its details from the portal; the join link
     is the button under the message, never raw text."""
     from uninotifier import activities
@@ -399,8 +397,7 @@ def meeting_rows(item: dict, meeting: dict | None) -> list[list[dict]]:
     return [[{"text": JOIN_TEAMS_BUTTON, "url": (meeting or {}).get("url") or item["url"]}]]
 
 
-def build_attendance_message(item: dict, sessions: list[dict] | None, now: datetime | None = None,
-                             detected_at: float | None = None) -> str:
+def build_attendance_message(item: dict, sessions: list[dict] | None, now: datetime | None = None) -> str:
     """An attendance activity: the next session and what checking in means.
     The instructor's own note (e.g. "الرجاء تأكيد الحضور …") follows as the body."""
     from uninotifier import activities
@@ -421,7 +418,7 @@ def attendance_rows(item: dict) -> list[list[dict]]:
     return [[{"text": CHECK_IN_BUTTON, "url": item["url"]}]]
 
 
-def build_reminder_message(deadline: dict, flag: str, detected_at: float | None = None) -> str:
+def build_reminder_message(deadline: dict, flag: str) -> str:
     """flag is '24h' or '1h'. Never sent for a submitted assignment."""
     is_quiz = deadline.get("type") == "quiz"
     emoji, label = ("📋", "Quiz / Exam") if is_quiz else ("📝", "Assignment")

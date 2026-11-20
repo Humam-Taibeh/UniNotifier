@@ -209,7 +209,7 @@ def compare(state: dict, courses: list[dict]) -> tuple[list[dict], dict]:
     return news, new_state
 
 
-def message(item: dict, detected_at: float | None = None) -> str:
+def message(item: dict) -> str:
     changed = item["was"] is not None
     lines = ["✏️ *Midterm Mark Changed*" if changed else "🎉 *Midterm Mark Posted*", "",
              media.course_line(item["course"]),
