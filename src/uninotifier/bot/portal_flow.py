@@ -569,7 +569,7 @@ def send_registration_answer(result: portal.Result, alert: bool = False) -> None
         text = "📝 *Registration*\n\n⚠️ I could not find the registration page in the portal's menu."
     else:
         text = (f"📝 *Registration*\n\n🔒 *Registration is not open right now.*\nThe portal says: {ISOLATE[0]}{said}{ISOLATE[1]}"
-                "\n\nI look every 30 minutes and tell you the moment it opens.")
+                "\n\nI look every 2 hours and tell you as soon as it opens.")
     rows = [[{"text": "🏛️ Open Registration Portal ↗️", "url": portal.LOGIN_URL}],
             [{"text": "🔙 Registration Plan", "callback_data": "reg:home"}, {"text": "🏠 Main Menu", "callback_data": "menu"}]]
     if not (result.png and notifier.send_png_file(chat.BOT_TOKEN, chat.CHAT_ID, result.png,

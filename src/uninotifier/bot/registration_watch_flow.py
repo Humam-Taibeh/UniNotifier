@@ -1,5 +1,5 @@
 """
-The registration watch in the bot (registration_watch.py has the rules): every 30 minutes the portal's registration page is read;
+The registration watch in the bot (registration_watch.py has the rules): every 2 hours the portal's registration page is read;
 the moment it stops saying registration is closed you are told, once, with the screenshot.
 """
 

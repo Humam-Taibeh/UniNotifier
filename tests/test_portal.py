@@ -1686,7 +1686,7 @@ def test_the_balance_watch_tells_you_only_when_the_balance_changed():
         assert balance_watch.due(now=1e9) and balance_watch.load() == {}
         reads(1700.0)
         assert balance_flow.check_once() is False and sent == [] and balance_watch.load()["total"] == 1700.0     # remembered
-        assert not balance_watch.due(now=balance_watch.load()["checked"] + 60) and balance_watch.due(now=balance_watch.load()["checked"] + 3601)
+        assert not balance_watch.due(now=balance_watch.load()["checked"] + 60) and balance_watch.due(now=balance_watch.load()["checked"] + 6 * 3600 + 1) and not balance_watch.due(now=balance_watch.load()["checked"] + 3601)
         assert balance_flow.check_once() is False and sent == []                                             # unchanged: silence
         reads(1500.0)
         assert balance_flow.check_once() is True and len(sent) == 1
@@ -1742,14 +1742,14 @@ def test_the_registration_page_is_read_said_and_watched():
         notifier.send_message = lambda token, chat_id, text, rows=None, **k: sent.append(("text", text, rows)) or True
         portal_flow.send_registration_answer(closed)
         kind, text, rows = sent[-1]
-        assert kind == "png" and "not open right now" in text and "غير مسموح التسجيل بهذه الفترة" in text and "every 30 minutes" in text
+        assert kind == "png" and "not open right now" in text and "غير مسموح التسجيل بهذه الفترة" in text and "every 2 hours" in text
         assert [b.get("callback_data") for r in rows for b in r][-2:] == ["reg:home", "menu"]
         portal_flow.send_registration_answer(opened, alert=True)
         assert sent[-1][1].startswith("🚨 *Registration is open!*")
         sent.clear()
         portal.fetch_many = lambda sections, ask: {"registration": closed}
         assert registration_watch_flow.watch_once() is False and sent == [] and registration_watch.load()["open"] is False   # closed: silent
-        assert registration_watch.due(now=registration_watch.load()["checked"] + 1801) and not registration_watch.due(now=registration_watch.load()["checked"] + 60)
+        assert registration_watch.due(now=registration_watch.load()["checked"] + 7201) and not registration_watch.due(now=registration_watch.load()["checked"] + 1801)
         portal.fetch_many = lambda sections, ask: {"registration": opened}
         assert registration_watch_flow.watch_once() is True and len(sent) == 1 and "Registration is open" in sent[0][1]     # opened: told
         assert registration_watch_flow.watch_once() is False and len(sent) == 1                                          # ... once
