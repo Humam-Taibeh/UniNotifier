@@ -223,12 +223,14 @@ def test_tidy_archive():
 
 
 def test_auto_done_only_for_saved_files_and_links():
-    """"Mark as done" is ticked automatically only on static material that really
-    landed; graded work, forums, pages and labels are never ticked."""
+    """"Mark as done" is ticked automatically only when the student chose it (AUTO_MARK_DONE=true; off by
+    default), and only on static material that really landed; graded work, forums, pages and labels are never ticked."""
+    from support import _with_env
     monitor = _package("uninotifier.monitor")
     ticked = []
     orig = monitor.moodle.set_completion
     monitor.moodle.set_completion = lambda ctx, key, cmid, done: ticked.append(cmid) or True
+    keep_env = os.environ.get("AUTO_MARK_DONE")
     try:
         with tempfile.TemporaryDirectory() as tmp:
             saved = Path(tmp) / "Lecture 1.pdf"
@@ -239,6 +241,10 @@ def test_auto_done_only_for_saved_files_and_links():
                 monitor.auto_complete(None, "k", item, artifact)
                 return item["done"]
 
+            for off in (None, "", "false"):                 # not chosen: Moodle is never touched, even for a saved file
+                assert not _with_env({"AUTO_MARK_DONE": off}, lambda: tick("resource", {"kind": "file", "path": str(saved)}, 0))
+            assert ticked == [], "nothing ticked without AUTO_MARK_DONE=true"
+            os.environ["AUTO_MARK_DONE"] = "true"
             assert tick("resource", {"kind": "file", "path": str(saved)}, 1)
             assert tick("folder", {"kind": "file", "path": tmp}, 2)
             assert tick("url", {"kind": "link", "target": "https://youtu.be/x"}, 3)
@@ -250,6 +256,10 @@ def test_auto_done_only_for_saved_files_and_links():
             assert ticked == ["1", "2", "3"], ticked
     finally:
         monitor.moodle.set_completion = orig
+        if keep_env is None:
+            os.environ.pop("AUTO_MARK_DONE", None)
+        else:
+            os.environ["AUTO_MARK_DONE"] = keep_env
     assert media.CONTAINER_TYPES == {"forum"}
 
 

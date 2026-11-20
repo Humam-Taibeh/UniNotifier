@@ -11,6 +11,7 @@ import math
 
 from uninotifier import activities
 from uninotifier import archive
+from uninotifier import envcheck
 from uninotifier import grades
 from uninotifier import media
 from uninotifier import moodle
@@ -188,11 +189,17 @@ def landed(artifact: dict) -> bool:
     return artifact.get("kind") == "link" and bool(artifact.get("target"))
 
 
+def auto_mark_done() -> bool:
+    """Ticking on Moodle by itself is the student's choice: AUTO_MARK_DONE=true in .env (off by default — the
+    tick shows in the instructor's completion report as if the file had been opened)."""
+    return envcheck.value("AUTO_MARK_DONE").lower() == "true"
+
+
 def auto_complete(context, sesskey: str, item: dict, artifact: dict) -> None:
     """Tick "Mark as done" on static material that really landed: a downloaded
-    file or folder, a resolved link. Assignments, quizzes, forums, pages and
-    labels are never ticked."""
-    if (item["type"] in media.AUTO_DONE_TYPES and item.get("manual") and not item.get("done")
+    file or folder, a resolved link — only with AUTO_MARK_DONE=true. Assignments,
+    quizzes, forums, pages and labels are never ticked."""
+    if (auto_mark_done() and item["type"] in media.AUTO_DONE_TYPES and item.get("manual") and not item.get("done")
             and landed(artifact)
             and moodle.set_completion(context, sesskey, item["cmid"], True)):
         item["done"] = True

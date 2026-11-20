@@ -27,7 +27,7 @@ _HOME = Path(tempfile.mkdtemp(prefix="uninotifier-test-home-"))
 for _key in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "ADMIN_USER_ID", "ZUJ_USERNAME", "ZUJ_PASSWORD",
              "PORTAL_USERNAME", "PORTAL_PASSWORD", "STUDENT_ID", "ARCHIVE_ROOT", "HEALTHCHECK_URL",
              "BOT_HEALTHCHECK_URL", "BOT_POLL_TIMEOUT", "UNINOTIFIER_MANUAL", "CAMBRIDGE_ASSIGNMENTS_URL",
-             "CAMBRIDGE_UNTIL", "CAMBRIDGE_EMAIL", "CAMBRIDGE_PASSWORD", "AUTO_CHECK_IN",
+             "CAMBRIDGE_UNTIL", "CAMBRIDGE_EMAIL", "CAMBRIDGE_PASSWORD", "AUTO_CHECK_IN", "AUTO_MARK_DONE",
              "NOTIFY_VIA", "SLACK_BOT_TOKEN", "SLACK_CHANNEL", "SLACK_APP_TOKEN", "SLACK_USER"):
     os.environ.pop(_key, None)                      # nothing inherited from a shell that loaded the real one
 # git gives a hook its own variables (GIT_DIR, GIT_INDEX_FILE, …, as `git rev-parse --local-env-vars`

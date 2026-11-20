@@ -51,6 +51,8 @@ VARIABLES = (
     Var("PORTAL_PASSWORD", (), "the registration portal password"),
     Var("AUTO_CHECK_IN", (), "true = the bot checks you in to your online lectures by itself",
         r"(?i)true|false", "true or false"),
+    Var("AUTO_MARK_DONE", (), "true = a lecture file the bot saved is ticked \"Mark as done\" on Moodle for you",
+        r"(?i)true|false", "true or false"),
     Var("NOTIFY_VIA", (), "where your messages go: telegram (the default) or slack",
         r"(?i)telegram|slack", "telegram or slack"),
     Var("SLACK_BOT_TOKEN", (), "your Slack app's Bot User OAuth Token (OAuth & Permissions)",
