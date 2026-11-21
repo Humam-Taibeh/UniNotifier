@@ -61,7 +61,7 @@ def build(note: str = "", due: datetime | None = None, meta: dict | None = None)
               winkit.text_field("note", "Reminder", note, hint="e.g. Buy the textbook, Faculty of Arts, floor 1",
                                 multiline=True, limit=reminders.NOTE_LIMIT),
               {"type": "actions", "block_id": QUICK, "elements": [      # a dropdown: a row of buttons runs off the window
-                  {"type": "static_select", "action_id": "quick", "placeholder": winkit.plain("⚡ Quick pick — fills in the day and time"),
+                  {"type": "static_select", "action_id": "quick", "placeholder": winkit.plain("⚡ Quick pick"),
                    "options": [{"text": winkit.plain(label[:75]), "value": f"rem:q:{pick}"}
                                for label, pick, _ in quick_picks(meta.get("course"))[:10]]}]},
               winkit.date_field("day", "Day", f"{due:%Y-%m-%d}"),

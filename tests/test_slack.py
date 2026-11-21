@@ -743,6 +743,8 @@ def test_reminders_are_set_in_a_slack_window_with_a_date_and_time_picker():
             assert window["type"] == "modal" and window["callback_id"] == "reminder" and slackbot.get_updates(None, 0) == []
             kinds = {b["block_id"]: b["element"]["type"] for b in window["blocks"] if b["type"] == "input"}
             assert kinds == {"note": "plain_text_input", "day": "datepicker", "time": "timepicker"}, kinds
+            quick = next(b for b in window["blocks"] if b.get("block_id") == "quick")["elements"][0]
+            assert len(quick["placeholder"]["text"]) <= 20, "the drop-down's words are cut off in the window if longer"
             [dropdown] = next(b for b in window["blocks"] if b.get("block_id") == "quick")["elements"]
             quick = dropdown["options"]
             assert dropdown["type"] == "static_select", "a dropdown: a row of buttons runs off the window's edge"
