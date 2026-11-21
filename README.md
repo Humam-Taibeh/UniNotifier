@@ -17,13 +17,16 @@
 **Your university, on your phone — the moment anything changes.**
 
 UniNotifier watches Al-Zaytoonah University of Jordan's Moodle (`elearning.zuj.edu.jo`) from your
-own Windows PC and sends everything that matters to a private Slack app of your own (or a Telegram bot, if you prefer): new files,
+own Windows PC and sends everything that matters to a private Slack app of your own, or to a Telegram bot: new files,
 assignments, quizzes, announcements and forum posts, deadline reminders, online-lecture alerts with a
 **Join** button, your transcript and balance on demand, and a GPA planner. Every course file is saved
 into a tidy folder per course.
 
 It runs quietly in the background through two Windows scheduled tasks, needs no server and no
 subscription, and nothing about you ever leaves your PC except the messages it sends to *your* Slack.
+
+> **Slack or Telegram — it works with both, the same way.** Slack is the recommended one because Telegram is
+> currently blocked on many networks in Jordan; the installer asks which you want.
 
 - [Features](#features) · [What it looks like](#what-it-looks-like)
 - [Install in 3 steps](#install-in-3-steps)
@@ -253,6 +256,7 @@ send `/start`. A few commands are worth knowing:
 | `/transcript` · `/balance` · `/record` | from the registration portal (needs `PORTAL_*` in `.env`) |
 | `/midterms` · `/attendance` | Midterm Watch · your absences per course |
 | `/register` | 🗓️ Registration Plan — what to register next term |
+| `/settings` | ⚙️ switch Auto Check-In, Auto Mark as Done and Midterm Watch on or off; 🆕 Check for Updates |
 | `/guest` | look up a friend's record with their own login (typed in a private form in Slack, never kept) |
 | `/update` | 🆕 is there a new version — what is new, and ⬇️ Update Now |
 | `/finals` · `/grades` | Finals Watch during exam season · check this term's grades now |
@@ -294,19 +298,21 @@ only at these times — each look is one ordinary sign-in with your own account,
 |---|---|
 | your timetable (the portal's home page) | once a semester, and again on `/check` |
 | Midterm Watch (`exams.zuj.edu.jo`) | every 15 minutes, while it is on (`/midterms`) |
-| the tuition balance | every 6 hours |
-| whether course registration has opened | every 2 hours |
+| the tuition balance | every hour |
+| whether course registration has opened | every 30 minutes |
 | Finals Watch | every 30 minutes, only while you have it on |
 | Transcript, Balance, Registration Plan | when you ask |
 
-**Automatic attendance check-in** — `AUTO_CHECK_IN=true` in `.env` (the setup asks you; off by default):
+**Automatic attendance check-in** — ⚙️ **Settings** in the bot, or `AUTO_CHECK_IN=true` in `.env` (the setup
+asks you; off by default):
 the bot checks you in to every *online* lecture as soon as the instructor opens attendance and sends a
 screenshot as proof, or tells you to do it by hand when it cannot. Never an in-person or activity day. It
 needs the portal login above, which is how it knows which days are online. **It marks you Present whether
 or not you attend** — switch it off for a lecture you will miss; your attendance is always what your
 instructor decides (see [DISCLAIMER.md](DISCLAIMER.md)).
 
-**Mark as done by itself** — `AUTO_MARK_DONE=true` in `.env` (off by default): when the bot has saved a
+**Mark as done by itself** — ⚙️ **Settings** in the bot, or `AUTO_MARK_DONE=true` in `.env` (off by default):
+when the bot has saved a
 lecture file or opened a link for you, it ticks *Mark as done* on Moodle. Your instructor's completion
 report then shows it as done, so it is your choice. Without it, every such message still has a
 ✅ Mark as done button you can press yourself. Assignments, quizzes and forums are never ticked.

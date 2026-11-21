@@ -13,9 +13,11 @@ does not have yet when it tells its owner that a new version is ready (newest fi
 - 🔒 **More private**: a friend's login for `guest` is typed into a private Slack form — never a chat message, never
   saved. What you type to the bot is no longer kept on your PC.
 - ✅ **Your choice**: ticking *Mark as done* on Moodle by itself is now off unless you set `AUTO_MARK_DONE=true` in
-  `.env` — your instructor sees those ticks. Automatic check-in marks you Present whether or not you attend: switch
+  `.env` (or ⚙️ Settings) — your instructor sees those ticks. Automatic check-in marks you Present whether or not you attend: switch
   it off for a lecture you will miss. Read [DISCLAIMER.md](DISCLAIMER.md).
-- The portal is read less often by itself (your balance every 6 hours, registration every 2 hours).
+- ⚙️ **Settings** in the menu: switch Auto Check-In, Auto Mark as Done and Midterm Watch on or off with one tap,
+  and 🆕 Check for Updates.
+- A guest look-up with a wrong ID or password now shows the portal's own page and a 🔁 Try Again button.
 
 ## 2026-11-16 — Your messages on Slack, when Telegram is blocked
 - Telegram is blocked on some networks in Jordan. Your messages can now come on Slack instead —

@@ -220,8 +220,8 @@ Two activity types ZUJ uses for online teaching are read from their own pages
 
 ### Automatic check-in
 
-With `AUTO_CHECK_IN=true` in `.env` — or `"auto_check_in": true` in a `schedule.json` of your own,
-which is obeyed either way when it says so (`schedule.auto_check_in`) — `checkin.py` checks you
+With Auto Check-In on — ⚙️ Settings in the bot, or `AUTO_CHECK_IN=true` in `.env` (a true/false there wins;
+when it is empty, `"auto_check_in"` in a `schedule.json` of your own decides: `schedule.auto_check_in`) — `checkin.py` checks you
 in to every session that is an **online lecture** — live on Teams. It is off by default; the setup asks. Never an in-person day
 (your instructor marks you there) nor an activity day (no class at all).
 
@@ -409,7 +409,9 @@ To let someone else see what the bot does with *their* record — once, from the
    in the chat: 🔑 Enter Their Login opens a private Slack form (a modal) for the student ID and the
    password — what is typed there never becomes a message, is never written to disk, and is kept in
    memory only for the sign-in. **In Telegram** they are two messages; the bot **deletes the password
-   message at once** (and asks you to delete it by hand if Telegram does not confirm).
+   message at once** (and asks you to delete it by hand if Telegram does not confirm). A sign-in the portal
+   refuses (a wrong ID or password) ends in ONE message: why, with a picture of the portal's own page,
+   🔁 Try Again and the way back — no session panel, since there was no session.
 3. If the portal sends them a verification code, read it from their phone and reply with it.
 4. Their record arrives in the layout of your own transcript: the screenshot with an executive
    summary — 📘 major, 🎓 cumulative GPA, 📌 status and the degree progress from **their own study
@@ -625,8 +627,8 @@ under it as the menu. While it works the chat shows "typing…", not a status me
 
 With the portal login set, the bot also looks by itself — each look one ordinary sign-in, reading only:
 the timetable once a semester (again on `/check`); Midterm Watch on `exams.zuj.edu.jo` every 15 minutes
-while it is on (`/midterms`, `exams_watch.py`); the tuition balance every 6 hours (`balance_watch.py`, told
-only when it changes); whether registration has opened every 2 hours (`registration_watch.py`, told once);
+while it is on (`/midterms`, `exams_watch.py`); the tuition balance every hour (`balance_watch.py`, told
+only when it changes); whether registration has opened every 30 minutes (`registration_watch.py`, told once);
 and Finals Watch every 30 minutes while you have it on. Never while another portal request runs, and a look
 that would need a verification code is skipped. The menu fallback that finds a moved page never clicks a
 link whose words say it does something (`portal.ACTION_WORDS`: confirm, cancel, delete, add, drop, pay …).

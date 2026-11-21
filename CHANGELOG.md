@@ -23,6 +23,9 @@ All notable changes to this project are documented here. The format follows
 - `DISCLAIMER.md` (and a Disclaimer section in both READMEs): unofficial; it assists and never decides; your
   attendance is your instructor's; your account, your responsibility.
 - A `commit-msg` hook (`core.hooksPath .githooks`): a commit names only the person who makes it.
+- ⚙️ **Settings** (main menu, `settings`): Auto Check-In, Auto Mark as Done and Midterm Watch on or off with one tap
+  (written to `.env`, seen at once), and 🆕 Check for Updates. `AUTO_CHECK_IN` in `.env` now wins over a
+  `schedule.json`'s `auto_check_in` (an empty value still leaves it to `schedule.json`).
 - Messages on Slack instead of Telegram (`NOTIFY_VIA=slack`), for a network that blocks Telegram:
   `python -m uninotifier.setup --slack` makes the Slack app with you (its settings in
   `docs/slack-app-manifest.json`, copied for pasting), checks its token, finds you and greets you there.
@@ -77,8 +80,6 @@ All notable changes to this project are documented here. The format follows
   timetable is uploaded again and the old files go (`slackfiles.py`, `data/slack_files.json`).
 - One connection pool to Slack, kept open and shared by every thread (it was one per thread, so each timetable
   press paid fresh TLS handshakes).
-- The unattended portal looks are rarer: the balance every 6 hours (was hourly), registration every 2 hours (was
-  30 minutes) — each look is a full sign-in.
 - Automatic *Mark as done* is off unless `AUTO_MARK_DONE=true` (an existing install that wants it sets it).
 - Slack screens follow one layout: title, line, the whole content, line, controls, line, Back + Main Menu; a screen
   you leave is removed; a screen too big for one box continues in the next.
@@ -121,6 +122,8 @@ All notable changes to this project are documented here. The format follows
   while Slack is asked (another process could take the lock and undo a save); a message Slack took is never
   reported unsent, so never sent twice.
 - An announcement's kept pictures go when it leaves the remembered list.
+- A guest look-up the portal refuses (a wrong ID or password) ends in one message — why, with a picture of the
+  portal's page, and 🔁 Try Again — instead of an empty "Guest session finished" panel.
 - Slack: a student ID typed is read as typed (Slack had made it a link); Show Original sends its picture with its
   words and the post's whole page.
 - A message whose sender was stopped half-way (the bot restarted, an update, a power cut) is no longer
