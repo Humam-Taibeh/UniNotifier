@@ -661,9 +661,10 @@ def _slack_windows_harness(bot, tmp):
         calls.clear()
         while not slackbot._events.empty():               # what an earlier test left in the queue is not this press's
             slackbot._events.get_nowait()
+        action = ({"action_id": "quick", "type": "static_select", "selected_option": {"value": value}}
+                  if value.startswith("rem:q:") else {"action_id": "b0_0", "value": value, "action_ts": "3.1"})
         payload = {"type": "block_actions", "user": {"id": user}, "trigger_id": trigger,
-                   "container": {"type": "message", "message_ts": ts},
-                   "actions": [{"action_id": "b0_0", "value": value, "action_ts": "3.1"}]}
+                   "container": {"type": "message", "message_ts": ts}, "actions": [action]}
         if view:
             payload["view"] = view
         slackbot.take("interactive", payload)
@@ -742,7 +743,9 @@ def test_reminders_are_set_in_a_slack_window_with_a_date_and_time_picker():
             assert window["type"] == "modal" and window["callback_id"] == "reminder" and slackbot.get_updates(None, 0) == []
             kinds = {b["block_id"]: b["element"]["type"] for b in window["blocks"] if b["type"] == "input"}
             assert kinds == {"note": "plain_text_input", "day": "datepicker", "time": "timepicker"}, kinds
-            quick = next(b for b in window["blocks"] if b.get("block_id") == "quick")["elements"]
+            [dropdown] = next(b for b in window["blocks"] if b.get("block_id") == "quick")["elements"]
+            quick = dropdown["options"]
+            assert dropdown["type"] == "static_select", "a dropdown: a row of buttons runs off the window's edge"
             assert {"rem:q:hour", "rem:q:morning"} <= {e["value"] for e in quick} and all(len(e["text"]["text"]) <= 75 for e in quick)
             # a quick pick fills the day and time in and keeps what was typed
             redrawn = None
