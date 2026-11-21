@@ -256,7 +256,7 @@ send `/start`. A few commands are worth knowing:
 | `/transcript` · `/balance` · `/record` | from the registration portal (needs `PORTAL_*` in `.env`) |
 | `/midterms` · `/attendance` | Midterm Watch · your absences per course |
 | `/register` | 🗓️ Registration Plan — what to register next term |
-| `/settings` | ⚙️ switch Auto Check-In and Auto Mark as Done on or off; 🆕 Check for Updates |
+| `/settings` | ⚙️ Auto Check-In and Auto Mark as Done on or off, and 🆕 Check for Updates — in Slack a window opens over the chat |
 | `/guest` | look up a friend's record with their own login (typed in a private form in Slack, never kept) |
 | `/update` | 🆕 is there a new version — what is new, and ⬇️ Update Now |
 | `/finals` · `/grades` | Finals Watch during exam season · check this term's grades now |

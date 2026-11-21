@@ -547,6 +547,87 @@ def _form_submitted(payload: dict) -> None:
     threading.Thread(target=guest_flow.login_from_form, args=(login, secret), name="guest-form", daemon=True).start()
 
 
+# ------------------------------------------------------------------ ⚙️ Settings as a window
+
+def _values(payload: dict) -> list[str]:
+    return [a.get("value") or "" for a in payload.get("actions") or []]
+
+
+def _settings_press(payload: dict) -> bool:
+    """A press that belongs to the Settings window (Slack's trigger lasts 3 seconds, so it is handled here, not in the
+    bot's queue): ⚙️ Settings opens the window; 🆕 Check for Updates in it opens a second one that says it is looking,
+    then what it found; ⬇️ Update Now / ⏰ Later there. True when the press was one of these."""
+    if payload.get("type") != "block_actions" or (payload.get("user") or {}).get("id") != owner():
+        return False
+    values, view = _values(payload), payload.get("view") or {}
+    from uninotifier.bot import settings_flow
+    token, _ = _settings()
+    if "settings" in values:                                      # the menu's ⚙️ Settings (in the chat, or on Home)
+        try:
+            slack.call(token, "views.open", {"trigger_id": payload.get("trigger_id", ""),
+                                             "view": json.dumps(settings_flow.modal(), ensure_ascii=False)})
+        except (slack.SlackError, requests.RequestException) as e:
+            log.warning("Slack: the Settings window did not open (%s) — the screen goes to the chat", e)
+            return False                                          # the press goes on as an ordinary one
+        return True
+    if view.get("type") != "modal":
+        return False
+    if "set:update" in values:
+        opened = slack.call(token, "views.push", {"trigger_id": payload.get("trigger_id", ""), "view": json.dumps(
+            settings_flow.waiting_window("⏳ Looking for a new version…"), ensure_ascii=False)})
+        view_id = (opened.get("view") or {}).get("id", "")
+        threading.Thread(target=_fill_updates, args=(view_id,), name="settings-updates", daemon=True).start()
+        return True
+    if "update:now" in values or "update:later" in values:
+        from uninotifier.bot import update_flow
+        if "update:later" in values:
+            words = "⏰ *Update postponed* — open ⚙️ Settings, or type `update`, whenever you want it."
+        elif update_flow.start():
+            words = "⬇️ *Updating…* about a minute. The bot restarts by itself and tells you in the chat."
+        else:
+            words = "⏳ An update is already running."
+        _show_window(view.get("id", ""), settings_flow.waiting_window(words))
+        return True
+    return False
+
+
+def _show_window(view_id: str, view: dict) -> None:
+    token, _ = _settings()
+    slack.call(token, "views.update", {"view_id": view_id, "view": json.dumps(view, ensure_ascii=False)})
+
+
+def _fill_updates(view_id: str) -> None:
+    """The updates window, filled in once GitHub answered (a look takes a few seconds)."""
+    from uninotifier.bot import settings_flow, update_flow
+    try:
+        _show_window(view_id, settings_flow.updates_window(*update_flow.view_status()))
+    except Exception as e:                                      # the window must never stay on "Looking…"
+        log.warning("Slack: the updates window could not be filled (%s)", type(e).__name__)
+        try:
+            _show_window(view_id, settings_flow.waiting_window("⚠️ I couldn't look just now — try again in a minute."))
+        except Exception:
+            pass
+
+
+def respond(kind: str, payload: dict) -> dict | None:
+    """What goes back to Slack WITH the acknowledgement, for a window's Save that is answered right there: {} closes
+    the window, {"response_action": "errors", ...} keeps it open with the reason under the tick boxes. None: an ordinary
+    request (acknowledged empty, then take() reads it)."""
+    view = payload.get("view") or {}
+    if kind != "interactive" or payload.get("type") != "view_submission" or view.get("callback_id") != "settings":
+        return None
+    if (payload.get("user") or {}).get("id") != owner():
+        return {}
+    from uninotifier.bot import settings_flow
+    ticked = (((view.get("state") or {}).get("values") or {}).get("auto") or {}).get("auto") or {}
+    chosen = {option.get("value") for option in ticked.get("selected_options") or []}
+    problem = settings_flow.save(chosen)
+    if problem:
+        return {"response_action": "errors", "errors": {"auto": problem}}
+    threading.Thread(target=_toast, args=(settings_flow.saved_line(), True), name="settings-saved", daemon=True).start()
+    return {}
+
+
 def take(kind: str, payload: dict) -> None:
     """What Socket Mode delivered, queued for the bot's loop. Never raises (it runs on Slack's thread)."""
     try:
@@ -559,6 +640,8 @@ def take(kind: str, payload: dict) -> None:
             _form_submitted(payload)
             return
         if kind == "interactive" and _opens_guest_form(payload):
+            return
+        if kind == "interactive" and _settings_press(payload):
             return
         if kind == "interactive":
             updates = from_press(payload)
@@ -589,8 +672,14 @@ def _connect() -> None:
     token, _ = _settings()
 
     def listener(client: SocketModeClient, req: SocketModeRequest) -> None:
-        client.send_socket_mode_response(SocketModeResponse(envelope_id=req.envelope_id))   # within 3 s, always
-        take(req.type, req.payload or {})
+        try:
+            answer = respond(req.type, req.payload or {})          # a window's Save: answered with the acknowledgement
+        except Exception as e:
+            log.error("Slack: a window could not be answered (%s)", type(e).__name__)
+            answer = {"response_action": "errors", "errors": {"auto": "Something went wrong — nothing was changed."}}
+        client.send_socket_mode_response(SocketModeResponse(envelope_id=req.envelope_id, payload=answer or None))   # within 3 s, always
+        if answer is None:
+            take(req.type, req.payload or {})
 
     socket = SocketModeClient(app_token=app_token(), web_client=WebClient(token=token), auto_reconnect_enabled=True)
     socket.socket_mode_request_listeners.append(listener)

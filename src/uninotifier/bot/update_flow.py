@@ -91,10 +91,19 @@ def handle_callback(cb: dict, action: str, message_id: int | None) -> None:
         if message_id:
             chat.edit_view(message_id, "⏰ *Update postponed* — send /update whenever you want it.", [chat.BACK_ROW])
         return
-    if not _busy.acquire(blocking=False):
+    if _busy.locked():
         chat.answer(cb["id"], "⏳ Already updating…")
         return
     chat.answer(cb["id"], "⬇️ Updating…")
     if message_id:
         chat.edit_view(message_id, "⬇️ *Updating…* this takes about a minute.", [])
+    start(message_id)
+
+
+def start(message_id: int | None = None) -> bool:
+    """Update Now, from a button in the chat or in Slack's Settings window: one update at a time (False when one
+    is running already); what happens is told in the chat."""
+    if not _busy.acquire(blocking=False):
+        return False
     threading.Thread(target=run_update, args=(message_id,), name="update", daemon=True).start()
+    return True

@@ -23,7 +23,8 @@ All notable changes to this project are documented here. The format follows
 - `DISCLAIMER.md` (and a Disclaimer section in both READMEs): unofficial; it assists and never decides; your
   attendance is your instructor's; your account, your responsibility.
 - A `commit-msg` hook (`core.hooksPath .githooks`): a commit names only the person who makes it.
-- ⚙️ **Settings** (main menu, `settings`): Auto Check-In and Auto Mark as Done on or off with one tap
+- ⚙️ **Settings** (main menu, `settings`) — in Slack a window over the chat, with tick boxes, Save and a second
+  window for 🆕 updates: Auto Check-In and Auto Mark as Done on or off
   (written to `.env`, seen at once), and 🆕 Check for Updates. `AUTO_CHECK_IN` in `.env` now wins over a
   `schedule.json`'s `auto_check_in` (an empty value still leaves it to `schedule.json`).
 - Messages on Slack instead of Telegram (`NOTIFY_VIA=slack`), for a network that blocks Telegram:

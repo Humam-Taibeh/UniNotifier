@@ -70,6 +70,86 @@ def switch(name: str, on: bool) -> str:
     return ""
 
 
+# ------------------------------------------------------------------ Slack: the Settings window
+
+VIEW_ID = "settings"                # the window's callback_id
+# what each switch does, said under its tick box (Slack shows at most 75 characters there)
+TICK_WORDS = {"AUTO_CHECK_IN": "Checks you in to online lectures — marks you Present even if absent.",
+              "AUTO_MARK_DONE": "Ticks saved lecture files as done — your instructor sees it."}
+
+
+def _plain(text: str) -> dict:
+    return {"type": "plain_text", "text": text, "emoji": True}
+
+
+def modal() -> dict:
+    """⚙️ Settings as a Slack window over the chat: a tick box per switch (with what it does), Save / Cancel, and
+    🆕 Check for Updates. Nothing changes until Save."""
+    options = [{"text": {"type": "mrkdwn", "text": f"*{label}*"},
+                "description": {"type": "mrkdwn", "text": TICK_WORDS[name]}, "value": name}
+               for name, label, _ in SWITCHES]
+    ticks = {"type": "checkboxes", "action_id": "auto", "options": options}
+    on = [option for option in options if is_on(option["value"])]
+    if on:
+        ticks["initial_options"] = on
+    from uninotifier import updates
+    version = updates._out("rev-parse", "--short", "HEAD") if updates.is_clone() else None
+    return {"type": "modal", "callback_id": VIEW_ID, "title": _plain("⚙️ Settings"),
+            "submit": _plain("Save"), "close": _plain("Cancel"),
+            "blocks": [
+                {"type": "section", "text": {"type": "mrkdwn", "text":
+                    "*What UniNotifier does for you on its own*\nTick what you want — *Save* applies it at once."}},
+                {"type": "divider"},
+                {"type": "input", "block_id": "auto", "optional": True, "label": _plain("Automatic actions"),
+                 "element": ticks},
+                {"type": "context", "elements": [{"type": "mrkdwn", "text":
+                    "Assignments, quizzes and forums are never touched. Your attendance is always your instructor's."}]},
+                {"type": "divider"},
+                {"type": "section", "block_id": "updates",
+                 "text": {"type": "mrkdwn", "text": "*🆕 Updates*\nIs a new version of UniNotifier ready?"},
+                 "accessory": {"type": "button", "action_id": "set_update", "value": "set:update",
+                               "text": _plain("Check for Updates")}},
+                *([{"type": "context", "elements": [{"type": "mrkdwn", "text": f"This copy: `{version}`"}]}]
+                  if version else []),
+            ]}
+
+
+def save(chosen: set[str]) -> str:
+    """The window's Save: every switch as ticked. "" when saved, else what to tell (shown under the tick boxes,
+    nothing changed)."""
+    if "AUTO_CHECK_IN" in chosen and not is_on("AUTO_CHECK_IN") and not (
+            envcheck.value("PORTAL_USERNAME") and envcheck.value("PORTAL_PASSWORD")):
+        return "Auto Check-In needs the portal login (PORTAL_USERNAME, PORTAL_PASSWORD) — run the setup to add it."
+    for name, _, _ in SWITCHES:
+        want = name in chosen
+        if want != is_on(name):
+            problem = switch(name, want)
+            if problem.startswith("⚠️ The settings file"):
+                return "The settings file could not be saved — nothing was changed."
+    return ""
+
+
+def saved_line() -> str:
+    """The quiet confirmation after Save (shown to you alone, for a moment)."""
+    return "✅ *Settings saved* — " + " · ".join(f"{label}: *{'On' if is_on(name) else 'Off'}*"
+                                                for name, label, _ in SWITCHES)
+
+
+def updates_window(text: str, rows: list) -> dict:
+    """🆕 Updates as a second window over Settings: what is new and ⬇️ Update Now / ⏰ Later (no way back buttons —
+    the window's own Back closes it)."""
+    from uninotifier import slack
+    rows = [row for row in rows if not any(button.get("callback_data") == "menu" for button in row)]
+    blocks = slack.blocks(text, {"inline_keyboard": rows} if rows else None, live=True) or [
+        {"type": "section", "text": {"type": "mrkdwn", "text": slack.mrkdwn(text)}}]
+    return {"type": "modal", "title": _plain("🆕 Updates"), "close": _plain("Back"), "blocks": blocks[:100]}
+
+
+def waiting_window(words: str) -> dict:
+    return {"type": "modal", "title": _plain("🆕 Updates"), "close": _plain("Back"),
+            "blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": words}}]}
+
+
 def handle_callback(cb: dict, action: str, message_id: int | None) -> None:
     """set:<NAME> flips one switch · set:update opens 🆕 Updates."""
     name = action.split(":", 1)[1]
