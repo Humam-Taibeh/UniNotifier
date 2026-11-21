@@ -23,12 +23,6 @@ All notable changes to this project are documented here. The format follows
 - `DISCLAIMER.md` (and a Disclaimer section in both READMEs): unofficial; it assists and never decides; your
   attendance is your instructor's; your account, your responsibility.
 - A `commit-msg` hook (`core.hooksPath .githooks`): a commit names only the person who makes it.
-- **Forms in Slack instead of typing messages.** ➕ New Reminder, 📌 Add to Reminders and a reminder's Edit buttons open
-  one window: the note, a date picker, a time picker and quick picks (next campus day, before the next lecture, in an
-  hour, tomorrow morning) that fill them in and keep what you typed. 🎯 Grade Needed opens a window (semester or
-  cumulative, a pick from 70–90 or your own value); a course's final grade, coursework out of and retake with its
-  previous grade are one window; the CGPA and record hours another. A wrong value is said under its own field and
-  the window stays open; Save redraws the screen it came from. Telegram keeps its buttons and typed answers.
 - ⚙️ **Settings** (main menu, `settings`) — in Slack a window over the chat, with tick boxes, Save and a second
   window for 🆕 updates: Auto Check-In and Auto Mark as Done on or off
   (written to `.env`, seen at once), and 🆕 Check for Updates. `AUTO_CHECK_IN` in `.env` now wins over a

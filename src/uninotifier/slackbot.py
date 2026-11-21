@@ -609,90 +609,11 @@ def _fill_updates(view_id: str) -> None:
             pass
 
 
-# ------------------------------------------------------------------ the form windows (reminders, Grade Needed)
-
-def _forms():
-    """The modules that own a window each (the reminder form, the Grade Needed forms)."""
-    from uninotifier.bot import gpa_window, reminder_window
-    return (reminder_window, gpa_window)
-
-
-def _form_ids() -> dict:
-    from uninotifier.bot import gpa_window, reminder_window
-    return {reminder_window.CALLBACK: reminder_window, gpa_window.TARGET: gpa_window,
-            gpa_window.COURSE: gpa_window, gpa_window.RECORD: gpa_window}
-
-
-def _window_press(payload: dict) -> bool:
-    """A press that opens one of the form windows, or a quick pick inside one — handled here, at once (Slack's trigger
-    lasts 3 seconds). A window Slack will not open leaves the press to the ordinary chat screens."""
-    if payload.get("type") != "block_actions" or (payload.get("user") or {}).get("id") != owner():
-        return False
-    values, view = _values(payload), payload.get("view") or {}
-    token, _ = _settings()
-    if view.get("type") == "modal":                               # a quick pick inside a window: it redraws itself
-        form = _form_ids().get(view.get("callback_id"))
-        redrawn = form.modal_action(payload) if form and hasattr(form, "modal_action") else None
-        if redrawn:
-            slack.call(token, "views.update", {"view_id": view.get("id", ""),
-                                               "view": json.dumps(redrawn, ensure_ascii=False)})
-            return True
-        return False
-    if view.get("type") == "home" or (payload.get("container") or {}).get("type") == "view":
-        number = HOME_ID
-    else:
-        ts = (payload.get("container") or {}).get("message_ts") or (payload.get("message") or {}).get("ts")
-        number = number_of(ts) if ts else None
-    for form in _forms():
-        window = form.opening(values, payload, number)
-        if window:
-            try:
-                slack.call(token, "views.open", {"trigger_id": payload.get("trigger_id", ""),
-                                                 "view": json.dumps(window, ensure_ascii=False)})
-            except (slack.SlackError, requests.RequestException) as e:
-                log.warning("Slack: a form window did not open (%s) — the chat screen is used", e)
-                return False
-            return True
-    return False
-
-
-def _after_save(work) -> None:
-    """What a window's Save does once Slack has its answer (saving, redrawing the screen), and the quiet line to you."""
-    try:
-        said = work()
-        if said:
-            _toast(said, True)
-    except Exception as e:
-        log.error("Slack: a window's Save could not be finished (%s)", type(e).__name__)
-        from uninotifier import failsafe
-        failsafe.report(f"bot:window:{type(e).__name__}", "A form you saved in Slack could not be finished",
-                        detail=f"{type(e).__name__} — nothing else is affected; open the form and save again.", wait=False)
-
-
-def _submit_form(payload: dict) -> dict | None:
-    """A form window's Save: its answer to Slack (a wrong value stays in the window, said under its field) and the
-    work after it. None when the window is not one of the forms."""
-    view = payload.get("view") or {}
-    form = _form_ids().get(view.get("callback_id"))
-    if form is None:
-        return None
-    if (payload.get("user") or {}).get("id") != owner():
-        return {}
-    answer, work = form.submit(payload)
-    if work is not None:
-        threading.Thread(target=_after_save, args=(work,), name="window-saved", daemon=True).start()
-    return answer
-
-
 def respond(kind: str, payload: dict) -> dict | None:
     """What goes back to Slack WITH the acknowledgement, for a window's Save that is answered right there: {} closes
     the window, {"response_action": "errors", ...} keeps it open with the reason under the tick boxes. None: an ordinary
     request (acknowledged empty, then take() reads it)."""
     view = payload.get("view") or {}
-    if kind == "interactive" and payload.get("type") == "view_submission":
-        form = _submit_form(payload)
-        if form is not None:
-            return form
     if kind != "interactive" or payload.get("type") != "view_submission" or view.get("callback_id") != "settings":
         return None
     if (payload.get("user") or {}).get("id") != owner():
@@ -721,8 +642,6 @@ def take(kind: str, payload: dict) -> None:
         if kind == "interactive" and _opens_guest_form(payload):
             return
         if kind == "interactive" and _settings_press(payload):
-            return
-        if kind == "interactive" and _window_press(payload):
             return
         if kind == "interactive":
             updates = from_press(payload)

@@ -11,7 +11,6 @@ from uninotifier import failsafe
 from uninotifier import notifier
 from uninotifier import reminders
 from uninotifier import slack
-from uninotifier import slackbot
 from uninotifier.bot import chat
 from uninotifier.notifier import escape_md
 
@@ -161,10 +160,6 @@ def start_reminder(source: dict | None = None, message_id: int | None = None) ->
     message_id: the chat message the 📌 sits under — the reminder links back to it."""
     global _reminder_wait
     _reminder_draft.clear()
-    if source is None and slackbot.interactive():       # typed `remind` in Slack: the form opens from a button
-        chat.send_view("⏰ *New Reminder*\n\nOpen the form: write it, pick the day and the time.",
-                       [[{"text": "⏰ Open the Form", "callback_data": "rem:new"}], REMINDER_CANCEL_ROW])
-        return
     if source is None:
         _reminder_wait = "note"
         chat.send_view("➕ *New Custom Reminder*\n\nSend the note — a short line, e.g. "

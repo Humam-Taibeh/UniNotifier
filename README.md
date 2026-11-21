@@ -250,9 +250,9 @@ send `/start`. A few commands are worth knowing:
 |---|---|
 | `/start` (`menu` in Slack) | the dashboard and menu |
 | `/tasks` | every open assignment, quiz and Cambridge One task, and your reminders |
-| `/remind` | a new reminder — in Slack a window with a date picker and a time picker |
+| `/remind` | a new reminder |
 | `/courses` · `/schedule` | your courses and lecturers · your timetable files |
-| `/need` · `/gpa` | Grade Needed (in Slack your numbers go in forms, not chat messages) · GPA & Grade Hub |
+| `/need` · `/gpa` | Grade Needed · GPA & Grade Hub |
 | `/transcript` · `/balance` · `/record` | from the registration portal (needs `PORTAL_*` in `.env`) |
 | `/midterms` · `/attendance` | Midterm Watch · your absences per course |
 | `/register` | 🗓️ Registration Plan — what to register next term |
