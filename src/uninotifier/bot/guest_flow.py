@@ -195,31 +195,51 @@ def handle_guest_text(text: str, message_id: int | None) -> None:
     threading.Thread(target=run_guest, args=(_guest["user"], text), daemon=True).start()
 
 
+FAILED_ROWS = [[{"text": "🔁 Try Again", "callback_data": "guest:start"}], chat.RECORD_ROW]
+
+
+def _failed(text: str, png: bytes | None, signing: dict | None) -> None:
+    """The look-up did not get in (a wrong ID or password, the portal down): ONE message says so — with the portal's
+    own page when there is one, so you see what it said — and 🔁 Try Again. There was no session, so no session panel
+    follows, and the "Signing in…" line goes."""
+    if isinstance(signing, dict) and signing.get("message_id"):
+        chat.api("deleteMessage", chat_id=chat.CHAT_ID, message_id=signing["message_id"])
+    _guest.clear()
+    if not (png and notifier.send_png_file(chat.BOT_TOKEN, chat.CHAT_ID, png, "Guest - portal.png", text,
+                                           rows=FAILED_ROWS)):
+        chat.send_view(text, FAILED_ROWS)
+
+
 @chat.with_action("typing")
 def run_guest(user: str, password: str) -> None:
     """Worker thread: sign in as the guest, send what was read. The caller holds _portal_lock."""
+    shown = False
     try:
-        guest_send(f"👤 Signing in as `{escape_md(user)}`…")
+        signing = guest_send(f"👤 Signing in as `{escape_md(user)}`…")
         try:
             results = portal.fetch_many(GUEST_SECTIONS, lambda a, r: portal_flow.ask_portal_code(a, r, for_guest=True),
                                         creds=(user, password), keep_debug=False)
         except maintenance.PortalUnavailable as e:
-            text = maintenance.alert_text(e, "Try the guest look-up again later.")
-            guest_file(e.png, "Guest - portal.png", text) if e.png else guest_send(text)
+            _failed(maintenance.alert_text(e, "Try the guest look-up again later."), e.png, signing)
         except portal.PortalError as e:
-            guest_send(f"❌ *Guest look-up stopped* — {escape_md(notifier.redact(str(e)))}")
+            _failed(f"❌ *Guest look-up stopped* — {escape_md(notifier.redact(str(e)))}", e.png, signing)
         except Exception as e:
             log.exception("Guest look-up failed")
             failsafe.bug("bot:guest", "A guest look-up crashed", e)
-            guest_send("❌ *Guest look-up failed* — the portal couldn't be read.")
+            _failed("❌ *Guest look-up failed* — the portal couldn't be read.", None, signing)
         else:
-            send_guest_results(user, results)
+            shown = send_guest_results(user, results)
+            if not shown:
+                record = results.get("transcript")
+                _failed("❌ *Guest look-up stopped* — their transcript could not be read.",
+                        record.png if record else None, signing)
     finally:
-        _guest["step"] = "done"
         portal_flow._portal_lock.release()
-        sent = guest_send(panel_text(), panel_rows(with_target=bool(_guest.get("record"))))
-        if isinstance(sent, dict) and "message_id" in sent:
-            _guest["panel"] = sent["message_id"]
+        if shown:                                   # signed in: the session's panel (🎯 Target GPA, 🚪 Sign Out)
+            _guest["step"] = "done"
+            sent = guest_send(panel_text(), panel_rows(with_target=bool(_guest.get("record"))))
+            if isinstance(sent, dict) and "message_id" in sent:
+                _guest["panel"] = sent["message_id"]
 
 
 # ------------------------------------------------------- the panel and the target calculator
@@ -311,21 +331,21 @@ def _target_callback(cb: dict, action: str) -> None:
             edit_panel(message_id, *target_picker())
 
 
-def send_guest_results(user: str, results: dict) -> None:
+def send_guest_results(user: str, results: dict) -> bool:
     """The guest's record, in the layout of your own transcript: the screenshot with the executive summary
     (major, passed hours, hours left when `degree_hours` is set, GPA, status), then the semesters — one text
     message. This term's published marks (the results page) fill in the term in progress. The financial page
-    was read only for the major; none of it is shown or kept."""
+    was read only for the major; none of it is shown or kept. False when there was no transcript to show."""
     head = f"👤 *Guest {escape_md(user)}*"
     record = results.get("transcript")
     if not record:
-        return
+        return False
     semesters = (record.data or {}).get("semesters") or []
     if not semesters:
         guest_send(f"{head} — the transcript page was reached, but no courses could be read from it.")
         if record.png:
             guest_file(record.png, f"Guest {user} - Transcript.png", f"{head} — 📜 Transcript")
-        return
+        return True
     major = None
     finance = results.get("balance")
     if finance and finance.found:
@@ -347,6 +367,7 @@ def send_guest_results(user: str, results: dict) -> None:
         guest_send(caption, rows)
     _guest["record"] = {"semesters": semesters, "figures": record.figures, "plan": plan,     # in memory only,
                         "overlay": finals.marks_overlay(results.get("grades"), semesters)}     # gone at sign-out
+    return True
 
 
 def _registration_text(record: dict) -> str:

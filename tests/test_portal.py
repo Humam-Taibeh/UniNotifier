@@ -1230,6 +1230,63 @@ def test_guest_summary_and_target_math():
         bot._guest.clear()
 
 
+def test_a_guest_sign_in_that_fails_says_so_with_the_portals_own_page():
+    """A wrong student ID or password: ONE message says the look-up stopped and why, with a picture of the portal's
+    page (its own words), 🔁 Try Again and the way back — the "Signing in…" line goes, and no "Guest session finished"
+    panel follows (there was no session to sign out of)."""
+    import importlib
+    bot = _package("uninotifier.bot")
+    guest_flow = importlib.import_module("uninotifier.bot.guest_flow")
+    from uninotifier import portal
+    calls, pictures = [], []
+
+    def fake_api(method, **data):
+        calls.append((method, data))
+        return {"message_id": 300 + len(calls)} if method == "sendMessage" else True
+
+    def refused(sections, ask_code, creds=None, keep_debug=True):
+        error = portal.PortalError("The portal refused the sign-in: Incorrect username or password.")
+        error.png = b"PNG-LOGIN-PAGE"
+        raise error
+
+    keep = (bot.api, bot.send_view, bot.portal.fetch_many, bot.notifier.send_png_file)
+    bot.api, bot.portal.fetch_many = fake_api, refused
+    bot.send_view = lambda text, rows: calls.append(("view", {"text": text, "rows": rows})) or {"message_id": 1}
+    bot.notifier.send_png_file = lambda token, chat_id, png, name, caption="", url=None, rows=None: \
+        pictures.append((png, caption, rows)) or True
+    try:
+        assert portal.PortalError("x").png is None
+        guest_flow._guest.clear()
+        guest_flow._guest.update(step="running", user="209900002", messages=[])
+        assert bot._portal_lock.acquire(blocking=False)
+        guest_flow.run_guest("209900002", "wrong")
+        at = next(n for n, (m, d) in enumerate(calls) if m == "sendMessage" and "Signing in" in d["text"])
+        signing = calls[at][1]
+        assert ("deleteMessage", {"chat_id": bot.CHAT_ID, "message_id": 301 + at}) in calls, "the Signing in… line goes"
+        assert len(pictures) == 1 and pictures[0][0] == b"PNG-LOGIN-PAGE", pictures
+        png, caption, rows = pictures[0]
+        assert caption.startswith("❌ *Guest look-up stopped*") and "Incorrect username or password" in caption
+        assert rows[0] == [{"text": "🔁 Try Again", "callback_data": "guest:start"}] and rows[-1] == bot.RECORD_ROW
+        texts = [d.get("text", "") for m, d in calls if m in ("sendMessage", "view")]
+        assert not any("Guest session finished" in t for t in texts), "no session panel after a failed sign-in"
+        assert guest_flow._guest == {} and not bot._portal_lock.locked()
+        assert signing["text"].startswith("👤 Signing in as")
+        # no picture (the portal could not be reached at all): the same message as text
+        calls.clear()
+        pictures.clear()
+        bot.portal.fetch_many = lambda *a, **k: (_ for _ in ()).throw(portal.PortalError("No verification code arrived in time."))
+        guest_flow._guest.update(step="running", user="209900002", messages=[])
+        assert bot._portal_lock.acquire(blocking=False)
+        guest_flow.run_guest("209900002", "pw")
+        view = [d for m, d in calls if m == "view"]
+        assert pictures == [] and view and "No verification code" in view[-1]["text"] and view[-1]["rows"][0][0]["text"] == "🔁 Try Again"
+    finally:
+        bot.api, bot.send_view, bot.portal.fetch_many, bot.notifier.send_png_file = keep
+        guest_flow._guest.clear()
+        if bot._portal_lock.locked():
+            bot._portal_lock.release()
+
+
 def test_guest_lookup_in_telegram():
     """/guest: student ID, then the password (deleted from the chat at once), their
     verification code relayed, their record sent one message after another — and none

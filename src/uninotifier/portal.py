@@ -119,7 +119,10 @@ TIMETABLE_PAGES = 6                  # pages followed when the rows-per-page cho
 
 
 class PortalError(Exception):
-    """Something the user should read (the message is shown in chat)."""
+    """Something the user should read (the message is shown in chat). `png`: the portal page as it was
+    when it happened (a refused sign-in shows the portal's own words), when there was a page."""
+
+    png: bytes | None = None
 
 
 @dataclass
@@ -512,7 +515,11 @@ def fetch_many(sections: list[str], ask_code, creds: tuple[str, str] | None = No
             if not resumed:
                 try:
                     login(page, *creds, ask_code)
-                except (PortalError, maintenance.PortalUnavailable):
+                except PortalError as e:
+                    if e.png is None:
+                        e.png = _screenshot(page)       # the portal's own words: what was wrong
+                    raise
+                except maintenance.PortalUnavailable:
                     raise
                 except Exception as e:          # the form never appeared, the page didn't load, ...
                     raise maintenance.unavailable(page, SITE_NAME, e) from e
