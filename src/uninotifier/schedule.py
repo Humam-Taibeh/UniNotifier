@@ -164,15 +164,16 @@ def _auto_text() -> str | None:
 
 
 def auto_check_in(current: dict | None = None) -> bool:
-    """Automatic attendance check-in is switched on. A schedule.json that says so, either way,
-    is obeyed ("auto_check_in": true / false); when it says nothing — or there is no
-    schedule.json at all, the timetable being the portal's — AUTO_CHECK_IN=true in .env decides."""
+    """Automatic attendance check-in is switched on. AUTO_CHECK_IN in .env decides when it says true or
+    false (⚙️ Settings writes it); when it is empty, an "auto_check_in" a schedule.json of your own holds
+    is obeyed; otherwise it is off."""
+    from uninotifier import envcheck
+    said = envcheck.value("AUTO_CHECK_IN").lower()
+    if said in ("true", "false"):
+        return said == "true"
     current = load_schedule() if current is None else current
     chosen = current.get("auto_check_in")
-    if isinstance(chosen, bool):
-        return chosen
-    from uninotifier import envcheck
-    return envcheck.value("AUTO_CHECK_IN").lower() == "true"
+    return chosen if isinstance(chosen, bool) else False
 
 
 def _portal_will_build() -> bool:

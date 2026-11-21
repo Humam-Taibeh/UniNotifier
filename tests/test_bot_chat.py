@@ -73,9 +73,10 @@ def test_bot_views():
     text, rows = bot.view_menu()
     assert [[b["text"] for b in row] for row in rows] == [
         ["📚 My Courses & Schedule", "⏳ Upcoming Tasks & Reminders"],
-        ["📊 GPA & Grade Hub", "📜 Academic Record & Balance"]], rows
+        ["📊 GPA & Grade Hub", "📜 Academic Record & Balance"],
+        ["⚙️ Settings"]], rows
     assert [b.get("callback_data") for row in rows for b in row] == [
-        "courses", "tasks", "academic", "record"], "no external site buttons, no in-chat guide"
+        "courses", "tasks", "academic", "record", "settings"], "no external site buttons, no in-chat guide"
     assert len(text.splitlines()) == 1 and text.startswith("🎓 *UniNotifier System* • First Semester 2026/2027")
     assert "Courses Tracked" not in text and text.endswith("Monitor not started yet*"), text          # the status sits beside the semester, no course count
     # My Courses & Schedule is a menu, not a wall of text; Tracked Items and Campus Guide are gone
@@ -1290,6 +1291,62 @@ def test_the_timetable_is_uploaded_once_then_shown_from_slacks_own_copy():
             bot.CHAT_ID, access.ADMIN_USER_ID = owner
 
 
+def test_settings_switch_what_the_bot_does_by_itself():
+    """⚙️ Settings (main menu, `settings`): Auto Check-In, Auto Mark as Done and Midterm Watch, each on or off with one
+    tap — written to .env (read back, nothing else in it touched) and seen by the bot at once. A value in .env wins
+    over a schedule.json's "auto_check_in". The screen ends with Back + Main Menu; 🆕 Check for Updates is there too."""
+    import shutil
+    from uninotifier import exams_watch, schedule, setup
+    settings_flow = importlib.import_module("uninotifier.bot.settings_flow")
+    bot = _package("uninotifier.bot")
+    assert any(b.get("callback_data") == "settings" for row in bot.view_menu()[1] for b in row), "⚙️ Settings on the menu"
+    tmp = Path(tempfile.mkdtemp(prefix="uninotifier-settings-"))
+    env = tmp / ".env"
+    env.write_text("ZUJ_USERNAME=a@b.c\n# my own note\nAUTO_MARK_DONE=\nAUTO_CHECK_IN=\n", encoding="utf-8")
+    keep = (paths.ENV_FILE, setup.restrict, exams_watch.STATE_FILE, schedule.load_schedule, bot.edit_view, bot.api)
+    keep_env = {k: os.environ.get(k) for k in ("AUTO_MARK_DONE", "AUTO_CHECK_IN")}
+    screens = []
+    try:
+        paths.ENV_FILE, setup.restrict = env, (lambda path: True)
+        exams_watch.STATE_FILE = tmp / "exams_watch.json"
+        schedule.load_schedule = lambda: {"auto_check_in": True}           # a schedule.json of the owner's that says on
+        for k in keep_env:
+            os.environ.pop(k, None)
+        text, rows = settings_flow.view_settings()
+        assert text.startswith("⚙️ *Settings*") and rows[-1] == bot.BACK_ROW, rows
+        assert [b["callback_data"] for row in rows[:-1] for b in row] == [
+            "set:AUTO_CHECK_IN", "set:AUTO_MARK_DONE", "set:MIDTERMS", "set:update"]
+        assert "Auto Check-In — *🟢 On*" in text and "Auto Mark as Done — *⚪ Off*" in text, text
+        bot.edit_view = lambda message_id, text, rows: screens.append((message_id, text, rows))
+        bot.api = lambda method, **data: True
+        bot.handle_callback({"id": "s1", "data": "set:AUTO_MARK_DONE", "message": {"message_id": 7}})
+        assert "AUTO_MARK_DONE=true" in env.read_text(encoding="utf-8") and os.environ["AUTO_MARK_DONE"] == "true"
+        assert "# my own note" in env.read_text(encoding="utf-8"), "nothing else in .env is touched"
+        assert screens[-1][0] == 7 and "Auto Mark as Done — *🟢 On*" in screens[-1][1], "redrawn in place"
+        # off from the bot although schedule.json says on: .env wins, at once
+        bot.handle_callback({"id": "s2", "data": "set:AUTO_CHECK_IN", "message": {"message_id": 7}})
+        assert "AUTO_CHECK_IN=false" in env.read_text(encoding="utf-8") and schedule.auto_check_in() is False
+        assert "Auto Check-In — *⚪ Off*" in screens[-1][1]
+        os.environ["AUTO_CHECK_IN"] = ""
+        assert schedule.auto_check_in() is True, "empty in .env: the schedule.json's choice"
+        assert schedule.auto_check_in({}) is False, "neither says: off"
+        os.environ["AUTO_CHECK_IN"] = "true"
+        assert schedule.auto_check_in({"auto_check_in": False}) is True
+        # Midterm Watch: its own switch
+        assert exams_watch.enabled()
+        bot.handle_callback({"id": "s3", "data": "set:MIDTERMS", "message": {"message_id": 7}})
+        assert not exams_watch.enabled() and "Midterm Watch — *⚪ Off*" in screens[-1][1]
+        assert settings_flow.switch("SOMETHING_ELSE", True).startswith("⚠️"), "only the listed settings are written"
+    finally:
+        paths.ENV_FILE, setup.restrict, exams_watch.STATE_FILE, schedule.load_schedule, bot.edit_view, bot.api = keep
+        for k, v in keep_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_the_slack_home_page_is_a_dashboard():
     """The main menu on Slack's Home page shows today, what is due soon and the next reminders, then
     the buttons — read from the bot's own files, every button with an id of its own (Slack refuses a
@@ -1328,7 +1385,7 @@ def test_the_slack_home_page_is_a_dashboard():
     ids += [e["action_id"] for b in page["blocks"] if b["type"] == "actions" for e in b["elements"]]
     assert len(ids) == len(set(ids)), f"an id repeats: {ids}"
     assert [e["value"] for b in page["blocks"] if b["type"] == "actions" for e in b["elements"] if e.get("value")] == [
-        "courses", "tasks", "academic", "record", "check", "rem:new"]
+        "courses", "tasks", "academic", "record", "settings", "check", "rem:new"]
     assert "Updated" in page["blocks"][-1]["elements"][0]["text"]
 
 

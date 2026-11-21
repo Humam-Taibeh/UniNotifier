@@ -20,7 +20,7 @@ from uninotifier import slack
 from uninotifier import slackbot
 from uninotifier import tasks
 from uninotifier import timetable
-from uninotifier.bot import chat
+from uninotifier.bot import chat, settings_flow
 from uninotifier.notifier import escape_md
 
 log = logging.getLogger("uninotifier")
@@ -49,6 +49,7 @@ def view_menu() -> tuple[str, list]:
          {"text": "⏳ Upcoming Tasks & Reminders", "callback_data": "tasks"}],
         [{"text": "📊 GPA & Grade Hub", "callback_data": "academic"},
          {"text": "📜 Academic Record & Balance", "callback_data": "record"}],
+        [{"text": "⚙️ Settings", "callback_data": "settings"}],
     ]
 
 
@@ -210,14 +211,14 @@ def view_course_list() -> tuple[str, list]:
 
 
 VIEWS = {"menu": view_menu, "tasks": view_tasks, "courses": view_courses, "courselist": view_course_list,
-         "academic": view_academic, "record": view_record}
+         "academic": view_academic, "record": view_record, "settings": settings_flow.view_settings}
 
 
 PORTAL_COMMANDS = {"/transcript": "transcript", "/balance": "balance"}      # /grades is Finals Watch's check
 
 
 COMMAND_VIEWS = {"/start": "menu", "/tasks": "tasks", "/courses": "courses", "/gpa": "academic",
-                 "/record": "record"}
+                 "/record": "record", "/settings": "settings"}
 
 
 _schedule_lock = threading.Lock()

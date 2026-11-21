@@ -34,7 +34,7 @@ from uninotifier import slackbot
 from uninotifier import tasks
 from uninotifier import telegram
 from uninotifier.bot import (attendance_flow, balance_flow, chat, exams_flow, checks, finals_flow, gpa_flow, guest_flow, portal_flow, registration_flow,
-                             registration_watch_flow, reminder_flow, update_flow, views)
+                             registration_watch_flow, reminder_flow, settings_flow, update_flow, views)
 
 log = logging.getLogger("uninotifier")
 
@@ -99,6 +99,7 @@ COMMANDS = [
     ("register", "🗓️ Registration Plan"),
     ("update", "🆕 Check for a New Version"),
     ("finals", "🏁 Finals Watch"),
+    ("settings", "⚙️ Settings"),
 ]
 
 
@@ -309,6 +310,9 @@ def route_callback(cb: dict, action: str, message_id: int | None) -> None:
         return
     if action.startswith("update:"):
         update_flow.handle_callback(cb, action, message_id)
+        return
+    if action.startswith("set:"):
+        settings_flow.handle_callback(cb, action, message_id)
         return
     if action.startswith("finals:"):
         chat.answer(cb["id"])
