@@ -342,12 +342,6 @@ def route_callback(cb: dict, action: str, message_id: int | None) -> None:
     if action == "schedule":
         views.start_schedule_files()
         return
-    if action == "panel":                                    # Slack opens the window at the press; this is a press it could not
-        chat.answer(cb["id"], "⚠️ The Control Panel could not open — try again.", alert=True)
-        return
-    if action in views.VIEWS and not message_id:             # chosen in the Control Panel: a new screen at the bottom
-        chat.send_view(*views.VIEWS[action]())
-        return
     if action in views.VIEWS and message_id:
         if chat.is_file_message(cb.get("message")):          # the menu opens under the file, which is kept
             chat.send_view(*views.VIEWS[action]())

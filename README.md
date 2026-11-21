@@ -263,11 +263,6 @@ send `/start`. A few commands are worth knowing:
 | `/check` | run a check right now |
 | `/help` | a link to this guide |
 
-In Slack the menu's 🎛️ **Control Panel** button opens one window over the chat with everything the bot does, in five
-sections (courses and schedule, tasks and reminders, GPA and grades, record and balance, settings). A form opens
-right there and closes when you save it; whatever you asked to read — a timetable, a transcript, your tasks — comes
-down in the chat as always, and notifications stay ordinary messages.
-
 The bot answers only you — `SLACK_USER` in Slack, `ADMIN_USER_ID` in Telegram; anyone else who finds it
 gets no reply, and you are told.
 

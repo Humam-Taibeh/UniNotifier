@@ -10,8 +10,6 @@ does not have yet when it tells its owner that a new version is ready (newest fi
 - 📝 **Midterm Watch** (`midterms`): each midterm mark the moment it appears on the exams site, with a picture.
 - 🎒 **Absences** (`attendance`): after your last lecture the bot asks whether you went, and warns you before a
   course's absence limit. It also tells you when your balance changes and when registration opens.
-- 🎛️ **Control Panel** (Slack): one button opens a window with everything the bot does, in five sections. Forms open
-  right there; what you ask to read arrives in the chat, and notifications stay as they are.
 - 🔒 **More private**: a friend's login for `guest` is typed into a private Slack form — never a chat message, never
   saved. What you type to the bot is no longer kept on your PC.
 - ✅ **Your choice**: ticking *Mark as done* on Moodle by itself is now off unless you set `AUTO_MARK_DONE=true` in

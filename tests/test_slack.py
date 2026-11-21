@@ -686,8 +686,6 @@ def _slack_windows_harness(bot, tmp):
                 state[name] = {name: {"type": kind, "selected_date": given or block["element"].get("initial_date")}}
             elif kind == "timepicker":
                 state[name] = {name: {"type": kind, "selected_time": given or block["element"].get("initial_time")}}
-            elif kind == "radio_buttons":
-                state[name] = {name: {"type": kind, "selected_option": {"value": given} if given else None}}
             elif kind == "static_select":
                 chosen = given or (block["element"].get("initial_option") or {}).get("value")
                 state[name] = {name: {"type": kind, "selected_option": {"value": chosen} if chosen else None}}
@@ -891,103 +889,6 @@ def test_grade_needed_is_asked_in_slack_windows_not_typed_as_messages():
     finally:
         (slack._post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, gpa.STATE_FILE,
          bot.edit_view, bot.send_view) = keep
-        bot.CHAT_ID, access.ADMIN_USER_ID = owner
-        shutil.rmtree(tmp, ignore_errors=True)
-
-
-def test_the_control_panel_is_one_window_for_everything_you_can_do():
-    """🎛️ Control Panel (Slack): the menu's button opens ONE window with five sections, each with a line of what is in it
-    now; a section's Open pushes its window — a list of actions and Go. A form action (reminder, Grade Needed, Settings)
-    turns that window into the form, and its Save closes the whole panel; an action whose answer is something to read
-    closes the panel and the answer comes down in the chat as a new message. Nothing chosen is said under the list.
-    Every title and line fits Slack's limits. Nobody else can open or use it."""
-    from datetime import datetime, timedelta
-    from support import OWNER_ID as OWNER, _with_env
-    from uninotifier import gpa, reminders, slack, slackbot
-    panel = importlib.import_module("uninotifier.bot.panel_window")
-    bot = _package("uninotifier.bot")
-    tmp = Path(tempfile.mkdtemp(prefix="uninotifier-panel-"))
-    calls, press, opened, save, toasts, fake_post = _slack_windows_harness(bot, tmp)
-
-    def no_telegram(*a, **k):
-        raise AssertionError("Telegram must not be used while the bot lives in Slack")
-
-    keep = (slack._post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, reminders.STATE_FILE,
-            reminders.SOURCES_FILE, gpa.STATE_FILE, bot.send_view, bot.edit_view)
-    owner = _as_owner(bot)
-    on = {"NOTIFY_VIA": "slack", "SLACK_BOT_TOKEN": "-".join(("xoxb", "1", "2", "made-up")), "SLACK_CHANNEL": "D0123ABCD",
-          "SLACK_APP_TOKEN": "-".join(("xapp", "1", "made-up")), "SLACK_USER": "U0OWNER1", "TELEGRAM_CHAT_ID": OWNER}
-    try:
-        slack._post, telegram.request, slack.MIN_INTERVAL = fake_post, no_telegram, 0
-        slackbot.STORE, slackbot._connect = tmp / "slack_messages.json", lambda: None
-        reminders.STATE_FILE, reminders.SOURCES_FILE = tmp / "reminders.json", tmp / "sources.json"
-        gpa.STATE_FILE = tmp / "gpa.json"
-        sent = []
-        bot.send_view = lambda text, rows: sent.append(text) or {"message_id": 1}
-        bot.edit_view = lambda message_id, text, rows: sent.append(text)
-
-        def scenario():
-            # the menu offers it (first), and the press opens the window at once — not a chat screen
-            assert bot.view_menu()[1][0] == [{"text": "🎛️ Control Panel", "callback_data": "panel"}]
-            press("panel")
-            main = opened()[0]
-            assert main["type"] == "modal" and main["callback_id"] == "panel" and slackbot.get_updates(None, 0) == []
-            assert len(main["title"]["text"]) <= 24 and len(main["blocks"]) <= 100
-            buttons = [b["accessory"] for b in main["blocks"] if b.get("accessory")]
-            assert [b["value"] for b in buttons] == [f"panel:open:{k}" for k, *_ in panel.SECTIONS]
-            assert len({b["action_id"] for b in buttons}) == len(buttons)
-            # a section's Open pushes its window over the main one
-            press("panel:open:tasks", view={"type": "modal", "callback_id": "panel", "id": "V-MAIN"})
-            pushed = [json.loads(d["view"]) for m, d in calls if m == "views.push"]
-            assert len(pushed) == 1 and pushed[0]["callback_id"] == "panel_go" and slackbot.get_updates(None, 0) == []
-            # every section's window fits Slack: title, options, lines
-            for key, *_ in panel.SECTIONS:
-                window = panel.section_window(key)
-                options = window["blocks"][0]["element"]["options"]
-                assert len(window["title"]["text"]) <= 24 and 1 <= len(options) <= 10, key
-                assert all(len(o["text"]["text"]) <= 75 and len(o["description"]["text"]) <= 75 for o in options), key
-            # a press of someone else opens nothing
-            press("panel", user="U0STRANGER")
-            assert opened() == []
-            assert all(u["callback_query"]["from"]["id"] == "slack:U0STRANGER" for u in slackbot.get_updates(None, 0)),                 "a stranger's press reaches the bot only to be turned away"
-            # Go with nothing chosen: said under the list, the window stays
-            window = panel.section_window("tasks")
-            assert save(window, {})["errors"][panel.PICK]
-            # an answer to read: the panel closes, the answer comes down as a NEW message at the bottom
-            assert save(window, {panel.PICK: "tasks"}) == {"response_action": "clear"}
-            update = slackbot.get_updates(None, 0)
-            assert len(update) == 1 and update[0]["callback_query"]["data"] == "tasks", update
-            assert update[0]["callback_query"]["message"]["message_id"] == 0
-            sent.clear()
-            bot.handle_update(update[0])
-            assert sent and "Upcoming Tasks" in sent[0], sent
-            # a stranger's Go does nothing
-            assert save(window, {panel.PICK: "tasks"}, user="U0STRANGER") == {} and slackbot.get_updates(None, 0) == []
-            # a form: the window becomes the form, and Save closes the whole panel
-            answer = save(window, {panel.PICK: "rem:new"})
-            form = answer["view"]
-            assert answer["response_action"] == "update" and form["callback_id"] == "reminder", answer
-            assert json.loads(form["private_metadata"])["panel"] is True and slackbot.get_updates(None, 0) == []
-            tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
-            assert save(form, {"note": "Buy the textbook", "day": tomorrow, "time": "09:30"}) == {"response_action": "clear"}
-            assert [r["note"] for r in reminders.pending()] == ["Buy the textbook"]
-            assert save(form, {"note": "", "day": tomorrow, "time": "09:30"})["response_action"] == "errors"      # a mistake stays in the form
-            target = save(panel.section_window("gpa"), {panel.PICK: "gpa:need"})["view"]
-            assert target["callback_id"] == "gpa_target" and save(target, {"preset": "85"}) == {"response_action": "clear"}
-            assert sent and "85" in sent[-1], "the plan comes down as a new message"
-            settings = save(panel.section_window("settings"), {panel.PICK: "settings"})["view"]
-            assert settings["callback_id"] == "settings" and json.loads(settings["private_metadata"])["panel"] is True
-            # every chat action of the panel is a button the bot already answers (none is lost)
-            known = set(bot.VIEWS) | {"schedule", "check", "att:home", "mid:status", "finals:status", "rem:list",
-                                      "portal:transcript", "portal:balance", "reg:fresh", "guest:start", "set:update"}
-            for _, _, _, actions in panel.SECTIONS:
-                for value, _, _, kind in actions:
-                    assert kind == "window" or value in known, value
-
-        _with_env(on, scenario)
-    finally:
-        (slack._post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, reminders.STATE_FILE,
-         reminders.SOURCES_FILE, gpa.STATE_FILE, bot.send_view, bot.edit_view) = keep
         bot.CHAT_ID, access.ADMIN_USER_ID = owner
         shutil.rmtree(tmp, ignore_errors=True)
 

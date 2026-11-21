@@ -810,17 +810,6 @@ only you see) runs on a thread.
 | 📘 Course marks | Final Grade, Coursework Total, Retake (turning it on) | final grade · coursework marks / out of · retake + previous grade |
 | 🎓 CGPA & Hours | the record button | CGPA · hours |
 | ⚙️ Settings, 🆕 Updates | ⚙️ Settings | tick boxes (Save) · a second window for updates |
-| 🎛️ Control Panel | the menu's 🎛️ Control Panel | five sections, each a list of actions and Go (below) |
-
-**🎛️ Control Panel** (`bot/panel_window.py`). The main window (callback `panel`) is five buttons, each with a line
-of what its section holds now (read from the bot's own files: no network). A section's Open pushes its window
-(`panel_go`): a list of that section's actions and **Go**. Go is a submit, so Slack's acknowledgement decides what
-happens: a *form* action (reminder, Grade Needed, CGPA, Settings) answers `response_action: update` with that form —
-its Save then answers `clear` (the form's `private_metadata` carries `panel: true`) and the whole panel closes; an
-action whose answer is something to *read* answers `clear` and is queued as the same button press the chat's menu
-would make, with no screen behind it, so the answer is a new message at the bottom of the chat. A window cannot hold a
-picture or a file, and notifications stay messages — which is why nothing is shown inside the panel. Telegram has no
-panel; the chat menus are unchanged there.
 | 🔑 Guest login | 🔑 Enter Their Login | student ID · password (never stored) |
 
 Only the owner can open or save one. A window Slack will not open leaves the press to the ordinary chat screens, and

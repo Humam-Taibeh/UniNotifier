@@ -23,10 +23,6 @@ All notable changes to this project are documented here. The format follows
 - `DISCLAIMER.md` (and a Disclaimer section in both READMEs): unofficial; it assists and never decides; your
   attendance is your instructor's; your account, your responsibility.
 - A `commit-msg` hook (`core.hooksPath .githooks`): a commit names only the person who makes it.
-- 🎛️ **Control Panel** (Slack): a button on the menu and the Home page opens one window with five sections —
-  courses and schedule, tasks and reminders, GPA and grades, record and balance, settings. A section is a list of
-  actions and Go: a form opens in the same window and closes it when saved; an answer to read (timetable,
-  transcript, tasks) closes it and arrives in the chat as a new message. Notifications are unchanged.
 - **Forms in Slack instead of typing messages.** ➕ New Reminder, 📌 Add to Reminders and a reminder's Edit buttons open
   one window: the note, a date picker, a time picker and quick picks (next campus day, before the next lecture, in an
   hour, tomorrow morning) that fill them in and keep what you typed. 🎯 Grade Needed opens a window (semester or

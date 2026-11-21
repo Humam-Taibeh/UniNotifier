@@ -82,10 +82,9 @@ def _plain(text: str) -> dict:
     return {"type": "plain_text", "text": text, "emoji": True}
 
 
-def modal(panel: bool = False) -> dict:
+def modal() -> dict:
     """⚙️ Settings as a Slack window over the chat: a tick box per switch (with what it does), Save / Cancel, and
-    🆕 Check for Updates. Nothing changes until Save. Opened from the 🎛️ Control Panel (`panel`), Save closes the
-    panel with it."""
+    🆕 Check for Updates. Nothing changes until Save."""
     options = [{"text": {"type": "mrkdwn", "text": f"*{label}*"},
                 "description": {"type": "mrkdwn", "text": TICK_WORDS[name]}, "value": name}
                for name, label, _ in SWITCHES]
@@ -97,7 +96,6 @@ def modal(panel: bool = False) -> dict:
     version = updates._out("rev-parse", "--short", "HEAD") if updates.is_clone() else None
     return {"type": "modal", "callback_id": VIEW_ID, "title": _plain("⚙️ Settings"),
             "submit": _plain("Save"), "close": _plain("Cancel"),
-            "private_metadata": '{"panel": true}' if panel else "{}",
             "blocks": [
                 {"type": "section", "text": {"type": "mrkdwn", "text":
                     "*What UniNotifier does for you on its own*\nTick what you want — *Save* applies it at once."}},
