@@ -16,7 +16,7 @@ import time
 from uninotifier import fileio, paths
 
 STATE_FILE = paths.DATA / "balance_watch.json"
-INTERVAL_SECONDS = 6 * 60 * 60        # how often the portal is looked at (each look is a full sign-in: kept rare)
+INTERVAL_SECONDS = 60 * 60            # how often the portal is looked at
 TOLERANCE = 0.005                     # amounts are money: a change is anything of half a fils or more
 
 

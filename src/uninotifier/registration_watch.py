@@ -13,7 +13,7 @@ import time
 from uninotifier import fileio, paths
 
 STATE_FILE = paths.DATA / "registration_watch.json"
-INTERVAL_SECONDS = 2 * 60 * 60        # a look is a full portal sign-in: rare enough to be light on the university
+INTERVAL_SECONDS = 30 * 60
 
 
 def load() -> dict:
