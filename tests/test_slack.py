@@ -6,6 +6,7 @@ from support import (_as_owner, _package)
 import importlib
 import json
 import os
+import shutil
 import tempfile
 import threading
 from pathlib import Path
@@ -633,6 +634,258 @@ def test_settings_open_as_a_window_in_slack():
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+        bot.CHAT_ID, access.ADMIN_USER_ID = owner
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _slack_windows_harness(bot, tmp):
+    """A fake Slack for the form windows: what was opened, updated and said, and the helpers to press and save."""
+    from uninotifier import slackbot
+    calls = []
+
+    class Answer:
+        status_code, ok, headers = 200, True, {}
+
+        def __init__(self, body):
+            self._body = body
+
+        def json(self):
+            return self._body
+
+    def fake_post(url, data=None, timeout=None, headers=None):
+        method = url.rsplit("/", 1)[-1]
+        calls.append((method, data))
+        return Answer({"ok": True, "ts": "1.1", "view": {"id": "V-OPEN"}})
+
+    def press(value, view=None, trigger="T-1", user="U0OWNER1", ts="1700000001.0001"):
+        calls.clear()
+        while not slackbot._events.empty():               # what an earlier test left in the queue is not this press's
+            slackbot._events.get_nowait()
+        payload = {"type": "block_actions", "user": {"id": user}, "trigger_id": trigger,
+                   "container": {"type": "message", "message_ts": ts},
+                   "actions": [{"action_id": "b0_0", "value": value, "action_ts": "3.1"}]}
+        if view:
+            payload["view"] = view
+        slackbot.take("interactive", payload)
+
+    def opened():
+        return [json.loads(d["view"]) for m, d in calls if m == "views.open"]
+
+    def save(window, fields, user="U0OWNER1"):
+        """Fill the window's fields as Slack would send them, and send Save: Slack's answer."""
+        state = {}
+        for block in window["blocks"]:
+            if block["type"] != "input":
+                continue
+            kind, name = block["element"]["type"], block["block_id"]
+            given = fields.get(name)
+            if kind == "plain_text_input":
+                state[name] = {name: {"type": kind, "value": given if name in fields else block["element"].get("initial_value")}}
+            elif kind == "datepicker":
+                state[name] = {name: {"type": kind, "selected_date": given or block["element"].get("initial_date")}}
+            elif kind == "timepicker":
+                state[name] = {name: {"type": kind, "selected_time": given or block["element"].get("initial_time")}}
+            elif kind == "static_select":
+                chosen = given or (block["element"].get("initial_option") or {}).get("value")
+                state[name] = {name: {"type": kind, "selected_option": {"value": chosen} if chosen else None}}
+            elif kind == "checkboxes":
+                ticked = given if name in fields else [o["value"] for o in block["element"].get("initial_options", [])]
+                state[name] = {name: {"type": kind, "selected_options": [{"value": v} for v in ticked]}}
+        view = {"callback_id": window["callback_id"], "private_metadata": window["private_metadata"],
+                "state": {"values": state}}
+        answer = slackbot.respond("interactive", {"type": "view_submission", "user": {"id": user}, "view": view})
+        for thread in [t for t in threading.enumerate() if t.name == "window-saved"]:
+            thread.join(5)
+        return answer
+
+    def toasts():
+        return [d["text"] for m, d in calls if m == "chat.postEphemeral"]
+
+    return calls, press, opened, save, toasts, fake_post
+
+
+def test_reminders_are_set_in_a_slack_window_with_a_date_and_time_picker():
+    """➕ New Reminder, 📌 Add to Reminders and a reminder's Edit buttons open ONE window in Slack: the note, a date
+    picker, a time picker and quick picks that fill them in (keeping what you typed). A time that has passed is said under
+    the time; a saved reminder is confirmed to you alone. An edit opens with the reminder's own text, day and time.
+    Typing `remind` offers the form on a button. Nobody else can save one."""
+    from datetime import datetime, timedelta
+    from support import OWNER_ID as OWNER, _with_env
+    from uninotifier import reminders, slack, slackbot
+    reminder_flow = importlib.import_module("uninotifier.bot.reminder_flow")
+    bot = _package("uninotifier.bot")
+    tmp = Path(tempfile.mkdtemp(prefix="uninotifier-reminder-window-"))
+    calls, press, opened, save, toasts, fake_post = _slack_windows_harness(bot, tmp)
+
+    def no_telegram(*a, **k):
+        raise AssertionError("Telegram must not be used while the bot lives in Slack")
+
+    keep = (slack._post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, reminders.STATE_FILE,
+            reminders.SOURCES_FILE, reminder_flow.with_words, bot.send_view, bot.edit_view)
+    owner = _as_owner(bot)
+    on = {"NOTIFY_VIA": "slack", "SLACK_BOT_TOKEN": "-".join(("xoxb", "1", "2", "made-up")), "SLACK_CHANNEL": "D0123ABCD",
+          "SLACK_APP_TOKEN": "-".join(("xapp", "1", "made-up")), "SLACK_USER": "U0OWNER1", "TELEGRAM_CHAT_ID": OWNER}
+    try:
+        slack._post, telegram.request, slack.MIN_INTERVAL = fake_post, no_telegram, 0
+        slackbot.STORE, slackbot._connect = tmp / "slack_messages.json", lambda: None
+        reminders.STATE_FILE, reminders.SOURCES_FILE = tmp / "reminders.json", tmp / "sources.json"
+        reminder_flow.with_words = lambda note, url: note + "\n(the post's own words)"
+        sent_views, edited = [], []
+        bot.send_view = lambda text, rows: sent_views.append((text, rows)) or {"message_id": 1}
+        bot.edit_view = lambda message_id, text, rows: edited.append((message_id, text))
+
+        def scenario():
+            tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+            # ➕ opens the window at once — not a chat screen
+            press("rem:new")
+            window = opened()[0]
+            assert window["type"] == "modal" and window["callback_id"] == "reminder" and slackbot.get_updates(None, 0) == []
+            kinds = {b["block_id"]: b["element"]["type"] for b in window["blocks"] if b["type"] == "input"}
+            assert kinds == {"note": "plain_text_input", "day": "datepicker", "time": "timepicker"}, kinds
+            quick = next(b for b in window["blocks"] if b.get("block_id") == "quick")["elements"]
+            assert {"rem:q:hour", "rem:q:morning"} <= {e["value"] for e in quick} and all(len(e["text"]["text"]) <= 75 for e in quick)
+            # a quick pick fills the day and time in and keeps what was typed
+            redrawn = None
+            slack_view = {"type": "modal", "id": "V-1", "callback_id": "reminder", "private_metadata": window["private_metadata"],
+                          "state": {"values": {"note": {"note": {"type": "plain_text_input", "value": "Buy the textbook"}}}}}
+            press("rem:q:morning", slack_view)
+            redrawn = json.loads([d for m, d in calls if m == "views.update"][-1]["view"])
+            assert [d["view_id"] for m, d in calls if m == "views.update"] == ["V-1"]
+            fields = {b["block_id"]: b["element"] for b in redrawn["blocks"] if b["type"] == "input"}
+            assert fields["note"]["initial_value"] == "Buy the textbook", "what was typed stays"
+            assert (fields["day"]["initial_date"], fields["time"]["initial_time"]) == (tomorrow, "08:00")
+            # a time that has passed is said under the time, nothing saved
+            answer = save(window, {"note": "Buy the textbook", "day": "2020-01-01", "time": "09:00"})
+            assert answer["response_action"] == "errors" and "already passed" in answer["errors"]["time"]
+            assert reminders.pending() == []
+            # saved: the reminder is there, confirmed to you alone
+            calls.clear()
+            assert save(window, {"note": "Buy the textbook", "day": tomorrow, "time": "18:30"}) == {}
+            [item] = reminders.pending()
+            assert item["note"] == "Buy the textbook" and datetime.fromtimestamp(item["due"]).strftime("%Y-%m-%d %H:%M") == f"{tomorrow} 18:30"
+            assert "Reminder set" in toasts()[-1] and [d["user"] for m, d in calls if m == "chat.postEphemeral"] == ["U0OWNER1"]
+            # an empty note is refused under the note
+            assert save(window, {"note": "  ", "day": tomorrow, "time": "18:30"})["errors"]["note"]
+            # ✏️ Change Time of that reminder: the window has its own text, day and time; Save changes it
+            press(f"rem:eh:{item['id']}")
+            edit = opened()[0]
+            assert edit["title"]["text"] == "✏️ Edit Reminder" and json.loads(edit["private_metadata"])["edit"] == item["id"]
+            fields = {b["block_id"]: b["element"] for b in edit["blocks"] if b["type"] == "input"}
+            assert fields["note"]["initial_value"] == "Buy the textbook" and fields["time"]["initial_time"] == "18:30"
+            assert save(edit, {"time": "20:15"}) == {}
+            assert datetime.fromtimestamp(reminders.get(item["id"])["due"]).strftime("%H:%M") == "20:15"
+            assert "Reminder changed" in toasts()[-1] and reminders.get(item["id"])["note"] == "Buy the textbook"
+            # 📌 Add to Reminders under a notification: its words in the window; saved unchanged it keeps the post's own words
+            reminders.remember_source("k1", "Announcement: bring your ID", "Big Data", "https://x.example/p")
+            press("rem:s:k1")
+            pinned = opened()[0]
+            assert pinned["title"]["text"] == "📌 Add to Reminders"
+            assert json.loads(pinned["private_metadata"])["course"] == "Big Data"
+            assert save(pinned, {"day": tomorrow, "time": "07:00"}) == {}
+            added = next(r for r in reminders.pending() if r["note"].startswith("Announcement"))
+            assert added["note"].endswith("(the post's own words)") and added["course"] == "Big Data" and added["url"] == "https://x.example/p"
+            # a pin too old to be found: the ordinary press answers it, no window
+            press("rem:s:gone")
+            assert opened() == []
+            # someone else cannot save one
+            before = len(reminders.pending())
+            assert save(window, {"note": "x", "day": tomorrow, "time": "09:00"}, user="U0STRANGER") == {}
+            assert len(reminders.pending()) == before
+            # `remind` typed: the form is offered on a button
+            reminder_flow.start_reminder()
+            text, rows = sent_views[-1]
+            assert rows[0][0]["callback_data"] == "rem:new" and reminder_flow._reminder_wait is None
+
+        _with_env(on, scenario)
+    finally:
+        (slack._post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, reminders.STATE_FILE,
+         reminders.SOURCES_FILE, reminder_flow.with_words, bot.send_view, bot.edit_view) = keep
+        bot.CHAT_ID, access.ADMIN_USER_ID = owner
+        reminder_flow._reminder_draft.clear()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_grade_needed_is_asked_in_slack_windows_not_typed_as_messages():
+    """🎯 Grade Needed opens a window (which average, a pick from 70–90 or your own value); a course's final grade,
+    coursework out of and retake with its previous grade are ONE window; the CGPA and record hours another. A wrong value
+    is said under its own field and the window stays; Save applies it and redraws the screen it came from."""
+    from support import OWNER_ID as OWNER, _with_env
+    from uninotifier import gpa, slack, slackbot
+    bot = _package("uninotifier.bot")
+    tmp = Path(tempfile.mkdtemp(prefix="uninotifier-gpa-window-"))
+    calls, press, opened, save, toasts, fake_post = _slack_windows_harness(bot, tmp)
+
+    def no_telegram(*a, **k):
+        raise AssertionError("Telegram must not be used while the bot lives in Slack")
+
+    keep = (slack._post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, gpa.STATE_FILE,
+            bot.edit_view, bot.send_view)
+    owner = _as_owner(bot)
+    on = {"NOTIFY_VIA": "slack", "SLACK_BOT_TOKEN": "-".join(("xoxb", "1", "2", "made-up")), "SLACK_CHANNEL": "D0123ABCD",
+          "SLACK_APP_TOKEN": "-".join(("xapp", "1", "made-up")), "SLACK_USER": "U0OWNER1", "TELEGRAM_CHAT_ID": OWNER}
+    try:
+        slack._post, telegram.request, slack.MIN_INTERVAL = fake_post, no_telegram, 0
+        slackbot.STORE, slackbot._connect = tmp / "slack_messages.json", lambda: None
+        gpa.STATE_FILE = tmp / "gpa.json"
+        edited, sent = [], []
+        bot.edit_view = lambda message_id, text, rows: edited.append((message_id, text))
+        bot.send_view = lambda text, rows: sent.append(text) or {"message_id": 1}
+
+        def scenario():
+            screen = slackbot.remember("1700000001.0001", "🎯 Grade Needed")      # the screen the buttons are on
+            # 🎯 Grade Needed
+            press("gpa:need")
+            window = opened()[0]
+            assert window["callback_id"] == "gpa_target", window["callback_id"]
+            assert slackbot.get_updates(None, 0) == [], "the press went to the chat"
+            presets = next(b for b in window["blocks"] if b.get("block_id") == "preset")["element"]
+            assert [o["value"] for o in presets["options"]] == ["70", "75", "80", "85", "90"] and presets["initial_option"]["value"] == "80"
+            bad = save(window, {"custom": "abc"})
+            assert bad["response_action"] == "errors" and "custom" in bad["errors"], bad
+            assert "between 0 and 100" in save(window, {"custom": "150"})["errors"]["custom"]
+            assert save(window, {"scope": "c", "custom": "77.5"}) == {}
+            assert edited and edited[-1][0] == screen and "77.5" in edited[-1][1] and "CGPA" in edited[-1][1], edited
+            assert save(window, {"preset": "85"}) == {} and "85" in edited[-1][1]
+            # a course's marks: one window
+            press("gpa:g:0", ts="1700000001.0001")
+            course = opened()[0]
+            assert course["callback_id"] == "gpa_course" and json.loads(course["private_metadata"])["index"] == 0
+            assert save(course, {"grade": "150"})["errors"]["grade"]
+            assert "out of" in save(course, {"got": "70", "out_of": "60"})["errors"]["out_of"]
+            assert save(course, {"got": "42"})["errors"]
+            assert "previous grade" in save(course, {"retake": ["yes"]})["errors"]["old"]
+            assert save(course, {"grade": "88", "got": "42", "out_of": "60"}) == {}
+            names = [c for c in gpa.load()["courses"]]
+            saved = gpa.load()["courses"][names[0]]
+            assert saved["grade"] == 88 and gpa.coursework(saved) == (42, 60) and not saved["retake"]
+            assert "saved" in toasts()[-1]
+            # reopened, the window holds what was saved; a retake with its previous grade
+            press("gpa:w:0")
+            again = opened()[0]
+            fields = {b["block_id"]: b["element"] for b in again["blocks"] if b["type"] == "input"}
+            assert (fields["grade"]["initial_value"], fields["got"]["initial_value"], fields["out_of"]["initial_value"]) == ("88", "42", "60")
+            assert save(again, {"grade": "", "got": "", "out_of": "", "retake": ["yes"], "old": "35"}) == {}
+            saved = gpa.load()["courses"][names[0]]
+            assert saved["retake"] and saved["old_grade"] == 35 and saved["grade"] is None and gpa.coursework(saved) is None
+            # turning a retake ON opens the window; turning it OFF is the ordinary toggle (nothing to type)
+            press("gpa:r:1")
+            assert opened() and opened()[0]["callback_id"] == "gpa_course"
+            press("gpa:r:0")
+            assert opened() == [], "already a retake: the ordinary toggle"
+            # the record
+            press("gpa:cg")
+            record = opened()[0]
+            assert record["callback_id"] == "gpa_record"
+            assert "CGPA" in save(record, {"cgpa": "150", "hours": "72"})["errors"]["cgpa"]
+            assert save(record, {"cgpa": "71.26", "hours": "72"}) == {}
+            assert (gpa.load()["cgpa"], gpa.load()["passed_hours"]) == (71.26, 72)
+            # someone else's save changes nothing
+            assert save(record, {"cgpa": "10", "hours": "1"}, user="U0STRANGER") == {} and gpa.load()["cgpa"] == 71.26
+
+        _with_env(on, scenario)
+    finally:
+        (slack._post, telegram.request, slack.MIN_INTERVAL, slackbot.STORE, slackbot._connect, gpa.STATE_FILE,
+         bot.edit_view, bot.send_view) = keep
         bot.CHAT_ID, access.ADMIN_USER_ID = owner
         shutil.rmtree(tmp, ignore_errors=True)
 

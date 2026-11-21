@@ -249,9 +249,9 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1
 |---|---|
 | `/start` (و`menu` في Slack) | لوحة التحكم والقائمة |
 | `/tasks` | كل واجب واختبار قصير ومهمة Cambridge One لم تُنجَز بعد، وتذكيراتك |
-| `/remind` | إضافة تذكير جديد |
+| `/remind` | إضافة تذكير جديد — وفي Slack نافذة فيها منتقي تاريخ ومنتقي وقت |
 | `/courses` · `/schedule` | موادك ومدرّسوها · ملفات جدولك الدراسي |
-| `/need` · `/gpa` | حاسبة العلامة المطلوبة (Grade Needed) · مركز المعدل والعلامات |
+| `/need` · `/gpa` | حاسبة العلامة المطلوبة (Grade Needed) — وفي Slack تُدخل أرقامك في نوافذ لا في رسائل · مركز المعدل والعلامات |
 | `/transcript` · `/balance` · `/record` | كشف العلامات · الرصيد المالي · السجل الأكاديمي، من بوابة الطالب (تحتاج قيم `PORTAL_*` في `.env`) |
 | `/midterms` · `/attendance` | مراقبة علامات الميد (Midterm Watch) · غيابك في كل مادة |
 | `/register` | 🗓️ Registration Plan — ماذا تسجّل في الفصل القادم |

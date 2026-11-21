@@ -795,6 +795,26 @@ anyone else in the workspace is a stranger to `access.py`. The app's **Home** pa
 (message number `HOME_ID`): drawn with the main menu at start and when opened empty, redrawn by
 `views.publish` at every press there. The menu state for Slack is kept apart (`data/ui_state.slack.json`).
 
+### Forms in Slack (`bot/winkit.py`, `reminder_window.py`, `gpa_window.py`)
+
+Where Telegram asks for a typed answer, Slack opens a **window** over the chat (a modal) — a press opens it at once
+(Slack's trigger lasts 3 seconds, so `slackbot.py` does it on the socket thread, before the bot's queue), and Save
+is answered *with* Slack's acknowledgement, so a wrong value is said under its own field and the window stays open.
+What happens after Save (writing the reminder or the marks, redrawing the screen the buttons were on, a quiet line
+only you see) runs on a thread.
+
+| Window | Opened by | Fields |
+|---|---|---|
+| ⏰ Reminder | ➕ New, 📌 Add to Reminders, ✏️ Edit Text / 🗓️ Change Date / 🕐 Change Time | note · date picker · time picker · quick picks (next campus day, before the next lecture, in 1 hour, tomorrow 8:00) |
+| 🎯 Grade Needed | 🎯 Grade Needed | which average · a pick 70–90 · or your own value |
+| 📘 Course marks | Final Grade, Coursework Total, Retake (turning it on) | final grade · coursework marks / out of · retake + previous grade |
+| 🎓 CGPA & Hours | the record button | CGPA · hours |
+| ⚙️ Settings, 🆕 Updates | ⚙️ Settings | tick boxes (Save) · a second window for updates |
+| 🔑 Guest login | 🔑 Enter Their Login | student ID · password (never stored) |
+
+Only the owner can open or save one. A window Slack will not open leaves the press to the ordinary chat screens, and
+typing `remind` offers the reminder form on a button (a typed message has no trigger to open a window with).
+
 ### The bot's heartbeat, and being told when something breaks
 
 The always-on bot has two loops that must keep turning — listening to Telegram and the
