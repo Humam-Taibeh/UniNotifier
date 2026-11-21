@@ -5,7 +5,7 @@ dates and no chain of day and hour screens.
   ➕ New Custom Reminder · 📌 Add to Reminders · ✏️ Edit Text / 🗓️ Change Date / 🕐 Change Time of a reminder
   all open the same window (an edit has the reminder's own text, day and time in it); Save sets it.
 
-A quick-pick dropdown above the date and time fills them in for you (next campus day, before the next lecture, in an hour,
+Quick picks above the date and time fill them in for you (next campus day, before the next lecture, in an hour,
 tomorrow morning) and keep what you typed. A time that has already passed is said under the time, nothing saved.
 """
 
@@ -60,10 +60,9 @@ def build(note: str = "", due: datetime | None = None, meta: dict | None = None)
     blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": heading}},
               winkit.text_field("note", "Reminder", note, hint="e.g. Buy the textbook, Faculty of Arts, floor 1",
                                 multiline=True, limit=reminders.NOTE_LIMIT),
-              {"type": "actions", "block_id": QUICK, "elements": [      # a dropdown: a row of buttons runs off the window
-                  {"type": "static_select", "action_id": "quick", "placeholder": winkit.plain("⚡ Quick pick — fills in the day and time"),
-                   "options": [{"text": winkit.plain(label[:75]), "value": f"rem:q:{pick}"}
-                               for label, pick, _ in quick_picks(meta.get("course"))[:10]]}]},
+              {"type": "actions", "block_id": QUICK, "elements": [
+                  {"type": "button", "action_id": f"q_{pick}", "value": f"rem:q:{pick}", "text": winkit.plain(label[:75])}
+                  for label, pick, _ in quick_picks(meta.get("course"))[:5]]},
               winkit.date_field("day", "Day", f"{due:%Y-%m-%d}"),
               winkit.time_field("time", "Time", f"{due:%H:%M}")]
     title = "✏️ Edit Reminder" if editing else ("📌 Add to Reminders" if meta.get("key") else "⏰ New Reminder")
@@ -98,8 +97,7 @@ def modal_action(payload: dict) -> dict | None:
     """A quick pick pressed inside the window: the same window again with the day and time filled in — and what
     was typed in the note kept."""
     view = payload.get("view") or {}
-    value = next((v for v in ((a.get("selected_option") or {}).get("value") or a.get("value") or ""
-                              for a in payload.get("actions") or []) if v.startswith("rem:q:")), "")
+    value = next((v for v in (a.get("value") or "" for a in payload.get("actions") or []) if v.startswith("rem:q:")), "")
     if view.get("callback_id") != CALLBACK or not value:
         return None
     meta = winkit.meta(view)
