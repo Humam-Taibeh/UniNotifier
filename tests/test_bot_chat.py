@@ -1292,7 +1292,7 @@ def test_the_timetable_is_uploaded_once_then_shown_from_slacks_own_copy():
 
 
 def test_settings_switch_what_the_bot_does_by_itself():
-    """⚙️ Settings (main menu, `settings`): Auto Check-In, Auto Mark as Done and Midterm Watch, each on or off with one
+    """⚙️ Settings (main menu, `settings`): Auto Check-In and Auto Mark as Done, each on or off with one
     tap — written to .env (read back, nothing else in it touched) and seen by the bot at once. A value in .env wins
     over a schedule.json's "auto_check_in". The screen ends with Back + Main Menu; 🆕 Check for Updates is there too."""
     import shutil
@@ -1315,7 +1315,7 @@ def test_settings_switch_what_the_bot_does_by_itself():
         text, rows = settings_flow.view_settings()
         assert text.startswith("⚙️ *Settings*") and rows[-1] == bot.BACK_ROW, rows
         assert [b["callback_data"] for row in rows[:-1] for b in row] == [
-            "set:AUTO_CHECK_IN", "set:AUTO_MARK_DONE", "set:MIDTERMS", "set:update"]
+            "set:AUTO_CHECK_IN", "set:AUTO_MARK_DONE", "set:update"]
         assert "Auto Check-In — *🟢 On*" in text and "Auto Mark as Done — *⚪ Off*" in text, text
         bot.edit_view = lambda message_id, text, rows: screens.append((message_id, text, rows))
         bot.api = lambda method, **data: True
@@ -1332,10 +1332,9 @@ def test_settings_switch_what_the_bot_does_by_itself():
         assert schedule.auto_check_in({}) is False, "neither says: off"
         os.environ["AUTO_CHECK_IN"] = "true"
         assert schedule.auto_check_in({"auto_check_in": False}) is True
-        # Midterm Watch: its own switch
-        assert exams_watch.enabled()
-        bot.handle_callback({"id": "s3", "data": "set:MIDTERMS", "message": {"message_id": 7}})
-        assert not exams_watch.enabled() and "Midterm Watch — *⚪ Off*" in screens[-1][1]
+        # Midterm Watch is switched on its own screen, not here
+        assert "Midterm" not in settings_flow.view_settings()[0] and exams_watch.enabled()
+        assert settings_flow.switch("MIDTERMS", False).startswith("⚠️") and exams_watch.enabled()
         assert settings_flow.switch("SOMETHING_ELSE", True).startswith("⚠️"), "only the listed settings are written"
     finally:
         paths.ENV_FILE, setup.restrict, exams_watch.STATE_FILE, schedule.load_schedule, bot.edit_view, bot.api = keep

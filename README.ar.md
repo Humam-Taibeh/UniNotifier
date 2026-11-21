@@ -255,7 +255,7 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_tasks.ps1
 | `/transcript` · `/balance` · `/record` | كشف العلامات · الرصيد المالي · السجل الأكاديمي، من بوابة الطالب (تحتاج قيم `PORTAL_*` في `.env`) |
 | `/midterms` · `/attendance` | مراقبة علامات الميد (Midterm Watch) · غيابك في كل مادة |
 | `/register` | 🗓️ Registration Plan — ماذا تسجّل في الفصل القادم |
-| `/settings` | ⚙️ تشغيل أو إيقاف تسجيل الحضور التلقائي وعلامة Mark as done ومراقبة علامات الميد؛ وزر 🆕 Check for Updates |
+| `/settings` | ⚙️ تشغيل أو إيقاف تسجيل الحضور التلقائي وعلامة Mark as done؛ وزر 🆕 Check for Updates |
 | `/guest` | الاطلاع على سجل زميل ببيانات دخوله هو (تُكتب في نموذج خاص في Slack، ولا تُحفظ أبداً) |
 | `/update` | 🆕 هل يوجد إصدار جديد — ما الجديد فيه، وزر ⬇️ Update Now |
 | `/finals` · `/grades` | مراقبة العلامات النهائية (Finals Watch) في فترة الامتحانات · فحص علامات هذا الفصل الآن |

@@ -3,7 +3,8 @@
 
   ✍️ Auto Check-In       AUTO_CHECK_IN in .env   checks you in to your online lectures (marks you Present)
   ✅ Auto Mark as Done   AUTO_MARK_DONE in .env  ticks a lecture file the bot saved as done on Moodle
-  📝 Midterm Watch       data/exams_watch.json   reads the exams site for your midterm marks
+
+(Midterm Watch is switched on its own screen, 📝 Midterm Watch — not here.)
 
 A switch is written to .env through setup.write_env (the file read back to prove it, kept to your Windows
 account) and set in this process at once: the bot's own threads see it immediately, the 15-minute check at
@@ -14,7 +15,7 @@ its next run. A value in .env wins over an "auto_check_in" a schedule.json of yo
 import logging
 import os
 
-from uninotifier import envcheck, exams_watch, media, schedule
+from uninotifier import envcheck, media, schedule
 from uninotifier.bot import chat
 
 log = logging.getLogger("uninotifier")
@@ -27,12 +28,9 @@ SWITCHES = (
     ("AUTO_MARK_DONE", "✅ Auto Mark as Done",
      "ticks *Mark as done* on Moodle for a lecture file it saved. Your instructor's completion report shows it."),
 )
-MIDTERMS = "MIDTERMS"
 
 
 def is_on(name: str) -> bool:
-    if name == MIDTERMS:
-        return exams_watch.enabled()
     if name == "AUTO_CHECK_IN":
         return schedule.auto_check_in()
     return envcheck.value(name).lower() == "true"
@@ -46,22 +44,16 @@ def view_settings(note: str = "") -> tuple[str, list]:
     lines = ["⚙️ *Settings*", media.DIVIDER]
     for name, label, words in SWITCHES:
         lines += [f"{label} — *{_state(is_on(name))}*", words, ""]
-    lines += [f"📝 Midterm Watch — *{_state(is_on(MIDTERMS))}*",
-              "reads the exams site every 15 minutes and tells you each midterm mark as it appears."]
     if note:
-        lines += ["", note]
+        lines += [note]
     rows = [[{"text": f"{label}: Turn {'Off' if is_on(name) else 'On'}", "callback_data": f"set:{name}"}]
             for name, label, _ in SWITCHES]
-    rows.append([{"text": f"📝 Midterm Watch: Turn {'Off' if is_on(MIDTERMS) else 'On'}", "callback_data": f"set:{MIDTERMS}"}])
     rows.append([{"text": "🆕 Check for Updates", "callback_data": "set:update"}])
     return "\n".join(lines).rstrip(), rows + [chat.BACK_ROW]
 
 
 def switch(name: str, on: bool) -> str:
     """Turn one switch on or off. "" when done, else why not (in words for the screen)."""
-    if name == MIDTERMS:
-        exams_watch.set_enabled(on)
-        return ""
     if name not in {n for n, _, _ in SWITCHES}:
         return "⚠️ That setting is not known."
     from uninotifier import setup

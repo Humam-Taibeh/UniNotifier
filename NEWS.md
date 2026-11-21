@@ -15,7 +15,7 @@ does not have yet when it tells its owner that a new version is ready (newest fi
 - ✅ **Your choice**: ticking *Mark as done* on Moodle by itself is now off unless you set `AUTO_MARK_DONE=true` in
   `.env` (or ⚙️ Settings) — your instructor sees those ticks. Automatic check-in marks you Present whether or not you attend: switch
   it off for a lecture you will miss. Read [DISCLAIMER.md](DISCLAIMER.md).
-- ⚙️ **Settings** in the menu: switch Auto Check-In, Auto Mark as Done and Midterm Watch on or off with one tap,
+- ⚙️ **Settings** in the menu: switch Auto Check-In and Auto Mark as Done on or off with one tap,
   and 🆕 Check for Updates.
 - A guest look-up with a wrong ID or password now shows the portal's own page and a 🔁 Try Again button.
 
