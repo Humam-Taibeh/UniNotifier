@@ -591,6 +591,43 @@ def _settings_press(payload: dict) -> bool:
     return False
 
 
+def _panel_press(payload: dict) -> bool:
+    """🎛️ Control Panel: the menu's button opens the main window; a section's Open inside it pushes that section's
+    window over it (Back is the window's own). Handled here, at once — Slack's trigger lasts 3 seconds. True when the
+    press was one of these; a window Slack will not open leaves the press to the chat (which says it could not)."""
+    if payload.get("type") != "block_actions" or (payload.get("user") or {}).get("id") != owner():
+        return False
+    from uninotifier.bot import panel_window
+    values, view = _values(payload), payload.get("view") or {}
+    token, _ = _settings()
+    if view.get("type") == "modal":
+        key = next((v[len(panel_window.OPEN):] for v in values if v.startswith(panel_window.OPEN)), "")
+        window = panel_window.section_window(key) if view.get("callback_id") == panel_window.MAIN else None
+        method = "views.push"
+    else:
+        window = panel_window.main_window() if "panel" in values else None
+        method = "views.open"
+    if window is None:
+        return False
+    try:
+        slack.call(token, method, {"trigger_id": payload.get("trigger_id", ""),
+                                   "view": json.dumps(window, ensure_ascii=False)})
+    except (slack.SlackError, requests.RequestException) as e:
+        log.warning("Slack: the Control Panel did not open (%s)", e)
+        return False
+    return True
+
+
+def _chat_press(value: str) -> None:
+    """An action chosen in the panel whose answer is a message: the same as pressing that button in the chat, with no
+    screen behind it (the answer is a new message at the bottom)."""
+    sender, chat = _person(owner())
+    _events.put({"update_id": _update_id(),
+                 "callback_query": {"id": f"slack-panel-{time.time()}", "from": sender, "chat_instance": "slack",
+                                    "message": {"message_id": 0, "chat": chat, "date": int(time.time()), "text": ""},
+                                    "data": value}})
+
+
 def _show_window(view_id: str, view: dict) -> None:
     token, _ = _settings()
     slack.call(token, "views.update", {"view_id": view_id, "view": json.dumps(view, ensure_ascii=False)})
@@ -669,6 +706,11 @@ def _after_save(work) -> None:
                         detail=f"{type(e).__name__} — nothing else is affected; open the form and save again.", wait=False)
 
 
+def _meta_of(view: dict) -> dict:
+    from uninotifier.bot import winkit
+    return winkit.meta(view)
+
+
 def _submit_form(payload: dict) -> dict | None:
     """A form window's Save: its answer to Slack (a wrong value stays in the window, said under its field) and the
     work after it. None when the window is not one of the forms."""
@@ -681,6 +723,8 @@ def _submit_form(payload: dict) -> dict | None:
     answer, work = form.submit(payload)
     if work is not None:
         threading.Thread(target=_after_save, args=(work,), name="window-saved", daemon=True).start()
+        if not answer and _meta_of(view).get("panel"):
+            return {"response_action": "clear"}                   # opened from the Control Panel: it all closes
     return answer
 
 
@@ -693,6 +737,14 @@ def respond(kind: str, payload: dict) -> dict | None:
         form = _submit_form(payload)
         if form is not None:
             return form
+    if kind == "interactive" and payload.get("type") == "view_submission" and view.get("callback_id") == "panel_go":
+        if (payload.get("user") or {}).get("id") != owner():
+            return {}
+        from uninotifier.bot import panel_window
+        answer, value = panel_window.go(payload)
+        if value:
+            _chat_press(value)
+        return answer
     if kind != "interactive" or payload.get("type") != "view_submission" or view.get("callback_id") != "settings":
         return None
     if (payload.get("user") or {}).get("id") != owner():
@@ -704,7 +756,7 @@ def respond(kind: str, payload: dict) -> dict | None:
     if problem:
         return {"response_action": "errors", "errors": {"auto": problem}}
     threading.Thread(target=_toast, args=(settings_flow.saved_line(), True), name="settings-saved", daemon=True).start()
-    return {}
+    return {"response_action": "clear"} if _meta_of(view).get("panel") else {}
 
 
 def take(kind: str, payload: dict) -> None:
@@ -719,6 +771,8 @@ def take(kind: str, payload: dict) -> None:
             _form_submitted(payload)
             return
         if kind == "interactive" and _opens_guest_form(payload):
+            return
+        if kind == "interactive" and _panel_press(payload):
             return
         if kind == "interactive" and _settings_press(payload):
             return

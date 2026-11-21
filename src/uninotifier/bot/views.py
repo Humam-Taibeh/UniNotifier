@@ -44,7 +44,8 @@ def semester() -> str:
 
 def view_menu() -> tuple[str, list]:
     text = " • ".join(part for part in ("🎓 *UniNotifier System*", semester(), chat.monitor_status()) if part)
-    return text, [
+    panel = [[{"text": "🎛️ Control Panel", "callback_data": "panel"}]] if slack.mode() == "slack" else []
+    return text, panel + [
         [{"text": "📚 My Courses & Schedule", "callback_data": "courses"},
          {"text": "⏳ Upcoming Tasks & Reminders", "callback_data": "tasks"}],
         [{"text": "📊 GPA & Grade Hub", "callback_data": "academic"},
