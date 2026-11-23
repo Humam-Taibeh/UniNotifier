@@ -98,6 +98,7 @@ def view_record() -> tuple[str, list]:
 
 REMINDERS_SHOWN = 10
 SCREEN_BUDGET = 3600                 # Telegram stops a message at 4096 characters; room is kept for the footer
+SLACK_SCREEN_BUDGET = 2200           # Slack refused this screen (msg_too_long) at ~3500 characters of Arabic notes, and took it at 2100
 LRM, FSI, PDI = "\u200e", "\u2068", "\u2069"
 
 
@@ -142,7 +143,7 @@ def view_tasks() -> tuple[str, list]:
     shown = []
     for r in mine[:REMINDERS_SHOWN]:
         block = ["", *reminder_lines(len(shown) + 1, r)]
-        if len("\n".join(lines + block)) > SCREEN_BUDGET:     # whole reminders only: never one cut in half
+        if len("\n".join(lines + block)) > (SLACK_SCREEN_BUDGET if in_slack else SCREEN_BUDGET):     # whole reminders only: never one cut in half
             break
         lines += block
         shown.append(r)

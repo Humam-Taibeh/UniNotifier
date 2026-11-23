@@ -1549,3 +1549,32 @@ def test_finals_watch_has_the_look_of_midterm_watch_and_no_edit_button():
     labels = [b["text"] for row in rows for b in row]
     assert not any("Edit" in label or "Change" in label for label in labels), labels
     assert [b["callback_data"] for b in rows[-1]] == ["academic", "menu"]
+
+
+def test_a_full_reminders_screen_fits_in_one_slack_message():
+    """Slack refused the Upcoming Tasks screen (msg_too_long) once nine reminders with long Arabic notes made
+    it ~3500 characters, though Telegram would take 4096: in Slack the screen keeps to a smaller budget,
+    drops whole reminders from the end and says how many are left."""
+    from uninotifier import reminders, tasks
+    from uninotifier.bot import chat, views
+
+    note = ("امتحان منتصف الفصل — مادة تجريبية — 100100\nالسبت 28-11-2026، من الساعة 10:00 إلى 10:50\n"
+            "القاعات حسب الجدول المنشور: " + "، ".join(str(9100 + n) for n in range(8))
+            + "\nتأكد من قاعة شعبتك. بعده مباشرة امتحان مادة أخرى الساعة 11:00.")
+    items = [{"id": n, "note": note, "course": "Sample Course", "due": 1900000000 + n, "message_id": None}
+             for n in range(1, 10)]
+    keep = (reminders.pending, tasks.open_tasks, chat.load_state, views.slack.mode)
+    try:
+        reminders.pending = lambda now=None: list(items)
+        tasks.open_tasks = lambda state, now: []
+        chat.load_state = lambda: {}
+        views.slack.mode = lambda: "slack"
+        text, rows = views.view_tasks()
+        shown = text.count("📝")
+        assert len(text) <= views.SLACK_SCREEN_BUDGET + 200, len(text)
+        assert 1 <= shown < 9 and f"… and {9 - shown} more" in text, (shown, text[-200:])
+        views.slack.mode = lambda: "telegram"
+        text, rows = views.view_tasks()
+        assert text.count("📝") == 9 and "more —" not in text, "Telegram keeps its larger budget"
+    finally:
+        reminders.pending, tasks.open_tasks, chat.load_state, views.slack.mode = keep
