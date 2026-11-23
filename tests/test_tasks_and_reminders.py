@@ -1578,3 +1578,66 @@ def test_a_full_reminders_screen_fits_in_one_slack_message():
         assert text.count("📝") == 9 and "more —" not in text, "Telegram keeps its larger budget"
     finally:
         reminders.pending, tasks.open_tasks, chat.load_state, views.slack.mode = keep
+
+
+def test_an_exam_reminder_is_one_reminder_that_tells_three_times():
+    """A note that speaks of an exam, a midterm or a quiz is kept once but is told 24 hours before, 1 hour before
+    and when it starts — each notice once; a reminder set late has no notice whose time had passed; a bot that was
+    off sends only the latest notice that is due; any other reminder is told once, as before."""
+    from uninotifier import notifier, reminders
+
+    is_exam = reminders.is_exam
+    for yes in ("امتحان منتصف الفصل", "الامتحان النصفي", "اختبار قصير", "كويز الفصل الأول", "موعد الميد", "ميد جبر",
+                "Midterm exam", "quiz 2", "Exams on Sat"):
+        assert is_exam({"note": yes}), yes
+    for no in ("ميدان الحرية", "ميديا", "submit the report", "call the doctor", "", None):
+        assert not is_exam({"note": no}), no
+
+    hour = 3600
+    due = 2_000_000_000.0
+    item = {"id": 7, "note": "امتحان جبر خطي\nالقاعات: 9134", "due": due, "course": "Linear Algebra (1)",
+            "created": due - 5 * 86400, "message_id": None}
+    plain = {"id": 8, "note": "call the doctor", "due": due, "created": due - 5 * 86400}
+    sent = []
+    keep = (reminders.CLAIM_DIR, reminders.load, notifier.send_message)
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            reminders.CLAIM_DIR = Path(tmp)
+            reminders.load = lambda: {"next_id": 9, "items": [dict(item), dict(plain)]}
+            notifier.send_message = lambda token, chat, text, rows=None, reply_to=None: sent.append((text, rows)) or True
+
+            assert reminders.send_due("t", "c", due - 25 * hour) == 0, "nothing is due yet"
+            assert reminders.send_due("t", "c", due - 24 * hour) == 1 and "24 hours to go" in sent[-1][0]
+            assert reminders.send_due("t", "c", due - 24 * hour + 60) == 0, "the same notice is not sent twice"
+            assert not any("Snooze" in b["text"] for row in sent[-1][1] for b in row), "no Done on an early notice"
+            assert reminders.send_due("t", "c", due - hour) == 1 and "1 hour to go" in sent[-1][0]
+            assert reminders.send_due("t", "c", due - 600) == 0
+            assert reminders.send_due("t", "c", due) == 2          # the exam's third notice and the plain reminder
+            assert any("starting now" in text for text, _ in sent)
+            assert any("Snooze" in b["text"] for row in sent[-2][1] + sent[-1][1] for b in row), "the last one has them"
+            assert sum("call the doctor" in text for text, _ in sent) == 1 and len(sent) == 4, [t[:30] for t, _ in sent]
+            assert reminders.send_due("t", "c", due + 3600) == 0
+            assert reminders.delivered(item), "after the last notice it is a delivered reminder"
+
+            # a bot that was off: only the latest due notice goes out, the earlier ones are skipped
+            sent.clear()
+            late = {**item, "id": 11}
+            reminders.load = lambda: {"next_id": 12, "items": [dict(late)]}
+            assert reminders.send_due("t", "c", due - 30 * 60) == 1 and "1 hour to go" in sent[0][0]
+            assert reminders.send_due("t", "c", due - 29 * 60) == 0, "the 24 h notice is not told afterwards"
+
+            # an exam reminder sent whole before notices existed (its plain marker is there): nothing early follows
+            sent.clear()
+            old = {**item, "id": 13, "created": due - 5 * 86400}
+            (Path(tmp) / f"{reminders._key(old)}.sent").write_text("", encoding="utf-8")
+            reminders.load = lambda: {"next_id": 14, "items": [dict(old)]}
+            assert reminders.send_due("t", "c", due + 3 * 86400) == 0 and not sent, "an old, delivered reminder is quiet"
+
+            # set 10 hours before: no 24 h notice at all, the 1 h one still comes
+            sent.clear()
+            soon = {**item, "id": 12, "created": due - 10 * hour}
+            reminders.load = lambda: {"next_id": 13, "items": [dict(soon)]}
+            assert reminders.send_due("t", "c", due - 9 * hour) == 0, "no '24 hours to go' for an exam set 10 hours ahead"
+            assert reminders.send_due("t", "c", due - hour) == 1 and "1 hour to go" in sent[0][0]
+        finally:
+            reminders.CLAIM_DIR, reminders.load, notifier.send_message = keep

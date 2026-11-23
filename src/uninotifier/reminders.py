@@ -56,6 +56,14 @@ SNOOZE = timedelta(hours=1)
 NOTE_LIMIT = 1500                        # a pinned post keeps its whole wording
 SHOTS_DIR = paths.DATA / "reminder_shots"   # the pictures of a pinned post, kept so it can be shown again
 
+# An exam-like reminder is kept once but tells you three times: 24 hours before, 1 hour before, and when it starts.
+# What counts as an exam: the note says exam / midterm / quiz in English, or امتحان / اختبار / ميد / كويز in Arabic
+# ("ميد" only as a word of its own — not ميدان or ميديا — with the usual prefixes ال بال وال لل).
+EXAM_RE = re.compile(r"امتحان|اختبار|كويز|(?<![؀-ۿ])(?:ال|بال|وال|لل)?ميد(?![؀-ۿ])"
+                     r"|\b(?:exams?|mid-?terms?|quiz(?:zes)?)\b", re.I)
+EXAM_LEADS = (timedelta(hours=24), timedelta(hours=1))
+LEAD_TITLES = {24: "⏳ *Reminder — 24 hours to go*", 1: "⏰ *Reminder — 1 hour to go*", 0: "🚨 *Reminder — starting now*"}
+
 PIN_BUTTON = "📌 Add to Reminders"
 TIME_RE = re.compile(r"\s*(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|ص|م)?\s*", re.I)
 
@@ -114,6 +122,7 @@ def update(reminder_id: int, note: str | None = None, due: float | None = None) 
             found["note"] = note.strip()[:NOTE_LIMIT]
         if due is not None:
             found["due"] = due
+            found["stages_from"] = time.time()       # a new time: the early notices of the old one do not come back
         save(state)
     return found
 
@@ -123,6 +132,7 @@ def snooze(reminder_id: int, now: float | None = None) -> dict | None:
     found = next((r for r in state["items"] if r["id"] == reminder_id), None)
     if found:
         found["due"] = (now or time.time()) + SNOOZE.total_seconds()
+        found["stages_from"] = now or time.time()     # snoozed: only its new time counts, not the early notices
         save(state)
     return found
 
@@ -381,41 +391,84 @@ def _key(item: dict) -> str:
     return f"{item['id']}-{int(item['due'])}"        # a snoozed reminder is a new delivery
 
 
+def is_exam(item: dict) -> bool:
+    """Does the note speak of an exam, a midterm or a quiz (see EXAM_RE)?"""
+    return bool(EXAM_RE.search(item.get("note") or ""))
+
+
+def _hours(lead: timedelta) -> int:
+    return int(lead.total_seconds() // 3600)
+
+
+def _stage_key(item: dict, lead: timedelta) -> str:
+    """The delivery marker of one notice. The one at the reminder's own time keeps the plain key (so a reminder
+    sent before notices existed is still a sent one); the early notices add -24h / -1h."""
+    return _key(item) if not lead else f"{_key(item)}-{_hours(lead)}h"
+
+
+def _stages(item: dict) -> list[tuple[timedelta, float]]:
+    """(lead, when) of every notice this reminder gives, earliest first, the one at its own time last. An exam
+    reminder gives 24 h and 1 h before as well — but not a notice whose time had already passed when the
+    reminder was set (or last moved): an exam set for tomorrow is not announced "24 hours to go" at once."""
+    own = (timedelta(0), float(item["due"]))
+    if not is_exam(item):
+        return [own]
+    floor = item.get("stages_from") or item.get("created") or 0
+    early = [(lead, item["due"] - lead.total_seconds()) for lead in EXAM_LEADS]
+    return [(lead, when) for lead, when in early if when >= floor] + [own]
+
+
 def delivered(item: dict) -> bool:
-    return (CLAIM_DIR / f"{_key(item)}.sent").exists()
+    return (CLAIM_DIR / f"{_key(item)}.sent").exists()           # the notice at its own time is the last one
 
 
-def _claim(item: dict) -> bool:
-    return daily.claim_in(CLAIM_DIR, _key(item), pending=True)       # confirmed once it is out
+def _stage_sent(item: dict, lead: timedelta) -> bool:
+    return (CLAIM_DIR / f"{_stage_key(item, lead)}.sent").exists()
 
 
-def _confirm(item: dict) -> None:
-    daily.confirm_in(CLAIM_DIR, _key(item))
+def _claim(item: dict, lead: timedelta = timedelta(0)) -> bool:
+    return daily.claim_in(CLAIM_DIR, _stage_key(item, lead), pending=True)       # confirmed once it is out
 
 
-def _release(item: dict) -> None:
-    daily.release_in(CLAIM_DIR, _key(item))
+def _confirm(item: dict, lead: timedelta = timedelta(0)) -> None:
+    daily.confirm_in(CLAIM_DIR, _stage_key(item, lead))
 
 
-def message(item: dict) -> tuple[str, list]:
-    lines = ["⏰ *Reminder*", "", f"📝 {escape_md(item['note'])}"]
+def _release(item: dict, lead: timedelta = timedelta(0)) -> None:
+    daily.release_in(CLAIM_DIR, _stage_key(item, lead))
+
+
+def message(item: dict, lead: timedelta = timedelta(0)) -> tuple[str, list]:
+    title = LEAD_TITLES[_hours(lead)] if is_exam(item) else "⏰ *Reminder*"
+    lines = [title, "", f"📝 {escape_md(item['note'])}"]
     if item.get("course"):
         lines.append(f"📘 *Course:* {escape_md(item['course'])}")
     lines.append(f"🕐 *Set for:* {when_text(item['due'])}")
     rows = [[{"text": "🌐 Open on Moodle", "url": item["url"]}]] if item.get("url") else []
-    rows.append([{"text": "⏰ Snooze 1 h", "callback_data": f"rem:z:{item['id']}"},
-                 {"text": "✅ Done", "callback_data": f"rem:done:{item['id']}"}])
+    if not lead:                       # an early notice has no Snooze / Done: tapping Done would end the notices to come
+        rows.append([{"text": "⏰ Snooze 1 h", "callback_data": f"rem:z:{item['id']}"},
+                     {"text": "✅ Done", "callback_data": f"rem:done:{item['id']}"}])
     return "\n".join(lines), rows
 
 
 def send_due(token: str, chat_id: str, now: float | None = None) -> int:
-    """Send every reminder whose time has come; returns how many went out."""
+    """Send every notice whose time has come; returns how many went out. Of the notices of one reminder that are
+    due together (the bot was off) only the latest is sent — "24 hours to go" is not told 10 minutes before."""
     now = now or time.time()
     sent = 0
     for item in load()["items"]:
-        if item["due"] > now or not _claim(item):
+        if delivered(item):                             # told at its own time already: no early notice comes after it
             continue
-        text, rows = message(item)
+        due_now = [(lead, when) for lead, when in _stages(item) if when <= now and not _stage_sent(item, lead)]
+        if not due_now:
+            continue
+        for lead, _ in due_now[:-1]:                    # missed ones are marked as passed, quietly
+            if daily.claim_in(CLAIM_DIR, _stage_key(item, lead)):
+                log.info("Reminder %s: the %s h notice had passed — skipped", item["id"], _hours(lead))
+        lead = due_now[-1][0]
+        if not _claim(item, lead):
+            continue
+        text, rows = message(item, lead)
         try:
             ok = notifier.send_message(token, chat_id, text, rows=rows, reply_to=item.get("message_id"))
         except Exception as e:
@@ -423,9 +476,9 @@ def send_due(token: str, chat_id: str, now: float | None = None) -> int:
             failsafe.bug("reminders", "A reminder could not be sent", e, "It is tried again on the next tick.")
             ok = False
         if ok:
-            _confirm(item)
+            _confirm(item, lead)
             sent += 1
-            log.info("Sent reminder %s", item["id"])
+            log.info("Sent reminder %s (%s h before)", item["id"], _hours(lead))
         else:
-            _release(item)                              # try again on the next tick
+            _release(item, lead)                        # try again on the next tick
     return sent
