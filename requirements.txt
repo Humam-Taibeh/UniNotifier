@@ -3,7 +3,7 @@
 # The project itself is installed separately:  pip install --no-deps -e .
 # certifi (the certificate bundle requests uses) is pinned although only requests needs it: versions
 # before 2026.10.18 trust a root certificate whose intermediates were revoked after their keys leaked.
-playwright==1.64.1
+playwright==1.65.2
 python-dotenv==1.2.4
 requests==2.34.2
 openpyxl==3.1.5
