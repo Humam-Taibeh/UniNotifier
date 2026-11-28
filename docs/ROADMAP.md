@@ -86,7 +86,7 @@ Cases to handle:
   summer for the first of next year (from the transcript, and the term code on Moodle's course names).
 
 Built 2026-11-18 (ahead of the rest): the **Register** button reads the portal's registration page and says whether it is
-open (its own sentence *غير مسموح التسجيل بهذه الفترة* while closed, with a screenshot), and a watch looks every 30 minutes
+open (its own sentence *غير مسموح التسجيل بهذه الفترة* while closed, with a screenshot), and a watch looks every 15 minutes
 and tells the owner once the moment that sentence is gone (`registration_watch.py`, `bot/registration_watch_flow.py`).
 Everything above this paragraph is still to build, from the real open page.
 

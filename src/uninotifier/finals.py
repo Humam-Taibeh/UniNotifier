@@ -8,7 +8,7 @@ on-demand), so it is opt-in and bounded:
   * it runs only while "finals mode" is on — `/finals on`, or automatically
     between the dates of an optional "finals" window in schedule.json:
         "finals": {"from": "2027-01-04", "to": "2027-01-31", "interval_minutes": 30}
-  * it checks every `interval_minutes` (default 30), one sign-in per check;
+  * it checks every `interval_minutes` (default 15), one sign-in per check;
   * once every course has its grade it pauses itself (⏸️ Finals Watch Paused)
     and stops contacting the portal — `/finals on` resumes it, and a new
     schedule.json window (a new "from" date) arms it again next season.
@@ -44,7 +44,7 @@ from uninotifier.notifier import escape_md
 log = logging.getLogger("uninotifier")
 
 STATE_FILE = paths.DATA / "finals.json"
-DEFAULT_INTERVAL_MINUTES = 30
+DEFAULT_INTERVAL_MINUTES = 15
 FAILURE_NOTICE_SECONDS = 6 * 3600
 DIVIDER = "━━━━━━━━━━━━━━━━━━"
 

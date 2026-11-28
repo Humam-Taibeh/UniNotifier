@@ -75,7 +75,7 @@ REMINDER_WINDOWS = (("24h", 24 * 3600), ("1h", 1 * 3600))
 
 
 # Marks of assignments and quizzes, read from their own pages (scan.check_grades)
-GRADE_CHECK_SECONDS = 30 * 60            # while there is no mark yet
+GRADE_CHECK_SECONDS = 10 * 60            # while there is no mark yet (under the 15-minute run slot, so every run looks)
 GRADE_RECHECK_SECONDS = 24 * 3600        # once there is one: has it been corrected?
 GRADE_WATCH_SECONDS = 45 * 24 * 3600     # how long after the due / closing time a mark is waited for
 

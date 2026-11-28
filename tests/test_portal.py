@@ -87,7 +87,7 @@ def test_finals_watch():
     assert finals.in_window(date(2027, 1, 4), sch) and finals.in_window(date(2027, 1, 31), sch)
     assert not finals.in_window(date(2027, 1, 3), sch) and not finals.in_window(date(2027, 2, 1), sch)
     assert not finals.in_window(date(2027, 1, 10), {}), "no window configured: only the switch turns it on"
-    assert finals.interval_seconds(sch) == 1200 and finals.interval_seconds({}) == 1800
+    assert finals.interval_seconds(sch) == 1200 and finals.interval_seconds({}) == 900
 
     with tempfile.TemporaryDirectory() as tmp:
         finals.STATE_FILE = Path(tmp) / "finals.json"
@@ -1799,7 +1799,7 @@ def test_the_registration_page_is_read_said_and_watched():
         notifier.send_message = lambda token, chat_id, text, rows=None, **k: sent.append(("text", text, rows)) or True
         portal_flow.send_registration_answer(closed)
         kind, text, rows = sent[-1]
-        assert kind == "png" and "not open right now" in text and "غير مسموح التسجيل بهذه الفترة" in text and "every 30 minutes" in text
+        assert kind == "png" and "not open right now" in text and "غير مسموح التسجيل بهذه الفترة" in text and "every 15 minutes" in text
         assert [b.get("callback_data") for r in rows for b in r][-2:] == ["reg:home", "menu"]
         portal_flow.send_registration_answer(opened, alert=True)
         assert sent[-1][1].startswith("🚨 *Registration is open!*")

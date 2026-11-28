@@ -282,8 +282,8 @@ only at these times — each look is one ordinary sign-in with your own account,
 | your timetable (the portal's home page) | once a semester, and again on `/check` |
 | Midterm Watch (`exams.zuj.edu.jo`) | every 2 minutes, while it is on (`/midterms`) |
 | the tuition balance | every hour |
-| whether course registration has opened | every 30 minutes |
-| Finals Watch | every 30 minutes, only while you have it on |
+| whether course registration has opened | every 15 minutes |
+| Finals Watch | every 15 minutes, only while you have it on |
 | Transcript, Balance, Registration Plan | when you ask |
 
 **Automatic attendance check-in** — ⚙️ **Settings** in the bot, or `AUTO_CHECK_IN=true` in `.env` (the setup

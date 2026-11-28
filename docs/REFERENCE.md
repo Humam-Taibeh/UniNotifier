@@ -336,7 +336,7 @@ lines) and anywhere else the number is only part of a line, that whole line is s
 — pictures of pages — has no text to search.
 
 The mark of a quiz or an assignment needs no file: its own page is read once there can be a mark
-(a quiz that has opened, an assignment handed in or past its due date), every 30 minutes for 45
+(a quiz that has opened, an assignment handed in or past its due date), every 10 minutes (so every 15-minute check looks) for 45
 days, and the mark is told once as `🎉 Grade Posted`.
 
 ### Class schedule
@@ -541,7 +541,7 @@ signs in again. A guest look-up never uses or replaces your session.
 
 ### Finals Watch (`/finals`)
 
-While **finals mode** is on, the bot signs in every 30 minutes (`finals.py`) and tells you
+While **finals mode** is on, the bot signs in every 15 minutes (`finals.py`) and tells you
 (the portal's other unattended looks are listed under *Official portal data* below):
 
 * `🎓 Grade Released` — one message per course the moment its mark appears
@@ -628,8 +628,8 @@ under it as the menu. While it works the chat shows "typing…", not a status me
 With the portal login set, the bot also looks by itself — each look one ordinary sign-in, reading only:
 the timetable once a semester (again on `/check`); Midterm Watch on `exams.zuj.edu.jo` every 2 minutes
 while it is on (`/midterms`, `exams_watch.py`); the tuition balance every hour (`balance_watch.py`, told
-only when it changes); whether registration has opened every 30 minutes (`registration_watch.py`, told once);
-and Finals Watch every 30 minutes while you have it on. Never while another portal request runs, and a look
+only when it changes); whether registration has opened every 15 minutes (`registration_watch.py`, told once);
+and Finals Watch every 15 minutes while you have it on. Never while another portal request runs, and a look
 that would need a verification code is skipped. The menu fallback that finds a moved page never clicks a
 link whose words say it does something (`portal.ACTION_WORDS`: confirm, cancel, delete, add, drop, pay …).
 
