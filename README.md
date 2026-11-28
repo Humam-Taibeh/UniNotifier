@@ -2,8 +2,14 @@
 
 <div align="center">
 
+<img src="docs/images/uninotifier-icon.png" width="96" alt="UniNotifier logo">
+
+# UniNotifier
+
+**Your university, on your phone: the moment anything changes.**
+
 [![Back to profile](https://img.shields.io/badge/%E2%86%90%20Profile-24292f?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Humam-Taibeh)
-[![Quick start](https://img.shields.io/badge/Quick%20start-0969da?style=for-the-badge)](#install-in-3-steps)
+[![Quick start](https://img.shields.io/badge/Quick%20start-0969da?style=for-the-badge)](#getting-started)
 [![Report a bug](https://img.shields.io/badge/Report%20a%20bug-b35900?style=for-the-badge)](https://github.com/Humam-Taibeh/UniNotifier/issues/new/choose)
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
@@ -14,50 +20,7 @@
 
 </div>
 
-# UniNotifier
-
-**Your university, on your phone — the moment anything changes.**
-
-UniNotifier watches Al-Zaytoonah University of Jordan's Moodle (`elearning.zuj.edu.jo`) from your
-own Windows PC and sends everything that matters to a private Slack app of your own, or to a Telegram bot: new files,
-assignments, quizzes, announcements and forum posts, deadline reminders, online-lecture alerts with a
-**Join** button, your transcript and balance on demand, and a GPA planner. Every course file is saved
-into a tidy folder per course.
-
-It runs quietly in the background through two Windows scheduled tasks, needs no server and no
-subscription, and nothing about you ever leaves your PC except the messages it sends to *your* Slack.
-
-> **Slack or Telegram — it works with both, the same way.** Slack is the recommended one because Telegram is
-> currently blocked on many networks in Jordan; the installer asks which you want.
-
-- [Features](#features) · [What it looks like](#what-it-looks-like)
-- [Install in 3 steps](#install-in-3-steps)
-- [Everyday use](#everyday-use) · [Where everything lives](#where-everything-lives) · [Optional extras](#optional-extras)
-- [Updating, pausing, uninstalling](#updating-pausing-uninstalling) · [Troubleshooting](#troubleshooting) · [Security & privacy](#security--privacy) · [How it was built](#how-it-was-built) · [Disclaimer](#disclaimer) · [How it fits together](#how-it-fits-together)
-- Every behaviour in depth: **[docs/REFERENCE.md](docs/REFERENCE.md)**
-
----
-
-## Features
-
-| | |
-|---|---|
-| 📚 **Everything on Moodle, as it happens** | Files, folders, links, pages, labels, quizzes, assignments, forum posts and announcements, Teams lectures and attendance — each as a sharp screenshot of the item itself, or the file itself (up to 45 MB), in a short message. An edit says what changed (*Was* / *Now*); re-uploaded files are reported too. |
-| 🗂️ **A tidy archive** | Every file lands in `<Course>\01_Lectures`, `02_Assignments` or `03_Exams`, never twice; an instructor's new version takes its place and the old one moves to `_Old_Versions`. |
-| 📅 **Your timetable, read and drawn for you** | With the portal login in `.env`, the bot reads your weekly timetable from the registration portal by itself — every day, time, section, room and mode — builds its lecture alerts from it, and draws it as a picture and a PDF for the 📅 Weekly Timetable button. No file to write; a `schedule.json` or a timetable picture of your own still wins. |
-| ⏰ **Deadlines & lectures** | Assignment and quiz reminders 24 h and 1 h ahead (stopped by your submission), and every day at noon a list of every open task — Cambridge One too — with a loud 🚨 on the last day; online-lecture alerts an hour before and at the start, with 🎥 Join Meeting and ✍️ Check In — and, if you switch it on, automatic attendance check-in with a screenshot as proof (or a 🚨 to do it by hand). Checking in does not replace attending: [you must be in the lecture](#disclaimer). |
-| 📌 **Your own reminders** | "Add to Reminders" under any notification, or a typed note — delivered at the exact minute. |
-| 🎉 **Your marks, found for you** | The mark of a quiz or assignment the moment Moodle shows it, with a picture of the page; and your row in any marks file an instructor uploads (Excel, Word, PDF, text) — found by the `STUDENT_ID` in your `.env`. A marks file it could not read says so. |
-| 📊 **Grades & GPA** | Grade Needed for a semester or cumulative target; type a course's coursework total once (`42/60`) to see the best mark it can still reach and what the final needs. Transcript and balance on demand, Finals Watch announcing each released grade. |
-| 🎓 **Your degree, from your own plan** | The transcript counts your study plan as the portal lists it — any major, any plan year: hours passed, this term, failed and not retaken, left now and after this term, the placement exams, and 📚 Remaining Courses group by group. A guest look-up does the same for a friend. |
-| 🗓️ **Registration Plan** | What to register next term, worked out from your plan and its prerequisites: choose the hours (12 / 15 / 18, 21 in your graduation term or with an excellent CGPA; 9 in a summer term, 12 in your last one) and get a ✨ suggestion — a failed course first, then the course that opens the most after it — or ✋ choose the courses yourself from those open to you, with the hours and the rules checked as you tap. Every course that is not open yet is listed under its reason: the course to pass first, 90 hours passed (training, the graduation project — with the department head's approval), graduation term only (military science). It is advice only: nothing is ever registered for you — you register on the portal yourself, and the bot tells you when the portal's registration opens. |
-| 📝 **Midterm marks, the moment they appear** | With the portal login set, the bot reads the exams site (`exams.zuj.edu.jo`, the same sign-in) every 15 minutes and sends each mark as it appears — the exam, the mark out of its maximum, the percentage — and tells you if a mark is changed later. It starts by saying which courses already have a mark and which it is waiting for; `/midterms` switches it off and on. |
-| 🎒 **Absences, counted for you** | After your last lecture of the day the bot asks whether you went (once more at 10 PM if you did not answer), keeps the count per course, and warns you before a course's absence limit. With the portal login it also tells you when your tuition balance changes and when course registration opens. |
-| 🛡️ **Quiet and self-healing** | ~10-second plain-HTTP checks every 15 minutes plus a tiny look every 2 minutes, retries, maintenance detection, Microsoft 2FA relayed to your chat, a bot that restarts itself, and alerts when something needs you. |
-
----
-
-## What it looks like
+## Screenshots
 
 <p align="center">
   <img src="docs/images/preview-alerts.png" width="100%" alt="New assignment and final reminder, an instructor's announcement, a new file saved to the course folder, marks found in a spreadsheet and a released grade">
@@ -80,9 +43,51 @@ subscription, and nothing about you ever leaves your PC except the messages it s
 *Previews drawn with the bot's real message texts and invented sample data — the people, courses and
 marks are made up. In Slack they are cards with tappable buttons; in Telegram they read the same.*
 
----
+## Overview
 
-## Install in 3 steps
+UniNotifier watches Al-Zaytoonah University of Jordan's Moodle (`elearning.zuj.edu.jo`) from your
+own Windows PC and sends everything that matters to a private Slack app of your own, or to a Telegram bot: new files,
+assignments, quizzes, announcements and forum posts, deadline reminders, online-lecture alerts with a
+**Join** button, your transcript and balance on demand, and a GPA planner. Every course file is saved
+into a tidy folder per course.
+
+It runs quietly in the background through two Windows scheduled tasks, needs no server and no
+subscription, and nothing about you ever leaves your PC except the messages it sends to *your* Slack.
+
+> **Slack or Telegram — it works with both, the same way.** Slack is the recommended one because Telegram is
+> currently blocked on many networks in Jordan; the installer asks which you want.
+
+Every behaviour is described in depth in **[docs/REFERENCE.md](docs/REFERENCE.md)**.
+
+## Features
+
+| | |
+|---|---|
+| 📚 **Everything on Moodle, as it happens** | Files, folders, links, pages, labels, quizzes, assignments, forum posts and announcements, Teams lectures and attendance — each as a sharp screenshot of the item itself, or the file itself (up to 45 MB), in a short message. An edit says what changed (*Was* / *Now*); re-uploaded files are reported too. |
+| 🗂️ **A tidy archive** | Every file lands in `<Course>\01_Lectures`, `02_Assignments` or `03_Exams`, never twice; an instructor's new version takes its place and the old one moves to `_Old_Versions`. |
+| 📅 **Your timetable, read and drawn for you** | With the portal login in `.env`, the bot reads your weekly timetable from the registration portal by itself — every day, time, section, room and mode — builds its lecture alerts from it, and draws it as a picture and a PDF for the 📅 Weekly Timetable button. No file to write; a `schedule.json` or a timetable picture of your own still wins. |
+| ⏰ **Deadlines & lectures** | Assignment and quiz reminders 24 h and 1 h ahead (stopped by your submission), and every day at noon a list of every open task — Cambridge One too — with a loud 🚨 on the last day; online-lecture alerts an hour before and at the start, with 🎥 Join Meeting and ✍️ Check In — and, if you switch it on, automatic attendance check-in with a screenshot as proof (or a 🚨 to do it by hand). Checking in does not replace attending: [you must be in the lecture](#disclaimer). |
+| 📌 **Your own reminders** | "Add to Reminders" under any notification, or a typed note — delivered at the exact minute. |
+| 🎉 **Your marks, found for you** | The mark of a quiz or assignment the moment Moodle shows it, with a picture of the page; and your row in any marks file an instructor uploads (Excel, Word, PDF, text) — found by the `STUDENT_ID` in your `.env`. A marks file it could not read says so. |
+| 📊 **Grades & GPA** | Grade Needed for a semester or cumulative target; type a course's coursework total once (`42/60`) to see the best mark it can still reach and what the final needs. Transcript and balance on demand, Finals Watch announcing each released grade. |
+| 🎓 **Your degree, from your own plan** | The transcript counts your study plan as the portal lists it — any major, any plan year: hours passed, this term, failed and not retaken, left now and after this term, the placement exams, and 📚 Remaining Courses group by group. A guest look-up does the same for a friend. |
+| 🗓️ **Registration Plan** | What to register next term, worked out from your plan and its prerequisites: choose the hours (12 / 15 / 18, 21 in your graduation term or with an excellent CGPA; 9 in a summer term, 12 in your last one) and get a ✨ suggestion — a failed course first, then the course that opens the most after it — or ✋ choose the courses yourself from those open to you, with the hours and the rules checked as you tap. Every course that is not open yet is listed under its reason: the course to pass first, 90 hours passed (training, the graduation project — with the department head's approval), graduation term only (military science). It is advice only: nothing is ever registered for you — you register on the portal yourself, and the bot tells you when the portal's registration opens. |
+| 📝 **Midterm marks, the moment they appear** | With the portal login set, the bot reads the exams site (`exams.zuj.edu.jo`, the same sign-in) every 15 minutes and sends each mark as it appears — the exam, the mark out of its maximum, the percentage — and tells you if a mark is changed later. It starts by saying which courses already have a mark and which it is waiting for; `/midterms` switches it off and on. |
+| 🎒 **Absences, counted for you** | After your last lecture of the day the bot asks whether you went (once more at 10 PM if you did not answer), keeps the count per course, and warns you before a course's absence limit. With the portal login it also tells you when your tuition balance changes and when course registration opens. |
+| 🛡️ **Quiet and self-healing** | ~10-second plain-HTTP checks every 15 minutes plus a tiny look every 2 minutes, retries, maintenance detection, Microsoft 2FA relayed to your chat, a bot that restarts itself, and alerts when something needs you. |
+
+## Tech stack
+
+| Area | Technology |
+|---|---|
+| Language | Python 3.11+ |
+| Portal sign-in and browser automation | Playwright (Chromium) |
+| Messaging | Slack (slack_sdk) or the Telegram Bot API |
+| Reading course files and marks | openpyxl, xlrd, python-docx, pypdf, lxml |
+| Scheduling | Windows Task Scheduler |
+| Quality | Offline test suite and pyflakes in GitHub Actions on Windows, CodeQL, dependency review |
+
+## Getting started
 
 About 15 minutes, and no file to edit.
 
@@ -240,8 +245,6 @@ registers both tasks for your Windows account — no administrator rights needed
 
 </details>
 
----
-
 ## Everyday use
 
 Everything is buttons. In Slack, open the app's **Home** page or type **menu** in its chat; commands are
@@ -267,28 +270,6 @@ send `/start`. A few commands are worth knowing:
 
 The bot answers only you — `SLACK_USER` in Slack, `ADMIN_USER_ID` in Telegram; anyone else who finds it
 gets no reply, and you are told.
-
----
-
-## Where everything lives
-
-| Path | What | In Git? |
-|---|---|---|
-| `.env` | your settings and passwords (from `.env.example`) | **never** |
-| `schedule.json` | a timetable you wrote yourself (from `schedule.example.json`) — optional: without it the bot reads the portal's | **never** |
-| `assets\` | a timetable PDF / PNG of your own, or a `logo.png` for the drawn one (optional) | **never** |
-| `data\` | everything the program writes: tracker state, Moodle / portal sessions, caches | **never** |
-| `data\logs\` | `monitor.log`, `bot.log` — the first place to look | **never** |
-| `ARCHIVE_ROOT` (default `Documents\University`) | your course files, per course | outside the project |
-| `src\uninotifier\` | the code | yes |
-| `monitor.py`, `bot.py` | the two launchers the scheduled tasks start | yes |
-| `install.bat` | the double-click installer (runs `scripts\install.ps1`) | yes |
-| `scripts\` | `install.ps1`, `setup_tasks.ps1`, `remove_tasks.ps1`, `windows_recovery.ps1` | yes |
-
-`data\` and `data\logs\` are created automatically on the first run. You can move the whole
-project folder: run `scripts\setup_tasks.ps1` again afterwards so the tasks point at the new place.
-
----
 
 ## Optional extras
 
@@ -378,7 +359,23 @@ powershell -ExecutionPolicy Bypass -File scripts\windows_recovery.ps1 -Undo     
 
 Details in [docs/REFERENCE.md](docs/REFERENCE.md).
 
----
+## Where everything lives
+
+| Path | What | In Git? |
+|---|---|---|
+| `.env` | your settings and passwords (from `.env.example`) | **never** |
+| `schedule.json` | a timetable you wrote yourself (from `schedule.example.json`) — optional: without it the bot reads the portal's | **never** |
+| `assets\` | a timetable PDF / PNG of your own, or a `logo.png` for the drawn one (optional) | **never** |
+| `data\` | everything the program writes: tracker state, Moodle / portal sessions, caches | **never** |
+| `data\logs\` | `monitor.log`, `bot.log` — the first place to look | **never** |
+| `ARCHIVE_ROOT` (default `Documents\University`) | your course files, per course | outside the project |
+| `src\uninotifier\` | the code | yes |
+| `monitor.py`, `bot.py` | the two launchers the scheduled tasks start | yes |
+| `install.bat` | the double-click installer (runs `scripts\install.ps1`) | yes |
+| `scripts\` | `install.ps1`, `setup_tasks.ps1`, `remove_tasks.ps1`, `windows_recovery.ps1` | yes |
+
+`data\` and `data\logs\` are created automatically on the first run. You can move the whole
+project folder: run `scripts\setup_tasks.ps1` again afterwards so the tasks point at the new place.
 
 ## Updating, pausing, uninstalling
 
@@ -408,8 +405,6 @@ the four lines above.
 To uninstall completely, remove the tasks, then delete the project folder (and your archive
 folder, if you no longer want the course files).
 
----
-
 ## Troubleshooting
 
 Start with `.venv\Scripts\python -m uninotifier.doctor` — it checks everything and says what to do.
@@ -430,56 +425,7 @@ Then look at `data\logs\monitor.log` and `data\logs\bot.log`.
 | *"schedule.json needs fixing"* in your chat | the message lists each mistake; reminders keep using the last good copy until it is fixed |
 | Nothing happens after a restart | sign in to Windows — the tasks run while you are signed in; checks catch up by themselves |
 
----
-
-## Security & privacy
-
-- **Your passwords stay in `.env`** on your PC. It is git-ignored, and every value in it is masked in
-  logs and in error alerts.
-- **Single owner.** The bot serves only you (`SLACK_USER` in Slack, `ADMIN_USER_ID` in Telegram) in your
-  private chat; anyone else in the workspace, strangers, groups and forwarded messages are dropped silently.
-- **No personal file is tracked.** `.env`, `schedule.json`, `assets\`, `data\` and logs are all
-  git-ignored, and a test fails if one ever is. Before you `git push`, `git status` should list none of them.
-- **It reads; it changes only what you switch on.** On Moodle it presses nothing by itself unless you
-  chose it: *Mark as done* for saved files (`AUTO_MARK_DONE`) and online-lecture check-in
-  (`AUTO_CHECK_IN`) — both off by default. The *Mark as done* button you press yourself always works.
-  Assignments, quizzes and course registration are never touched; on the portal it only opens pages.
-- **Your messages live where you read them.** What the bot sends you — marks, balance, screenshots — is
-  kept by Slack (or Telegram) in your own private workspace or chat, like any message you receive there.
-  A friend's login for `/guest` is typed into a private Slack form, used once and never saved.
-- **Unofficial, and yours to use responsibly** — see [Disclaimer](#disclaimer).
-- **Found a security problem?** Please report it privately — see [SECURITY.md](SECURITY.md).
-
----
-
-## How it was built
-
-**AI coding tools wrote almost all of the code in this project.** I decide what to build, direct
-the tools with requirements and prompts, and refine the result. I am a third-year Artificial
-Intelligence student, still building my own programming fundamentals.
-
----
-
-## Disclaimer
-
-UniNotifier is an independent student project that helps a student keep up with their own courses. It is
-not affiliated with, endorsed or supported by Al-Zaytoonah University of Jordan, Moodle, Microsoft, Slack,
-Telegram or Cambridge. It signs in with *your own* account, the way you would, at a gentle pace.
-
-- **It assists; it never decides.** Your attendance, marks and registration are always what your
-  instructors and the university record. Automatic check-in only does what you could do yourself — it
-  marks you Present whether or not you attend, so switch it off for a lecture you will miss.
-- **You must attend.** Automatic check-in is a reminder-and-button helper, not a replacement for attending.
-  Even when the bot has checked you in, you have to be in the lecture. Using it for a lecture you do not
-  attend may break university rules, and that responsibility is yours.
-- **Your responsibility.** Use it only with your own account (and a friend's only with their consent), in
-  line with the university's rules, and at your own risk. It comes with no warranty (see [LICENSE](LICENSE)).
-
-The full text: **[DISCLAIMER.md](DISCLAIMER.md)**.
-
----
-
-## How it fits together
+## Architecture
 
 ```
   UNIVERSITY SITES          YOUR WINDOWS PC                                                                YOU
@@ -521,9 +467,7 @@ The full text: **[DISCLAIMER.md](DISCLAIMER.md)**.
   balance, registration), and, if you turn it on, watches Cambridge One.
 - **Slack** (or Telegram) is the only thing that leaves your PC: your own app, talking only to you.
 
----
-
-## For developers
+## Testing and development
 
 ```powershell
 .venv\Scripts\pip install -r requirements-dev.txt
@@ -537,6 +481,47 @@ fresh clone passes exactly like a configured PC. Architecture, every module and 
 **[docs/REFERENCE.md](docs/REFERENCE.md)**.
 
 Want to help? **[CONTRIBUTING.md](CONTRIBUTING.md)** has the rules the tests enforce, on one page.
+
+## Security and privacy
+
+- **Your passwords stay in `.env`** on your PC. It is git-ignored, and every value in it is masked in
+  logs and in error alerts.
+- **Single owner.** The bot serves only you (`SLACK_USER` in Slack, `ADMIN_USER_ID` in Telegram) in your
+  private chat; anyone else in the workspace, strangers, groups and forwarded messages are dropped silently.
+- **No personal file is tracked.** `.env`, `schedule.json`, `assets\`, `data\` and logs are all
+  git-ignored, and a test fails if one ever is. Before you `git push`, `git status` should list none of them.
+- **It reads; it changes only what you switch on.** On Moodle it presses nothing by itself unless you
+  chose it: *Mark as done* for saved files (`AUTO_MARK_DONE`) and online-lecture check-in
+  (`AUTO_CHECK_IN`) — both off by default. The *Mark as done* button you press yourself always works.
+  Assignments, quizzes and course registration are never touched; on the portal it only opens pages.
+- **Your messages live where you read them.** What the bot sends you — marks, balance, screenshots — is
+  kept by Slack (or Telegram) in your own private workspace or chat, like any message you receive there.
+  A friend's login for `/guest` is typed into a private Slack form, used once and never saved.
+- **Unofficial, and yours to use responsibly** — see [Disclaimer](#disclaimer).
+- **Found a security problem?** Please report it privately — see [SECURITY.md](SECURITY.md).
+
+## Disclaimer
+
+UniNotifier is an independent student project that helps a student keep up with their own courses. It is
+not affiliated with, endorsed or supported by Al-Zaytoonah University of Jordan, Moodle, Microsoft, Slack,
+Telegram or Cambridge. It signs in with *your own* account, the way you would, at a gentle pace.
+
+- **It assists; it never decides.** Your attendance, marks and registration are always what your
+  instructors and the university record. Automatic check-in only does what you could do yourself — it
+  marks you Present whether or not you attend, so switch it off for a lecture you will miss.
+- **You must attend.** Automatic check-in is a reminder-and-button helper, not a replacement for attending.
+  Even when the bot has checked you in, you have to be in the lecture. Using it for a lecture you do not
+  attend may break university rules, and that responsibility is yours.
+- **Your responsibility.** Use it only with your own account (and a friend's only with their consent), in
+  line with the university's rules, and at your own risk. It comes with no warranty (see [LICENSE](LICENSE)).
+
+The full text: **[DISCLAIMER.md](DISCLAIMER.md)**.
+
+## How it was built
+
+**AI coding tools wrote almost all of the code in this project.** I decide what to build, direct
+the tools with requirements and prompts, and refine the result. I am a third-year Artificial
+Intelligence student, still building my own programming fundamentals.
 
 ## License and legal
 

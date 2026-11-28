@@ -593,7 +593,7 @@ def test_the_readme_stays_true():
     live status of the CI workflow that runs this suite, and it says a check-in never replaces attending."""
     project = Path(__file__).resolve().parents[1]
     text = (project / "README.md").read_text(encoding="utf-8")
-    head = text.split("\n# UniNotifier\n", 1)[0]
+    head = text.split("\n## ", 1)[0]
     labels = " ".join(line for line in head.splitlines() if line.startswith("[!["))
     for label in ("Python 3.11+", "Platform: Windows", "Code style: pyflakes clean", "License: PolyForm Noncommercial"):
         assert f"[![{label}](" in labels, label
