@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="docs/images/uninotifier-icon.png" width="96" alt="UniNotifier logo">
+<img src="docs/images/logo.png" width="96" alt="UniNotifier logo">
 
 # UniNotifier
 
