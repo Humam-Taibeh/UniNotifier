@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
@@ -18,4 +19,4 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: Humam-Taibeh/project-standards@797d5625a934f34145148a2597e0fa1aaf06a6ad
+      - uses: Humam-Taibeh/project-standards@364139b0dcaa3b8b4ea52cbdbcb9349d694491d9
