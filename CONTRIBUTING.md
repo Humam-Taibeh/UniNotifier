@@ -44,10 +44,8 @@ To see which lines the tests reach (branch coverage, per module):
    file is added to the runner's `TOPICS`.
 2. **No personal data, ever.** Never commit `.env`, `schedule.json`, `data/`, `assets/` timetables, logs or
    `tests/recorded/` (real pages). Tests fail if a personal path, a real ID, or one of those files shows up.
-3. **Both READMEs change together.** `README.md` and `README.ar.md` must keep identical code blocks,
-   diagram and badges, and tables of the same shape — the parity test compares them. In the Arabic file,
-   start every paragraph, list item and table cell with an Arabic word: GitHub picks the text direction
-   from the first letter. `docs/REFERENCE.md` is English only.
+3. **The README stays true.** Its badges, clone address and relative links are tested. Documentation is
+   written in English.
 4. **The bot speaks English.** Every button, alert and message the bot writes is in English; content
    from Moodle or the portal stays as it was published.
 5. **Fail loudly.** In code that runs unattended, a catch-all `except` must tell the owner through

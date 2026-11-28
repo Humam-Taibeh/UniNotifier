@@ -135,6 +135,7 @@ def test_no_personal_values_in_the_code():
     for path in [*(project / "scripts").glob("*.ps1"), project / ".env.example", project / "schedule.example.json",
                  *project.glob("*.md"), *(project / "docs").glob("*.md")]:      # what a new student reads and runs
         text = path.read_text(encoding="utf-8").replace(REPO_PATH, "")      # the project's own public address is fine
+        text = text.replace("(https://github.com/Humam-Taibeh)", "")        # ... and the "back to profile" link
         for personal in ("Humam", "Taibeh", "Year_04", *own_ids):
             assert personal not in text, (path.name, personal)
     for path in (project / "tests").glob("*.py"):           # the tests use a made-up ID, never the real one

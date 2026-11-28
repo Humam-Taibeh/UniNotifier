@@ -1,8 +1,10 @@
-[العربية](README.ar.md) | **English**
-
----
+<a name="top"></a>
 
 <div align="center">
+
+[![Back to profile](https://img.shields.io/badge/%E2%86%90%20Profile-24292f?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Humam-Taibeh)
+[![Quick start](https://img.shields.io/badge/Quick%20start-0969da?style=for-the-badge)](#install-in-3-steps)
+[![Report a bug](https://img.shields.io/badge/Report%20a%20bug-b35900?style=for-the-badge)](https://github.com/Humam-Taibeh/UniNotifier/issues/new/choose)
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D6)](https://www.microsoft.com/windows)
@@ -31,7 +33,7 @@ subscription, and nothing about you ever leaves your PC except the messages it s
 - [Features](#features) · [What it looks like](#what-it-looks-like)
 - [Install in 3 steps](#install-in-3-steps)
 - [Everyday use](#everyday-use) · [Where everything lives](#where-everything-lives) · [Optional extras](#optional-extras)
-- [Updating, pausing, uninstalling](#updating-pausing-uninstalling) · [Troubleshooting](#troubleshooting) · [Security & privacy](#security--privacy) · [Disclaimer](#disclaimer) · [How it fits together](#how-it-fits-together)
+- [Updating, pausing, uninstalling](#updating-pausing-uninstalling) · [Troubleshooting](#troubleshooting) · [Security & privacy](#security--privacy) · [How it was built](#how-it-was-built) · [Disclaimer](#disclaimer) · [How it fits together](#how-it-fits-together)
 - Every behaviour in depth: **[docs/REFERENCE.md](docs/REFERENCE.md)**
 
 ---
@@ -43,7 +45,7 @@ subscription, and nothing about you ever leaves your PC except the messages it s
 | 📚 **Everything on Moodle, as it happens** | Files, folders, links, pages, labels, quizzes, assignments, forum posts and announcements, Teams lectures and attendance — each as a sharp screenshot of the item itself, or the file itself (up to 45 MB), in a short message. An edit says what changed (*Was* / *Now*); re-uploaded files are reported too. |
 | 🗂️ **A tidy archive** | Every file lands in `<Course>\01_Lectures`, `02_Assignments` or `03_Exams`, never twice; an instructor's new version takes its place and the old one moves to `_Old_Versions`. |
 | 📅 **Your timetable, read and drawn for you** | With the portal login in `.env`, the bot reads your weekly timetable from the registration portal by itself — every day, time, section, room and mode — builds its lecture alerts from it, and draws it as a picture and a PDF for the 📅 Weekly Timetable button. No file to write; a `schedule.json` or a timetable picture of your own still wins. |
-| ⏰ **Deadlines & lectures** | Assignment and quiz reminders 24 h and 1 h ahead (stopped by your submission), and every day at noon a list of every open task — Cambridge One too — with a loud 🚨 on the last day; online-lecture alerts an hour before and at the start, with 🎥 Join Meeting and ✍️ Check In — and, if you switch it on, automatic attendance check-in with a screenshot as proof (or a 🚨 to do it by hand). |
+| ⏰ **Deadlines & lectures** | Assignment and quiz reminders 24 h and 1 h ahead (stopped by your submission), and every day at noon a list of every open task — Cambridge One too — with a loud 🚨 on the last day; online-lecture alerts an hour before and at the start, with 🎥 Join Meeting and ✍️ Check In — and, if you switch it on, automatic attendance check-in with a screenshot as proof (or a 🚨 to do it by hand). Checking in does not replace attending: [you must be in the lecture](#disclaimer). |
 | 📌 **Your own reminders** | "Add to Reminders" under any notification, or a typed note — delivered at the exact minute. |
 | 🎉 **Your marks, found for you** | The mark of a quiz or assignment the moment Moodle shows it, with a picture of the page; and your row in any marks file an instructor uploads (Excel, Word, PDF, text) — found by the `STUDENT_ID` in your `.env`. A marks file it could not read says so. |
 | 📊 **Grades & GPA** | Grade Needed for a semester or cumulative target; type a course's coursework total once (`42/60`) to see the best mark it can still reach and what the final needs. Transcript and balance on demand, Finals Watch announcing each released grade. |
@@ -307,9 +309,9 @@ only at these times — each look is one ordinary sign-in with your own account,
 asks you; off by default):
 the bot checks you in to every *online* lecture as soon as the instructor opens attendance and sends a
 screenshot as proof, or tells you to do it by hand when it cannot. Never an in-person or activity day. It
-needs the portal login above, which is how it knows which days are online. **It marks you Present whether
-or not you attend** — switch it off for a lecture you will miss; your attendance is always what your
-instructor decides (see [DISCLAIMER.md](DISCLAIMER.md)).
+needs the portal login above, which is how it knows which days are online. **You must still attend: a check-in by the bot does not replace being in the lecture.** It marks you
+Present whether or not you attend, so switch it off for a lecture you will miss; your attendance is always
+what your instructor decides (see [DISCLAIMER.md](DISCLAIMER.md)).
 
 **Mark as done by itself** — ⚙️ **Settings** in the bot, or `AUTO_MARK_DONE=true` in `.env` (off by default):
 when the bot has saved a
@@ -450,6 +452,14 @@ Then look at `data\logs\monitor.log` and `data\logs\bot.log`.
 
 ---
 
+## How it was built
+
+**AI coding tools wrote almost all of the code in this project.** I decide what to build, direct
+the tools with requirements and prompts, and refine the result. I am a third-year Artificial
+Intelligence student, still building my own programming fundamentals.
+
+---
+
 ## Disclaimer
 
 UniNotifier is an independent student project that helps a student keep up with their own courses. It is
@@ -459,6 +469,9 @@ Telegram or Cambridge. It signs in with *your own* account, the way you would, a
 - **It assists; it never decides.** Your attendance, marks and registration are always what your
   instructors and the university record. Automatic check-in only does what you could do yourself — it
   marks you Present whether or not you attend, so switch it off for a lecture you will miss.
+- **You must attend.** Automatic check-in is a reminder-and-button helper, not a replacement for attending.
+  Even when the bot has checked you in, you have to be in the lecture. Using it for a lecture you do not
+  attend may break university rules, and that responsibility is yours.
 - **Your responsibility.** Use it only with your own account (and a friend's only with their consent), in
   line with the university's rules, and at your own risk. It comes with no warranty (see [LICENSE](LICENSE)).
 
@@ -525,6 +538,24 @@ fresh clone passes exactly like a configured PC. Architecture, every module and 
 
 Want to help? **[CONTRIBUTING.md](CONTRIBUTING.md)** has the rules the tests enforce, on one page.
 
-## License
+## License and legal
 
 [PolyForm Noncommercial 1.0.0](LICENSE): free to use, study, change and share for any noncommercial purpose, with the copyright notice kept. Selling it, or using it in a paid product or service, is not allowed without the author's written permission. Version 1.0.0 was published under the MIT license; everything after it is under this one.
+
+| Document | What it covers |
+|---|---|
+| [License](LICENSE) | What you may do with the code |
+| [Disclaimer](DISCLAIMER.md) | Limits, risks and your responsibility |
+| [Security](SECURITY.md) | How to report a vulnerability privately |
+| [Contributing](CONTRIBUTING.md) | How to propose a change |
+| [Code Of Conduct](CODE_OF_CONDUCT.md) | Expected behaviour |
+| [Changelog](CHANGELOG.md) | What changed, by version |
+
+---
+
+<div align="center">
+
+[![Back to top](https://img.shields.io/badge/%E2%86%91%20Back%20to%20top-57606a?style=for-the-badge)](#top)
+[![Back to profile](https://img.shields.io/badge/%E2%86%90%20Profile-24292f?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Humam-Taibeh)
+
+</div>

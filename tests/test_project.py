@@ -32,13 +32,12 @@ def test_every_test_file_is_run():
 
 
 def test_the_license_is_noncommercial():
-    """The license file is the PolyForm Noncommercial text with the author's notice, and both READMEs say so."""
+    """The license file is the PolyForm Noncommercial text with the author's notice, and the README says so."""
     text = (paths.ROOT / "LICENSE").read_text(encoding="utf-8")
     assert text.startswith("# PolyForm Noncommercial License 1.0.0") and "Required Notice: Copyright (c)" in text
     assert "MIT License" not in text
-    for name in ("README.md", "README.ar.md"):
-        readme = (paths.ROOT / name).read_text(encoding="utf-8")
-        assert "license-PolyForm%20Noncommercial" in readme and "License: MIT" not in readme, name
+    readme = (paths.ROOT / "README.md").read_text(encoding="utf-8")
+    assert "license-PolyForm%20Noncommercial" in readme and "License: MIT" not in readme
 
 
 def test_modules_import_quietly_and_names_resolve():
@@ -585,26 +584,17 @@ def test_the_repository_is_ready_for_students():
     security = (project / "SECURITY.md").read_text(encoding="utf-8")
     assert "/security/advisories/new" in security and "Don't open a public issue" in security
     contributing = (project / "CONTRIBUTING.md").read_text(encoding="utf-8")
-    for rule in ("Tests are offline", "No personal data", "Both READMEs change together", "The bot speaks English"):
+    for rule in ("Tests are offline", "No personal data", "The README stays true", "The bot speaks English"):
         assert rule in contributing, rule
 
 
-def test_the_readme_translations_say_the_same():
-    """README.md and README.ar.md link to each other and stay in step: the same badges, commands,
-    diagram and sample output (comments may be translated), every relative link pointing at a file —
-    and the tests badge is the live status of the CI workflow that runs this suite."""
+def test_the_readme_stays_true():
+    """README.md keeps its badges, its clone address and working relative links, the tests badge is the
+    live status of the CI workflow that runs this suite, and it says a check-in never replaces attending."""
     project = Path(__file__).resolve().parents[1]
-    en = (project / "README.md").read_text(encoding="utf-8")
-    ar = (project / "README.ar.md").read_text(encoding="utf-8")
-    assert en.splitlines()[0] == "[العربية](README.ar.md) | **English**", en.splitlines()[0]
-    assert ar.splitlines()[0] == "**العربية** | [English](README.md)", ar.splitlines()[0]
-
-    def badges(text):
-        head = text.split("\n# UniNotifier\n", 1)[0].splitlines()
-        assert head[1:4] == ["", "---", ""] and head[4] == '<div align="center">' and head[-1] == "</div>", head
-        return [line for line in head if line.startswith("[![")]
-    assert badges(en) == badges(ar) and len(badges(en)) == 5, "the same five badges on both pages"
-    labels = " ".join(badges(en))
+    text = (project / "README.md").read_text(encoding="utf-8")
+    head = text.split("\n# UniNotifier\n", 1)[0]
+    labels = " ".join(line for line in head.splitlines() if line.startswith("[!["))
     for label in ("Python 3.11+", "Platform: Windows", "Code style: pyflakes clean", "License: PolyForm Noncommercial"):
         assert f"[![{label}](" in labels, label
     workflow = f"https://{REPO_PATH}/actions/workflows/tests.yml"
@@ -613,22 +603,11 @@ def test_the_readme_translations_say_the_same():
     for step in ("runs-on: windows-latest", '"3.11"', "python tests/test_architecture.py",
                  "python -m pyflakes src tests monitor.py bot.py", "python -m playwright install chromium"):
         assert step in ci, f"the CI workflow lost: {step}"
-
-    def blocks(text):
-        found = []
-        for body in re.findall(r"^```\w*\n(.*?)^```", text, re.S | re.M):
-            lines = [re.sub(r"\s+#\s.*$", "", line).rstrip() for line in body.splitlines()]
-            found.append([line for line in lines if line and not line.lstrip().startswith("# ")])
-        return found
-    assert len(blocks(en)) >= 8 and blocks(en) == blocks(ar), "a command, the diagram or a sample differs"
-
-    for name, text in (("README.md", en), ("README.ar.md", ar)):
-        for target in re.findall(r"\]\(([^)#]+?)\)", text):
-            if not target.startswith(("http://", "https://")):
-                assert (project / target).exists(), (name, target)
-        assert f"git clone {PUBLIC_REPO}\n" in text and "%USERPROFILE%" in text, (name, "clone address and placeholder")
-    assert [line.count("|") for line in en.splitlines() if line.startswith("|")] == \
-           [line.count("|") for line in ar.splitlines() if line.startswith("|")], "the tables have the same shape"
+    for target in re.findall(r"\]\(([^)#]+?)\)", text):
+        if not target.startswith(("http://", "https://")):
+            assert (project / target).exists(), target
+    assert f"git clone {PUBLIC_REPO}\n" in text and "%USERPROFILE%" in text, "clone address and placeholder"
+    assert "does not replace being in the lecture" in text
 
 
 def test_a_student_on_slack_needs_no_telegram_at_all():
