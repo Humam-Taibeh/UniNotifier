@@ -70,7 +70,7 @@ def view_status() -> tuple[str, list]:
         return (f"📝 *Midterm Watch*\n{media.DIVIDER}\n" + portal_flow.portal_setup_text(),
                 [[HUB, MAIN]])
     lines = ["📝 *Midterm Watch*", media.DIVIDER,
-             "🟢 *On* — I look at the exams site every 15 minutes and tell you the moment a mark appears." if on else
+             "🟢 *On* — I look at the exams site every 2 minutes and tell you the moment a mark appears." if on else
              "⏸️ *Off* — I am not looking. Turn it on when your midterm exams begin.", ""]
     names = courses_in_order(state)
     if not names:

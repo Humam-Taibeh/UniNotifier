@@ -626,7 +626,7 @@ caption; only a transcript's semesters follow as a single text — and the hub y
 under it as the menu. While it works the chat shows "typing…", not a status message.
 
 With the portal login set, the bot also looks by itself — each look one ordinary sign-in, reading only:
-the timetable once a semester (again on `/check`); Midterm Watch on `exams.zuj.edu.jo` every 15 minutes
+the timetable once a semester (again on `/check`); Midterm Watch on `exams.zuj.edu.jo` every 2 minutes
 while it is on (`/midterms`, `exams_watch.py`); the tuition balance every hour (`balance_watch.py`, told
 only when it changes); whether registration has opened every 30 minutes (`registration_watch.py`, told once);
 and Finals Watch every 30 minutes while you have it on. Never while another portal request runs, and a look

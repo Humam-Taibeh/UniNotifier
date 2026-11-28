@@ -20,7 +20,7 @@ from uninotifier.notifier import escape_md
 STATE_FILE = paths.DATA / "exams_watch.json"
 FOUND_FILE = paths.DATA / "midterm_found.json"      # marks the monitor found on Moodle (written only by the monitor)
 MIDTERM_WORDS = ("midterm", "mid-term", "mid term", "first exam", "1st exam", "ميد", "منتصف", "نصفي", "الامتحان الاول", "الامتحان الأول", "امتحان اول", "امتحان أول")
-INTERVAL_SECONDS = 15 * 60
+INTERVAL_SECONDS = 2 * 60      # a look is one sign-in and one page; a course's own page is read only when its grade changed
 
 
 def load() -> dict:
@@ -232,7 +232,7 @@ def intro(courses: list[dict]) -> str:
     graded = [c for c in courses if exams.number(c["grade"]) is not None]
     waiting = [c for c in courses if exams.number(c["grade"]) is None]
     lines = ["👀 *Midterm Marks Watch is on*", "",
-             "I look at the exams site every 15 minutes and tell you the moment a mark appears."]
+             "I look at the exams site every 2 minutes and tell you the moment a mark appears."]
     if graded:
         lines += ["", f"✅ *Already out ({len(graded)}):*"] + [f"• {escape_md(c['course'])} — {escape_md(_mark(c['grade'], ((c.get('report') or {}).get('total') or {}).get('max')))}" for c in graded]
     if waiting:

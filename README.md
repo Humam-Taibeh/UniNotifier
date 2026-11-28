@@ -72,7 +72,7 @@ Every behaviour is described in depth in **[docs/REFERENCE.md](docs/REFERENCE.md
 | 📊 **Grades & GPA** | Grade Needed for a semester or cumulative target; type a course's coursework total once (`42/60`) to see the best mark it can still reach and what the final needs. Transcript and balance on demand, Finals Watch announcing each released grade. |
 | 🎓 **Your degree, from your own plan** | The transcript counts your study plan as the portal lists it — any major, any plan year: hours passed, this term, failed and not retaken, left now and after this term, the placement exams, and 📚 Remaining Courses group by group. A guest look-up does the same for a friend. |
 | 🗓️ **Registration Plan** | What to register next term, worked out from your plan and its prerequisites: choose the hours (12 / 15 / 18, 21 in your graduation term or with an excellent CGPA; 9 in a summer term, 12 in your last one) and get a ✨ suggestion — a failed course first, then the course that opens the most after it — or ✋ choose the courses yourself from those open to you, with the hours and the rules checked as you tap. Every course that is not open yet is listed under its reason: the course to pass first, 90 hours passed (training, the graduation project — with the department head's approval), graduation term only (military science). It is advice only: nothing is ever registered for you — you register on the portal yourself, and the bot tells you when the portal's registration opens. |
-| 📝 **Midterm marks, the moment they appear** | With the portal login set, the bot reads the exams site (`exams.zuj.edu.jo`, the same sign-in) every 15 minutes and sends each mark as it appears — the exam, the mark out of its maximum, the percentage — and tells you if a mark is changed later. It starts by saying which courses already have a mark and which it is waiting for; `/midterms` switches it off and on. |
+| 📝 **Midterm marks, the moment they appear** | With the portal login set, the bot reads the exams site (`exams.zuj.edu.jo`, the same sign-in) every 2 minutes and sends each mark as it appears — the exam, the mark out of its maximum, the percentage — and tells you if a mark is changed later. It starts by saying which courses already have a mark and which it is waiting for; `/midterms` switches it off and on. |
 | 🎒 **Absences, counted for you** | After your last lecture of the day the bot asks whether you went (once more at 10 PM if you did not answer), keeps the count per course, and warns you before a course's absence limit. With the portal login it also tells you when your tuition balance changes and when course registration opens. |
 | 🛡️ **Quiet and self-healing** | ~10-second plain-HTTP checks every 15 minutes plus a tiny look every 2 minutes, retries, maintenance detection, Microsoft 2FA relayed to your chat, a bot that restarts itself, and alerts when something needs you. |
 
@@ -280,7 +280,7 @@ only at these times — each look is one ordinary sign-in with your own account,
 | What | How often |
 |---|---|
 | your timetable (the portal's home page) | once a semester, and again on `/check` |
-| Midterm Watch (`exams.zuj.edu.jo`) | every 15 minutes, while it is on (`/midterms`) |
+| Midterm Watch (`exams.zuj.edu.jo`) | every 2 minutes, while it is on (`/midterms`) |
 | the tuition balance | every hour |
 | whether course registration has opened | every 30 minutes |
 | Finals Watch | every 30 minutes, only while you have it on |

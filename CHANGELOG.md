@@ -10,7 +10,7 @@ All notable changes to this project are documented here. The format follows
 - **Slack is the way in**: the setup asks where the messages go (Enter = Slack: it works on every network) and a
   Slack-only install needs no Telegram at all. The README (English and Arabic) is written around Slack.
 - **Midterm Watch** (`/midterms`): with the portal login, the exams site (`exams.zuj.edu.jo`, the same sign-in) is
-  read every 15 minutes and each midterm mark is told as it appears or changes — with a picture, out of 100 and the
+  read every 2 minutes and each midterm mark is told as it appears or changes — with a picture, out of 100 and the
   best mark the course can still reach; marks can be typed by hand; a summary screen; on and off.
 - **Absences, counted** (`/attendance`): after the day's last lecture the bot asks whether you went (again at 10 PM),
   counts per course (5 allowed; blended and once-a-week courses 2; limits settable per course) and warns before a
