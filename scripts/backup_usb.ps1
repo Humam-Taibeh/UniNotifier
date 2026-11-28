@@ -1,10 +1,11 @@
 <#
 Copies the whole project (settings, sessions, state, code) to a USB drive.
 
-    backup_usb.bat                                   (double-click: shows your drives, you pick one)
+    backup_usb.bat                                   (double-click: Enter = the folder next to the project,
+                                                      or type a USB drive letter)
     powershell -ExecutionPolicy Bypass -File scripts\backup_usb.ps1 -Drive G:
 
-The copy lands in <drive>\UniNotifier-backup. Nothing on the drive is deleted, so running it
+The copy lands in <drive>\UniNotifier-backup, or in UniNotifier-backup beside the project folder. Nothing on the drive is deleted, so running it
 again only adds new files and updates changed ones. The .venv folder is skipped: it is rebuilt
 by scripts\install.ps1. Your .env and data\ hold passwords and sessions - keep the drive safe.
 A drive that is still locked (BitLocker, VeraCrypt) must be unlocked first.
@@ -31,21 +32,27 @@ function Show-Drives {
     Write-Host ""
 }
 
+# The default home of the backup: UniNotifier-backup next to the project folder.
+$localTarget = Join-Path (Split-Path -Parent $project) "UniNotifier-backup"
+
 if (-not $Drive) {
     Show-Drives
-    $Drive = Read-Host "Type the letter of your USB drive (for example G) and press Enter"
-    if (-not $Drive) { Write-Host "Nothing typed - nothing copied."; exit 1 }
+    Write-Host "Backup folder next to the project: $localTarget"
+    $Drive = Read-Host "Press Enter to use it, or type the letter of a USB drive (for example G)"
 }
 
-$root = $Drive.Trim().TrimEnd("\")
-if ($root -match "^[A-Za-z]:?$") { $root = $root.Substring(0, 1) + ":\" }
-if (-not (Test-Path -LiteralPath $root)) {
-    Write-Host "Drive $Drive was not found or cannot be opened."
-    Write-Host "Plug it in, unlock it if it is encrypted, and check its letter in File Explorer."
-    exit 1
+if (-not $Drive) {
+    $target = $localTarget
+} else {
+    $root = $Drive.Trim().TrimEnd("\")
+    if ($root -match "^[A-Za-z]:?$") { $root = $root.Substring(0, 1) + ":\" }
+    if (-not (Test-Path -LiteralPath $root)) {
+        Write-Host "Drive $Drive was not found or cannot be opened."
+        Write-Host "Plug it in, unlock it if it is encrypted, and check its letter in File Explorer."
+        exit 1
+    }
+    $target = Join-Path $root "UniNotifier-backup"
 }
-
-$target = Join-Path $root "UniNotifier-backup"
 Write-Host "Copying $project"
 Write-Host "     to $target"
 
