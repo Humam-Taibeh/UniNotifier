@@ -13,6 +13,8 @@ record.
 
 ## It assists; it never decides
 
+- **You must attend.** A check-in made by the bot does **not** replace being in the lecture. Even when the bot
+  has checked you in, you have to be present; your instructor may verify attendance in the lecture.
 - **Attendance.** Your attendance is what your instructor records, always. Automatic check-in
   (`AUTO_CHECK_IN`, off by default) only presses the button you could press yourself during an online
   lecture — and it does so **whether or not you are actually attending**. Using it for a lecture you do not
